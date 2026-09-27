@@ -19,14 +19,24 @@ def load_fixture():
     return load
 
 
+def db_url_for_tests() -> str:
+    return os.environ.get("TEST_DATABASE_URL") or database_url()
+
+
+def connect_to_schema(schema: str) -> psycopg.Connection:
+    conn = connect(db_url_for_tests())
+    conn.execute(f"SET search_path TO {schema}")
+    return conn
+
+
 @pytest.fixture
-def db():
-    """Migrated connection in a throwaway schema, dropped after the test.
+def empty_db():
+    """Unmigrated connection in a throwaway schema, dropped after the test.
 
     Uses TEST_DATABASE_URL, falling back to DATABASE_URL and then the docker-compose default.
     Skips if no Postgres is reachable; start one with ``docker compose up -d``.
     """
-    url = os.environ.get("TEST_DATABASE_URL") or database_url()
+    url = db_url_for_tests()
     try:
         conn = connect(url)
     except psycopg.OperationalError as exc:
@@ -36,8 +46,14 @@ def db():
     conn.execute(f"CREATE SCHEMA {schema}")
     conn.execute(f"SET search_path TO {schema}")
     try:
-        migrate(conn)
         yield conn
     finally:
         conn.execute(f"DROP SCHEMA {schema} CASCADE")
         conn.close()
+
+
+@pytest.fixture
+def db(empty_db):
+    """Migrated connection in a throwaway schema."""
+    migrate(empty_db)
+    return empty_db

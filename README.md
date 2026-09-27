@@ -23,6 +23,10 @@ uv run ruff check .              # lint
 uv run ruff format .             # format
 ```
 
+To change the schema, add a new numbered SQL file in `src/dep_watch_agent/migrations/`.
+Applied migrations are checksummed and must never be edited; `migrate` refuses to run if one
+has changed.
+
 Set `DATABASE_URL` to use a different Postgres (see `.env.example`). Tests use
 `TEST_DATABASE_URL` if set, and each test runs in its own throwaway schema.
 
