@@ -1,12 +1,15 @@
 [project]
 name = "dep-watch-agent"
 version = "0.1.0"
-description = "Agent that watches project dependencies for releases, advisories, and breaking changes"
+description = "Watches upstream issue trackers for bugs affecting a pinned dependency version"
 authors = [
     { name = "SteveVu", email = "phucvhd@gmail.com" }
 ]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "httpx>=0.28.1",
+    "psycopg[binary]>=3.3.6",
+]
 
 [project.scripts]
 dep-watch-agent = "dep_watch_agent.cli:main"

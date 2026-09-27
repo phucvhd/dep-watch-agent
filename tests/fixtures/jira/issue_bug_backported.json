@@ -1,0 +1,198 @@
+{
+  "expand": "operations,versionedRepresentations,editmeta,changelog,renderedFields",
+  "id": "13562131",
+  "self": "https://issues.apache.org/jira/rest/api/2/issue/13562131",
+  "key": "KAFKA-16025",
+  "fields": {
+    "summary": "Streams StateDirectory has orphaned locks after rebalancing, blocking future rebalancing",
+    "issuetype": {
+      "self": "https://issues.apache.org/jira/rest/api/2/issuetype/1",
+      "id": "1",
+      "description": "A problem which impairs or prevents the functions of the product.",
+      "iconUrl": "https://issues.apache.org/jira/secure/viewavatar?size=xsmall&avatarId=21133&avatarType=issuetype",
+      "name": "Bug",
+      "subtask": false,
+      "avatarId": 21133
+    },
+    "components": [
+      {
+        "self": "https://issues.apache.org/jira/rest/api/2/component/12327571",
+        "id": "12327571",
+        "name": "streams",
+        "description": "Streams library architecture and APIs"
+      }
+    ],
+    "created": "2023-12-18T00:08:07.000+0000",
+    "description": "Hello,\r\n\r\n \r\n\r\nWe are encountering an issue where during rebalancing, we see streams threads on one client get stuck in rebalancing. Upon enabling debug logs, we saw that some tasks were having issues initializing due to failure to grab a lock in the StateDirectory:\r\n\r\n \r\n\r\n{{2023-12-14 22:51:57.352000Z stream-thread [i-0f1a5e7a42158e04b-StreamThread-14] Could not initialize task 0_51 since: stream-thread [i-0f1a5e7a42158e04b-StreamThread-14] standby-task [0_51] Failed to lock the state directory for task 0_51; will retry}}\r\n\r\n \r\n\r\nWe were able to reproduce this behavior reliably on 3.4.0. This is the sequence that triggers the bug.\r\n\r\nAssume in a streams consumer group, there are 5 instances (A, B, C, D, E), each with 5 threads (1-5), and the consumer is using stateful tasks which have state stores on disk. There are 10 active tasks and 10 standby tasks.\r\n # Instance A is deactivated\r\n # As an example, lets say task 0_1, previously on instance B, moves to instance C\r\n # Task 0_1 leaves behind it's state directory on Instance B's disk, currently unused, and no lock for it exists in Instance B's StateDirectory in-memory lock tracker\r\n # Instance A is re-activated\r\n # Streams thread 1 on Instance B is asked to re-join the consumer group due to a new member being added\r\n # As part of re-joining, thread 1 lists non-empty state directories in order to report the offset's it has in it's state stores as part of it's metadata. Thread 1 sees that the directory for 0_1 is not empty.\r\n # The cleanup thread on instance B runs. The cleanup thread locks state store 0_1, sees the directory for 0_1 was last modified more than `state.cleanup.delay.ms` ago, deletes it, and unlocks it successfully\r\n # Thread 1 takes a lock on directory 0_1 due to it being found not-empty before, unaware that the cleanup has run between the time of the check and the lock. It tracks this lock in it's own in-memory store, in addition to StateDirectory's in-memory lock store\r\n # Thread 1 successfully joins the consumer group\r\n # After every consumer in the group joins the group, assignments are calculated, and then every consumer calls sync group to receive the new assignments\r\n # Thread 1 on Instance B calls sync group but gets an error - the group coordinator has triggered a new rebalance and all members must rejoin the group\r\n # Thread 1 again lists non-empty state directories in order to report the offset's it has in it's state stores as part of it's metadata. Prior to doing so, it clears it's in-memory store tracking the locks it has taken for the purpose of gathering rebalance metadata\r\n # Thread 1 no longer takes a lock on 0_1 as it is empty\r\n # However, that lock on 0_1 owned by Thread 1 remains in StateDirectory\r\n # All consumers re-join and sync successfully, receiving their new assignments\r\n # Thread 2 on Instance B is assigned task 0_1\r\n # Thread 2 cannot take a lock on 0_1 in the StateDirectory because it is still being held by Thread 1\r\n # Thread 2 remains in rebalancing state, and cannot make progress on task 0_1, or any other tasks it has assigned.",
+    "fixVersions": [
+      {
+        "self": "https://issues.apache.org/jira/rest/api/2/version/12354122",
+        "id": "12354122",
+        "name": "3.7.1",
+        "archived": false,
+        "released": true,
+        "releaseDate": "2024-06-28"
+      },
+      {
+        "self": "https://issues.apache.org/jira/rest/api/2/version/12354033",
+        "id": "12354033",
+        "name": "3.8.0",
+        "archived": false,
+        "released": true,
+        "releaseDate": "2024-07-29"
+      }
+    ],
+    "priority": {
+      "self": "https://issues.apache.org/jira/rest/api/2/priority/3",
+      "iconUrl": "https://issues.apache.org/jira/images/icons/priorities/major.svg",
+      "name": "Major",
+      "id": "3"
+    },
+    "resolution": {
+      "self": "https://issues.apache.org/jira/rest/api/2/resolution/1",
+      "id": "1",
+      "description": "A fix for this issue is checked into the tree and tested.",
+      "name": "Fixed"
+    },
+    "labels": [],
+    "versions": [
+      {
+        "self": "https://issues.apache.org/jira/rest/api/2/version/12352112",
+        "id": "12352112",
+        "description": "",
+        "name": "3.4.0",
+        "archived": false,
+        "released": true,
+        "releaseDate": "2023-02-07"
+      }
+    ],
+    "resolutiondate": "2024-01-08T22:51:45.000+0000",
+    "comment": {
+      "comments": [
+        {
+          "self": "https://issues.apache.org/jira/rest/api/2/issue/13562131/comment/17801223",
+          "id": "17801223",
+          "author": {
+            "self": "https://issues.apache.org/jira/rest/api/2/user?username=sabitn",
+            "name": "sabitn",
+            "key": "JIRAUSER303392",
+            "avatarUrls": {
+              "48x48": "https://issues.apache.org/jira/secure/useravatar?avatarId=10452",
+              "24x24": "https://issues.apache.org/jira/secure/useravatar?size=small&avatarId=10452",
+              "16x16": "https://issues.apache.org/jira/secure/useravatar?size=xsmall&avatarId=10452",
+              "32x32": "https://issues.apache.org/jira/secure/useravatar?size=medium&avatarId=10452"
+            },
+            "displayName": "Sabit",
+            "active": true,
+            "timeZone": "Etc/UTC"
+          },
+          "body": "Submitted PR: https://github.com/apache/kafka/pull/15088",
+          "updateAuthor": {
+            "self": "https://issues.apache.org/jira/rest/api/2/user?username=sabitn",
+            "name": "sabitn",
+            "key": "JIRAUSER303392",
+            "avatarUrls": {
+              "48x48": "https://issues.apache.org/jira/secure/useravatar?avatarId=10452",
+              "24x24": "https://issues.apache.org/jira/secure/useravatar?size=small&avatarId=10452",
+              "16x16": "https://issues.apache.org/jira/secure/useravatar?size=xsmall&avatarId=10452",
+              "32x32": "https://issues.apache.org/jira/secure/useravatar?size=medium&avatarId=10452"
+            },
+            "displayName": "Sabit",
+            "active": true,
+            "timeZone": "Etc/UTC"
+          },
+          "created": "2023-12-29T16:53:46.488+0000",
+          "updated": "2023-12-29T16:53:46.488+0000"
+        },
+        {
+          "self": "https://issues.apache.org/jira/rest/api/2/issue/13562131/comment/17801927",
+          "id": "17801927",
+          "author": {
+            "self": "https://issues.apache.org/jira/rest/api/2/user?username=ableegoldman",
+            "name": "ableegoldman",
+            "key": "ableegoldman",
+            "avatarUrls": {
+              "48x48": "https://issues.apache.org/jira/secure/useravatar?ownerId=ableegoldman&avatarId=39245",
+              "24x24": "https://issues.apache.org/jira/secure/useravatar?size=small&ownerId=ableegoldman&avatarId=39245",
+              "16x16": "https://issues.apache.org/jira/secure/useravatar?size=xsmall&ownerId=ableegoldman&avatarId=39245",
+              "32x32": "https://issues.apache.org/jira/secure/useravatar?size=medium&ownerId=ableegoldman&avatarId=39245"
+            },
+            "displayName": "A. Sophie Blee-Goldman",
+            "active": true,
+            "timeZone": "America/Los_Angeles"
+          },
+          "body": "Nice find and writeup of the race condition – I'll take a look at the fix",
+          "updateAuthor": {
+            "self": "https://issues.apache.org/jira/rest/api/2/user?username=ableegoldman",
+            "name": "ableegoldman",
+            "key": "ableegoldman",
+            "avatarUrls": {
+              "48x48": "https://issues.apache.org/jira/secure/useravatar?ownerId=ableegoldman&avatarId=39245",
+              "24x24": "https://issues.apache.org/jira/secure/useravatar?size=small&ownerId=ableegoldman&avatarId=39245",
+              "16x16": "https://issues.apache.org/jira/secure/useravatar?size=xsmall&ownerId=ableegoldman&avatarId=39245",
+              "32x32": "https://issues.apache.org/jira/secure/useravatar?size=medium&ownerId=ableegoldman&avatarId=39245"
+            },
+            "displayName": "A. Sophie Blee-Goldman",
+            "active": true,
+            "timeZone": "America/Los_Angeles"
+          },
+          "created": "2024-01-02T21:10:24.277+0000",
+          "updated": "2024-01-02T21:10:24.277+0000"
+        },
+        {
+          "self": "https://issues.apache.org/jira/rest/api/2/issue/13562131/comment/17804498",
+          "id": "17804498",
+          "author": {
+            "self": "https://issues.apache.org/jira/rest/api/2/user?username=ableegoldman",
+            "name": "ableegoldman",
+            "key": "ableegoldman",
+            "avatarUrls": {
+              "48x48": "https://issues.apache.org/jira/secure/useravatar?ownerId=ableegoldman&avatarId=39245",
+              "24x24": "https://issues.apache.org/jira/secure/useravatar?size=small&ownerId=ableegoldman&avatarId=39245",
+              "16x16": "https://issues.apache.org/jira/secure/useravatar?size=xsmall&ownerId=ableegoldman&avatarId=39245",
+              "32x32": "https://issues.apache.org/jira/secure/useravatar?size=medium&ownerId=ableegoldman&avatarId=39245"
+            },
+            "displayName": "A. Sophie Blee-Goldman",
+            "active": true,
+            "timeZone": "America/Los_Angeles"
+          },
+          "body": "FYI [~sabitn] I added you as a Jira contributor so you should now be able to self-assign any tickets you are working on. Thanks again for the fix!",
+          "updateAuthor": {
+            "self": "https://issues.apache.org/jira/rest/api/2/user?username=ableegoldman",
+            "name": "ableegoldman",
+            "key": "ableegoldman",
+            "avatarUrls": {
+              "48x48": "https://issues.apache.org/jira/secure/useravatar?ownerId=ableegoldman&avatarId=39245",
+              "24x24": "https://issues.apache.org/jira/secure/useravatar?size=small&ownerId=ableegoldman&avatarId=39245",
+              "16x16": "https://issues.apache.org/jira/secure/useravatar?size=xsmall&ownerId=ableegoldman&avatarId=39245",
+              "32x32": "https://issues.apache.org/jira/secure/useravatar?size=medium&ownerId=ableegoldman&avatarId=39245"
+            },
+            "displayName": "A. Sophie Blee-Goldman",
+            "active": true,
+            "timeZone": "America/Los_Angeles"
+          },
+          "created": "2024-01-08T22:52:39.021+0000",
+          "updated": "2024-01-08T22:52:39.021+0000"
+        }
+      ],
+      "maxResults": 3,
+      "total": 3,
+      "startAt": 0
+    },
+    "updated": "2024-03-07T20:41:07.000+0000",
+    "status": {
+      "self": "https://issues.apache.org/jira/rest/api/2/status/5",
+      "description": "A resolution has been taken, and it is awaiting verification by reporter. From here issues are either reopened, or are closed.",
+      "iconUrl": "https://issues.apache.org/jira/images/icons/statuses/resolved.png",
+      "name": "Resolved",
+      "id": "5",
+      "statusCategory": {
+        "self": "https://issues.apache.org/jira/rest/api/2/statuscategory/3",
+        "id": 3,
+        "key": "done",
+        "colorName": "green",
+        "name": "Done"
+      }
+    }
+  }
+}

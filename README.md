@@ -1,19 +1,34 @@
 # dep-watch-agent
 
-An agent that watches project dependencies for new releases, security advisories, and breaking changes.
+Watches upstream issue trackers (starting with Apache Kafka's JIRA) for bugs that affect a
+pinned dependency version: data loss, upgrade regressions, deadlocks and other issues that
+never get a CVE.
 
 ## Status
 
-Early scaffold — nothing implemented yet.
+- Version parsing and affected-range checks (`dep_watch_agent.versions`)
+- Incremental JIRA sync into Postgres (`dep-watch-agent sync-jira`)
 
 ## Development
 
-Requires [uv](https://docs.astral.sh/uv/).
+Requires [uv](https://docs.astral.sh/uv/) and Docker.
 
 ```bash
-uv sync                      # create .venv and install deps
-uv run dep-watch-agent       # run the CLI
-uv run pytest                # run tests
-uv run ruff check .          # lint
-uv run ruff format .         # format
+uv sync                          # create .venv and install deps
+docker compose up -d --wait      # start Postgres (pgvector) on localhost:5433
+uv run dep-watch-agent migrate   # apply database migrations
+uv run dep-watch-agent sync-jira # sync KAFKA issues (incremental after the first run)
+uv run pytest                    # run tests (DB tests skip if Postgres is down)
+uv run ruff check .              # lint
+uv run ruff format .             # format
 ```
+
+Set `DATABASE_URL` to use a different Postgres (see `.env.example`). Tests use
+`TEST_DATABASE_URL` if set, and each test runs in its own throwaway schema.
+
+### JIRA sync
+
+`sync-jira` pulls issues with their affected versions, fix versions, components and comments
+from `issues.apache.org` anonymously. The first run fetches all ~20k KAFKA issues (about
+7 minutes with the default 1 s delay between requests); later runs fetch only issues updated
+since the previous run. Use `--full` to re-sync everything.
