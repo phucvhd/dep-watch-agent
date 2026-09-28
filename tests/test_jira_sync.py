@@ -1,10 +1,17 @@
 from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
+from sqlalchemy import func, select
 
 from dep_watch_agent.jira.models import parse_issue
 from dep_watch_agent.jira.store import load_watermark, upsert_issue
 from dep_watch_agent.jira.sync import FIELDS, build_jql, sync_project
+from dep_watch_agent.orm import (
+    JiraCommentRow,
+    JiraIssueComponentRow,
+    JiraIssueRow,
+    JiraIssueVersionRow,
+)
 from tests.jira_factory import raw_comment, raw_issue
 
 
@@ -51,11 +58,11 @@ def test_build_jql_incremental_uses_utc_minutes():
 # --- sync against Postgres ------------------------------------------------------
 
 
-def count(db, table: str) -> int:
-    return db.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+def count(session, model) -> int:
+    return session.scalar(select(func.count()).select_from(model))
 
 
-def test_first_sync_is_full_and_saves_start_time(db):
+def test_first_sync_is_full_and_saves_start_time(db, schema):
     client = FakeClient([raw_issue(1, "KAFKA-1"), raw_issue(2, "KAFKA-2")])
 
     result = sync_project(db, client, now=clock(T0))
@@ -63,8 +70,10 @@ def test_first_sync_is_full_and_saves_start_time(db):
     assert result.issues_synced == 2
     assert result.since is None
     assert "updated >=" not in client.queries[0]
-    assert load_watermark(db, "jira:KAFKA") == T0
-    assert count(db, "jira_issues") == 2
+    # Committed, not just visible in this session.
+    with schema.session() as other:
+        assert load_watermark(other, "jira:KAFKA") == T0
+        assert count(other, JiraIssueRow) == 2
 
 
 def test_second_sync_is_incremental_with_overlap(db):
@@ -85,7 +94,7 @@ def test_full_flag_ignores_watermark(db):
     assert "updated >=" not in client.queries[0]
 
 
-def test_watermark_not_saved_if_sync_fails(db):
+def test_watermark_not_saved_if_sync_fails(db, schema):
     class Boom(Exception):
         pass
 
@@ -97,9 +106,10 @@ def test_watermark_not_saved_if_sync_fails(db):
     with pytest.raises(Boom):
         sync_project(db, FailingClient([]), now=clock(T0))
 
-    assert load_watermark(db, "jira:KAFKA") is None
-    # Issues synced before the failure are kept; the rerun upserts them again.
-    assert count(db, "jira_issues") == 1
+    with schema.session() as other:
+        assert load_watermark(other, "jira:KAFKA") is None
+        # Issues synced before the failure are committed; the rerun upserts them again.
+        assert count(other, JiraIssueRow) == 1
 
 
 def test_watermarks_are_per_project(db):
@@ -115,7 +125,7 @@ def test_fetches_truncated_comments(db):
     sync_project(db, client, now=clock(T0))
 
     assert client.comment_requests == ["KAFKA-1"]
-    assert count(db, "jira_comments") == 5
+    assert count(db, JiraCommentRow) == 5
 
 
 def test_does_not_fetch_complete_comments(db):
@@ -135,27 +145,50 @@ def test_progress_callback(db):
 # --- store ------------------------------------------------------------------------
 
 
+def versions_of(session, issue_id: int) -> list[tuple[str, str]]:
+    return [
+        tuple(r)
+        for r in session.execute(
+            select(JiraIssueVersionRow.kind, JiraIssueVersionRow.name)
+            .where(JiraIssueVersionRow.issue_id == issue_id)
+            .order_by(JiraIssueVersionRow.kind, JiraIssueVersionRow.name)
+        )
+    ]
+
+
 def test_upsert_stores_everything(db, load_fixture):
     issue = parse_issue(load_fixture("jira/issue_bug_backported.json"))
     upsert_issue(db, issue)
 
     row = db.execute(
-        "SELECT key, project, issue_type, resolution, raw->>'key' FROM jira_issues WHERE id = %s",
-        (issue.id,),
-    ).fetchone()
-    assert row == ("KAFKA-16025", "KAFKA", "Bug", "Fixed", "KAFKA-16025")
+        select(
+            JiraIssueRow.key,
+            JiraIssueRow.project,
+            JiraIssueRow.issue_type,
+            JiraIssueRow.resolution,
+            JiraIssueRow.raw["key"].astext,
+        ).where(JiraIssueRow.id == issue.id)
+    ).one()
+    assert tuple(row) == ("KAFKA-16025", "KAFKA", "Bug", "Fixed", "KAFKA-16025")
+    assert versions_of(db, issue.id) == [("affects", "3.4.0"), ("fix", "3.7.1"), ("fix", "3.8.0")]
+    assert db.scalars(select(JiraIssueComponentRow.component)).all() == ["streams"]
+    assert count(db, JiraCommentRow) == 3
 
-    versions = db.execute(
-        "SELECT kind, name FROM jira_issue_versions WHERE issue_id = %s ORDER BY kind, name",
-        (issue.id,),
-    ).fetchall()
-    assert versions == [("affects", "3.4.0"), ("fix", "3.7.1"), ("fix", "3.8.0")]
 
-    components = db.execute(
-        "SELECT component FROM jira_issue_components WHERE issue_id = %s", (issue.id,)
-    ).fetchall()
-    assert components == [("streams",)]
-    assert count(db, "jira_comments") == 3
+def test_relationships_load_children(db, load_fixture):
+    issue = parse_issue(load_fixture("jira/issue_bug_backported.json"))
+    upsert_issue(db, issue)
+    db.commit()
+
+    row = db.get(JiraIssueRow, issue.id)
+    assert sorted((v.kind, v.name) for v in row.versions) == [
+        ("affects", "3.4.0"),
+        ("fix", "3.7.1"),
+        ("fix", "3.8.0"),
+    ]
+    assert [c.component for c in row.components] == ["streams"]
+    assert [c.created_at for c in row.comments] == sorted(c.created_at for c in row.comments)
+    assert row.comments[0].issue is row
 
 
 def test_upsert_replaces_children(db):
@@ -187,26 +220,31 @@ def test_upsert_replaces_children(db):
         ),
     )
 
-    assert db.execute("SELECT summary FROM jira_issues").fetchall() == [("Renamed",)]
-    assert db.execute(
-        "SELECT kind, name FROM jira_issue_versions ORDER BY kind, name"
-    ).fetchall() == [("affects", "3.6.0"), ("fix", "3.7.1"), ("fix", "3.8.0")]
-    assert db.execute("SELECT component FROM jira_issue_components").fetchall() == [("streams",)]
-    assert db.execute("SELECT id, body FROM jira_comments").fetchall() == [(11, "b edited")]
+    assert db.scalars(select(JiraIssueRow.summary)).all() == ["Renamed"]
+    assert versions_of(db, 1) == [("affects", "3.6.0"), ("fix", "3.7.1"), ("fix", "3.8.0")]
+    assert db.scalars(select(JiraIssueComponentRow.component)).all() == ["streams"]
+    assert [tuple(r) for r in db.execute(select(JiraCommentRow.id, JiraCommentRow.body))] == [
+        (11, "b edited")
+    ]
+
+
+def test_upsert_without_children(db):
+    upsert_issue(db, parse_issue(raw_issue(1, "KAFKA-1")))
+    assert count(db, JiraIssueRow) == 1
+    assert count(db, JiraIssueVersionRow) == 0
 
 
 def test_upsert_follows_key_change(db):
     # Moving an issue between projects changes its key but not its id.
     upsert_issue(db, parse_issue(raw_issue(1, "OLD-5")))
     upsert_issue(db, parse_issue(raw_issue(1, "KAFKA-99")))
-    assert db.execute("SELECT id, key, project FROM jira_issues").fetchall() == [
-        (1, "KAFKA-99", "KAFKA")
-    ]
+    rows = db.execute(select(JiraIssueRow.id, JiraIssueRow.key, JiraIssueRow.project)).all()
+    assert [tuple(r) for r in rows] == [(1, "KAFKA-99", "KAFKA")]
 
 
 def test_resync_is_idempotent(db):
     issues = [raw_issue(1, "KAFKA-1", fix=["3.7.0"]), raw_issue(2, "KAFKA-2")]
     sync_project(db, FakeClient(issues), now=clock(T0))
     sync_project(db, FakeClient(issues), full=True, now=clock(T1))
-    assert count(db, "jira_issues") == 2
-    assert count(db, "jira_issue_versions") == 1
+    assert count(db, JiraIssueRow) == 2
+    assert count(db, JiraIssueVersionRow) == 1

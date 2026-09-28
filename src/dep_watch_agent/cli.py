@@ -55,7 +55,7 @@ def _migrate() -> int:
 
 
 def _sync_jira(project: str, *, full: bool, request_delay: float) -> int:
-    from dep_watch_agent.db import connect, migrate
+    from dep_watch_agent.db import migrate, session_factory
     from dep_watch_agent.jira.client import JiraClient
     from dep_watch_agent.jira.sync import sync_project
 
@@ -64,8 +64,8 @@ def _sync_jira(project: str, *, full: bool, request_delay: float) -> int:
             print(f"  {count} issues synced", file=sys.stderr)
 
     migrate()
-    with connect() as conn, JiraClient(request_delay=request_delay) as client:
-        result = sync_project(conn, client, project, full=full, on_issue=progress)
+    with session_factory()() as session, JiraClient(request_delay=request_delay) as client:
+        result = sync_project(session, client, project, full=full, on_issue=progress)
 
     since = result.since.isoformat() if result.since else "the beginning"
     print(f"{result.source}: synced {result.issues_synced} issue(s) updated since {since}")

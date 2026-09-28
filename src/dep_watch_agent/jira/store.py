@@ -1,95 +1,92 @@
-"""Persist JIRA issues to Postgres. Every write is an idempotent upsert."""
+"""Persist JIRA issues to Postgres. Every write is an idempotent upsert.
+
+These functions don't commit; the caller owns the transaction.
+"""
 
 from datetime import datetime
 
-import psycopg
-from psycopg.types.json import Jsonb
+from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import Session
 
 from dep_watch_agent.jira.models import JiraIssue
+from dep_watch_agent.orm import (
+    JiraCommentRow,
+    JiraIssueComponentRow,
+    JiraIssueRow,
+    JiraIssueVersionRow,
+    SyncStateRow,
+)
 
 
-def upsert_issue(conn: psycopg.Connection, issue: JiraIssue) -> None:
+def upsert_issue(session: Session, issue: JiraIssue) -> None:
     """Insert or replace an issue and its versions, components and comments."""
-    with conn.transaction():
-        conn.execute(
-            """
-            INSERT INTO jira_issues (
-                id, key, project, summary, description, issue_type, status, resolution,
-                priority, labels, created_at, updated_at, resolved_at, raw, synced_at
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
-            ON CONFLICT (id) DO UPDATE SET
-                key = EXCLUDED.key,
-                project = EXCLUDED.project,
-                summary = EXCLUDED.summary,
-                description = EXCLUDED.description,
-                issue_type = EXCLUDED.issue_type,
-                status = EXCLUDED.status,
-                resolution = EXCLUDED.resolution,
-                priority = EXCLUDED.priority,
-                labels = EXCLUDED.labels,
-                created_at = EXCLUDED.created_at,
-                updated_at = EXCLUDED.updated_at,
-                resolved_at = EXCLUDED.resolved_at,
-                raw = EXCLUDED.raw,
-                synced_at = now()
-            """,
-            (
-                issue.id,
-                issue.key,
-                issue.project,
-                issue.summary,
-                issue.description,
-                issue.issue_type,
-                issue.status,
-                issue.resolution,
-                issue.priority,
-                issue.labels,
-                issue.created_at,
-                issue.updated_at,
-                issue.resolved_at,
-                Jsonb(issue.raw),
-            ),
+    values = {
+        "id": issue.id,
+        "key": issue.key,
+        "project": issue.project,
+        "summary": issue.summary,
+        "description": issue.description,
+        "issue_type": issue.issue_type,
+        "status": issue.status,
+        "resolution": issue.resolution,
+        "priority": issue.priority,
+        "labels": issue.labels,
+        "created_at": issue.created_at,
+        "updated_at": issue.updated_at,
+        "resolved_at": issue.resolved_at,
+        "raw": issue.raw,
+    }
+    stmt = insert(JiraIssueRow).values(values)  # synced_at defaults to now() on insert
+    session.execute(
+        stmt.on_conflict_do_update(
+            index_elements=[JiraIssueRow.id],
+            set_={**{k: stmt.excluded[k] for k in values if k != "id"}, "synced_at": func.now()},
         )
+    )
 
-        # Child rows are replaced wholesale so removed versions, components and deleted
-        # comments disappear on re-sync.
-        for table in ("jira_issue_versions", "jira_issue_components", "jira_comments"):
-            conn.execute(f"DELETE FROM {table} WHERE issue_id = %s", (issue.id,))
+    # Child rows are replaced wholesale so removed versions, components and deleted comments
+    # disappear on re-sync.
+    for child in (JiraIssueVersionRow, JiraIssueComponentRow, JiraCommentRow):
+        session.execute(delete(child).where(child.issue_id == issue.id))
 
-        with conn.cursor() as cur:
-            cur.executemany(
-                "INSERT INTO jira_issue_versions (issue_id, kind, name) VALUES (%s, %s, %s)",
-                [(issue.id, "affects", v) for v in issue.affects_versions]
-                + [(issue.id, "fix", v) for v in issue.fix_versions],
-            )
-            cur.executemany(
-                "INSERT INTO jira_issue_components (issue_id, component) VALUES (%s, %s)",
-                [(issue.id, c) for c in issue.components],
-            )
-            cur.executemany(
-                """
-                INSERT INTO jira_comments (id, issue_id, author, body, created_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                """,
-                [
-                    (c.id, issue.id, c.author, c.body, c.created_at, c.updated_at)
-                    for c in issue.comments
-                ],
-            )
+    versions = [
+        {"issue_id": issue.id, "kind": kind, "name": name}
+        for kind, names in (("affects", issue.affects_versions), ("fix", issue.fix_versions))
+        for name in names
+    ]
+    components = [{"issue_id": issue.id, "component": c} for c in issue.components]
+    comments = [
+        {
+            "id": c.id,
+            "issue_id": issue.id,
+            "author": c.author,
+            "body": c.body,
+            "created_at": c.created_at,
+            "updated_at": c.updated_at,
+        }
+        for c in issue.comments
+    ]
+    for model, rows in (
+        (JiraIssueVersionRow, versions),
+        (JiraIssueComponentRow, components),
+        (JiraCommentRow, comments),
+    ):
+        if rows:
+            session.execute(insert(model), rows)
 
 
-def load_watermark(conn: psycopg.Connection, source: str) -> datetime | None:
-    row = conn.execute("SELECT watermark FROM sync_state WHERE source = %s", (source,)).fetchone()
-    return row[0] if row else None
+def load_watermark(session: Session, source: str) -> datetime | None:
+    # A column query, not session.get(): the identity map would return a cached row that
+    # save_watermark's upsert doesn't update.
+    return session.scalar(select(SyncStateRow.watermark).where(SyncStateRow.source == source))
 
 
-def save_watermark(conn: psycopg.Connection, source: str, watermark: datetime) -> None:
-    with conn.transaction():
-        conn.execute(
-            """
-            INSERT INTO sync_state (source, watermark) VALUES (%s, %s)
-            ON CONFLICT (source) DO UPDATE SET watermark = EXCLUDED.watermark, updated_at = now()
-            """,
-            (source, watermark),
+def save_watermark(session: Session, source: str, watermark: datetime) -> None:
+    stmt = insert(SyncStateRow).values(source=source, watermark=watermark)
+    session.execute(
+        stmt.on_conflict_do_update(
+            index_elements=[SyncStateRow.source],
+            set_={"watermark": stmt.excluded.watermark, "updated_at": func.now()},
         )
+    )
