@@ -18,7 +18,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-import psycopg
+from sqlalchemy.orm import Session
 
 from dep_watch_agent.jira.client import JiraClient
 from dep_watch_agent.jira.models import comments_truncated, parse_issue
@@ -60,7 +60,7 @@ def build_jql(project: str, since: datetime | None) -> str:
 
 
 def sync_project(
-    conn: psycopg.Connection,
+    session: Session,
     client: JiraClient,
     project: str = "KAFKA",
     *,
@@ -69,20 +69,26 @@ def sync_project(
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
     on_issue: Callable[[int], None] | None = None,
 ) -> SyncResult:
-    """Sync issues updated since the last run, or every issue if ``full``."""
+    """Sync issues updated since the last run, or every issue if ``full``.
+
+    Commits after each issue, so no transaction stays open while waiting on JIRA.
+    """
     source = f"jira:{project}"
     started_at = now()
-    watermark = None if full else load_watermark(conn, source)
+    watermark = None if full else load_watermark(session, source)
+    session.commit()
     since = watermark - overlap if watermark is not None else None
 
     count = 0
     for raw in client.search(build_jql(project, since), FIELDS):
         if comments_truncated(raw):
             raw["fields"]["comment"]["comments"] = client.comments(raw["key"])
-        upsert_issue(conn, parse_issue(raw))
+        upsert_issue(session, parse_issue(raw))
+        session.commit()
         count += 1
         if on_issue is not None:
             on_issue(count)
 
-    save_watermark(conn, source, started_at)
+    save_watermark(session, source, started_at)
+    session.commit()
     return SyncResult(source=source, since=since, issues_synced=count, watermark=started_at)
