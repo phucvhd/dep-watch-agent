@@ -26,6 +26,23 @@ uv run ruff format .             # format
 Set `DATABASE_URL` to use a different Postgres (see `.env.example`). Tests use
 `TEST_DATABASE_URL` if set, and each test runs in its own throwaway schema.
 
+### Schema migrations
+
+Migrations are [Alembic](https://alembic.sqlalchemy.org/) revisions in
+`src/dep_watch_agent/migrations/versions/`, written as raw SQL with `op.execute`. There are no
+ORM models, so autogenerate is not used.
+
+```bash
+uv run alembic revision -m "add foo table"   # new revision; fill in upgrade() and downgrade()
+uv run alembic upgrade head                  # same as `dep-watch-agent migrate`
+uv run alembic downgrade -1                  # undo the latest revision
+uv run alembic history                       # list revisions
+```
+
+Every revision must have a working `downgrade()`; the test suite upgrades and downgrades each
+one. If two branches both add a revision, merge the heads (`uv run alembic merge heads`)
+before landing; a test fails when there is more than one head.
+
 ### JIRA sync
 
 `sync-jira` pulls issues with their affected versions, fix versions, components and comments
