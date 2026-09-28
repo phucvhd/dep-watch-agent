@@ -64,7 +64,15 @@ config version, and asks: is this version affected?
 uv run dep-watch-agent eval sample    # sample 100 issues -> 200 cases, empty labels.csv
 uv run dep-watch-agent eval status    # labeling progress
 uv run dep-watch-agent eval upload    # push to the Langfuse dataset (needs .env keys)
+uv run dep-watch-agent eval run --system baseline             # score locally (needs labels)
+uv run dep-watch-agent eval run --system baseline --langfuse  # record a Langfuse experiment
+uv run dep-watch-agent eval run --provisional                 # before labeling; not a result
 ```
+
+Every system extracts cited version facts from the issue text; `verdict.decide` drops facts
+whose quote isn't in the text, then decides with the version module. The **baseline**
+(`baseline.py`) extracts with regex and cue words, no LLM, and is the number every LLM change
+is reported against. Metric definitions are in `eval/metrics.py`.
 
 - **Metadata answer**: `in_affected_range` over JIRA's affected/fix versions. Each issue gets
   one affected config and one deliberately hard not-affected config (the fix release, a later

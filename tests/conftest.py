@@ -15,6 +15,14 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 
 @pytest.fixture
+def written(tmp_path):
+    """A two-issue, four-case dataset written to disk, unlabeled."""
+    from tests.eval_factory import write_test_dataset
+
+    return write_test_dataset(tmp_path / "test-set")
+
+
+@pytest.fixture
 def load_fixture():
     def load(name: str) -> dict:
         return json.loads((FIXTURES / name).read_text())

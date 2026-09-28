@@ -34,8 +34,8 @@ from dep_watch_agent.eval.sampling import (
     strata_counts,
     stratified_sample,
 )
+from dep_watch_agent.verdict import INSUFFICIENT_INFORMATION
 
-INSUFFICIENT_INFORMATION = "insufficient_information"
 ANSWERABLE_VALUES = ("yes", "no")
 
 LABEL_FIELDS = [
