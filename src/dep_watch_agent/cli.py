@@ -9,6 +9,8 @@ from dep_watch_agent import __version__
 DATASETS_DIR = Path("eval/datasets")
 DEFAULT_DATASET = "kafka-ground-truth-v1"
 DEFAULT_SEED = 20260927
+RUNS_DIR = Path("eval/runs")
+SYSTEMS = ("baseline",)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -39,6 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("sample", "sample issues and write a new dataset with an empty labels.csv"),
         ("status", "show labeling progress and problems"),
         ("upload", "upload a fully labeled dataset to Langfuse"),
+        ("run", "score a system on the dataset"),
     ):
         p = eval_commands.add_parser(sub, help=help_text)
         p.add_argument("--name", default=DEFAULT_DATASET, help=f"default: {DEFAULT_DATASET}")
@@ -47,6 +50,19 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--size", type=int, default=100, help="issues to sample (default: 100)")
             p.add_argument("--seed", type=int, default=DEFAULT_SEED)
             p.add_argument("--force", action="store_true", help="overwrite an existing dataset")
+        if sub == "run":
+            p.add_argument("--system", choices=sorted(SYSTEMS), default="baseline")
+            p.add_argument("--run-name", help="default: <system>-<UTC timestamp>")
+            p.add_argument(
+                "--provisional",
+                action="store_true",
+                help="score against JIRA metadata answers; allowed before labeling is done",
+            )
+            p.add_argument(
+                "--langfuse",
+                action="store_true",
+                help="run as a Langfuse experiment on the uploaded dataset",
+            )
     return parser
 
 
@@ -119,6 +135,9 @@ def _eval(args: argparse.Namespace) -> int:
             print(f"next: label {directory / 'labels.csv'} while reading {directory / 'review.md'}")
             return 0
 
+        if args.eval_command == "run":
+            return _eval_run(args, directory)
+
         dataset = ds.load_dataset(directory)
         if args.eval_command == "status":
             labeled, total = ds.label_progress(dataset)
@@ -140,6 +159,56 @@ def _eval(args: argparse.Namespace) -> int:
     except ds.DatasetError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+
+
+def _eval_run(args: argparse.Namespace, directory: Path) -> int:
+    import json
+    from datetime import UTC, datetime
+
+    from dep_watch_agent.baseline import RuleBasedExtractor
+    from dep_watch_agent.db import session_factory
+    from dep_watch_agent.eval import dataset as ds
+    from dep_watch_agent.eval.metrics import compute_metrics, format_metrics
+    from dep_watch_agent.eval.runner import run_langfuse, run_local
+    from dep_watch_agent.eval.sampling import known_versions
+
+    with session_factory()() as session:
+        extractor = RuleBasedExtractor(known_versions(session, "KAFKA"))
+    run_name = args.run_name or f"{args.system}-{datetime.now(UTC):%Y%m%dT%H%M%SZ}"
+
+    if args.langfuse:
+        if args.provisional:
+            raise ds.DatasetError("--provisional runs are local only; Langfuse holds labeled data")
+        from langfuse import Langfuse
+
+        client = Langfuse()
+        _, metrics = run_langfuse(client, args.name, extractor, run_name=run_name)
+        client.flush()
+        print(f"Langfuse experiment {run_name} on {args.name}")
+        results = None
+    else:
+        dataset = ds.load_dataset(directory)
+        results = run_local(dataset, extractor, provisional=args.provisional)
+        metrics = compute_metrics(results)
+
+    label = "PROVISIONAL (metadata answers, not labels)" if args.provisional else "labeled"
+    print(f"{run_name}: {extractor.name} on {args.name}, {label}")
+    print(format_metrics(metrics))
+
+    if results is not None:
+        out = RUNS_DIR / args.name / f"{run_name}.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "run_name": run_name,
+            "system": extractor.name,
+            "dataset": args.name,
+            "provisional": args.provisional,
+            "metrics": metrics,
+            "results": [r.__dict__ for r in results],
+        }
+        out.write_text(json.dumps(payload, indent=2) + "\n")
+        print(f"results: {out}")
+    return 0
 
 
 if __name__ == "__main__":
