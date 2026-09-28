@@ -42,11 +42,15 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _migrate() -> int:
-    from dep_watch_agent.db import connect, migrate
+    from dep_watch_agent.db import current_revision, migrate
 
-    with connect() as conn:
-        applied = migrate(conn)
-    print(f"applied {len(applied)} migration(s)" + (f": {', '.join(applied)}" if applied else ""))
+    before = current_revision()
+    migrate()
+    after = current_revision()
+    if before == after:
+        print(f"database already at revision {after}")
+    else:
+        print(f"migrated database from revision {before or '(empty)'} to {after}")
     return 0
 
 
@@ -59,8 +63,8 @@ def _sync_jira(project: str, *, full: bool, request_delay: float) -> int:
         if count % 500 == 0:
             print(f"  {count} issues synced", file=sys.stderr)
 
+    migrate()
     with connect() as conn, JiraClient(request_delay=request_delay) as client:
-        migrate(conn)
         result = sync_project(conn, client, project, full=full, on_issue=progress)
 
     since = result.since.isoformat() if result.since else "the beginning"
