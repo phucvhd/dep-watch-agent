@@ -1,0 +1,64 @@
+{
+  "name": "kafka-ground-truth-v2",
+  "project": "KAFKA",
+  "seed": 20260927,
+  "size": 100,
+  "design": {
+    "version": "v2",
+    "description": "Fix versions given as structured input, as in production; affected versions masked. Negatives are configs before the bug starts, so the text must say where it starts."
+  },
+  "created_at": "2026-09-28T01:16:29.573269+00:00",
+  "max_text_chars": 40000,
+  "excluded_comment_authors": [
+    "ASF GitHub Bot"
+  ],
+  "candidates": 2546,
+  "viable_candidates": 1925,
+  "strata_targets": {
+    "era": {
+      "legacy": 0.1,
+      "2.x": 0.35,
+      "3.x+": 0.55
+    },
+    "start_language": {
+      "True": 0.5,
+      "False": 0.5
+    },
+    "mentions_version": {
+      "True": 0.5,
+      "False": 0.5
+    }
+  },
+  "strata_counts": {
+    "era": {
+      "2.x": 35,
+      "3.x+": 55,
+      "legacy": 10
+    },
+    "mentions_version": {
+      "False": 50,
+      "True": 50
+    },
+    "start_language": {
+      "False": 50,
+      "True": 50
+    }
+  },
+  "case_basis_counts": {
+    "before_affected": 100,
+    "listed_affected": 100
+  },
+  "labels": {
+    "labeled_by": "claude-opus-5-5 (5 independent agents, one per batch of 20 issues; v2 question: given fix versions)",
+    "human_reviewed": false,
+    "method": "text-only judgment per the labeling guide; every 'yes' cites verbatim quotes, verified programmatically (label_evidence.jsonl)",
+    "second_pass": {
+      "cases": 39,
+      "agreement": 0.974,
+      "cohens_kappa": 0.941
+    },
+    "overrides": {
+      "KAFKA-16254@3.4.1": "second pass disagreed; resolved to no (if unsure, no): the 3.5 change added the commit overhead, but the core complaint (no switch to disable offset syncs) may predate 3.5"
+    }
+  }
+}

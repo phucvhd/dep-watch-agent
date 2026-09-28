@@ -2,13 +2,28 @@
 
 This is where "the LLM extracts facts, code decides" is enforced. Every system (the rule-based
 baseline, the LLM pipeline) produces an ``Extraction``: version facts, each with a quote from
-the issue. ``decide`` then:
+the issue text. Fix versions also arrive as structured input (``IssueText.fix_versions``, from
+JIRA or git), as they do in production.
 
-1. drops facts whose quote doesn't appear in the issue text (no valid citation, no fact),
-2. drops versions that aren't a specific release (``3.7`` names a release line, not a release;
-   treating it as ``3.7.0`` would invent a fact),
-3. decides with ``in_affected_range`` from the version module. ``unknown``, or no usable facts
-   at all, becomes ``insufficient_information``.
+Evidence kinds, from strongest start-of-bug signal to fix:
+
+- ``introduced``: the bug starts at this version ("regression in 3.6.0", "broken since 3.6.0")
+- ``affects``: the bug was observed at this version ("reproduced on 3.6.0", a stack trace)
+- ``unaffected``: the bug was absent at this version ("works on 3.5.2")
+- ``fix``: the fix is in this release (text-stated; the given fix versions are added to these)
+
+``decide``:
+
+1. drops facts whose quote isn't in the issue text (no valid citation, no fact), and versions
+   that name a release line (``3.7``) rather than a release;
+2. **not affected** if the version contains a fix, by the version module's backport rules, or
+   the text says this exact version is unaffected;
+3. **affected** if the version is at or after a version where the bug exists (``affects`` or
+   ``introduced``) and before a fix;
+4. **not affected** if the version is before the bug starts: below an ``introduced`` version, or
+   at or below an ``unaffected`` one;
+5. otherwise **insufficient_information**. In particular "seen on 3.6.0" says nothing about
+   3.5.2: the reporter's version is not where the bug starts.
 
 Extractions don't depend on the config version, so one extraction serves every config.
 """
@@ -19,6 +34,7 @@ from typing import Any, Literal
 
 from dep_watch_agent.versions import (
     Applicability,
+    Version,
     VersionParseError,
     in_affected_range,
     parse_version,
@@ -29,16 +45,18 @@ NOT_AFFECTED = "not_affected"
 INSUFFICIENT_INFORMATION = "insufficient_information"
 ANSWERS = (AFFECTED, NOT_AFFECTED, INSUFFICIENT_INFORMATION)
 
-EvidenceKind = Literal["affects", "fix"]
+EvidenceKind = Literal["introduced", "affects", "unaffected", "fix"]
+EVIDENCE_KINDS: tuple[str, ...] = ("introduced", "affects", "unaffected", "fix")
 
 
 @dataclass(frozen=True)
 class IssueText:
-    """The only issue content a system may see."""
+    """The only issue content a system may see: free text plus the given fix versions."""
 
     summary: str
     description: str
     comments: list[str] = field(default_factory=list)
+    fix_versions: list[str] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "IssueText":
@@ -46,9 +64,11 @@ class IssueText:
             summary=data.get("summary") or "",
             description=data.get("description") or "",
             comments=list(data.get("comments") or []),
+            fix_versions=list(data.get("fix_versions") or []),
         )
 
     def fields(self) -> list[str]:
+        """The free-text fields quotes must come from."""
         return [self.summary, self.description, *self.comments]
 
 
@@ -102,19 +122,25 @@ def decide(issue: IssueText, kafka_version: str, extraction: Extraction) -> Deci
         else:
             used.append(ev)
 
-    if not used:
-        return Decision(INSUFFICIENT_INFORMATION, used, dropped)
+    def versions(*kinds: str) -> list[Version]:
+        return [parse_version(ev.version) for ev in used if ev.kind in kinds]
 
-    result = in_affected_range(
-        kafka_version,
-        [ev.version for ev in used if ev.kind == "affects"],
-        [ev.version for ev in used if ev.kind == "fix"],
-    )
-    answer = {
-        Applicability.AFFECTED: AFFECTED,
-        Applicability.NOT_AFFECTED: NOT_AFFECTED,
-        Applicability.UNKNOWN: INSUFFICIENT_INFORMATION,
-    }[result]
+    target = parse_version(kafka_version)
+    fixes = versions("fix") + [parse_version(v) for v in issue.fix_versions if is_release(v)]
+    present = versions("affects", "introduced")
+    introduced = versions("introduced")
+    unaffected = versions("unaffected")
+
+    if fixes and in_affected_range(target, [], fixes) is Applicability.NOT_AFFECTED:
+        answer = NOT_AFFECTED
+    elif target in unaffected and target not in present:
+        answer = NOT_AFFECTED  # a statement about this exact version beats range inference
+    elif present and in_affected_range(target, present, fixes) is Applicability.AFFECTED:
+        answer = AFFECTED
+    elif (introduced and target < min(introduced)) or any(target <= u for u in unaffected):
+        answer = NOT_AFFECTED
+    else:
+        answer = INSUFFICIENT_INFORMATION
     return Decision(answer, used, dropped)
 
 
@@ -129,7 +155,7 @@ def is_release(version: str) -> bool:
 
 
 def _rejection(ev: Evidence, issue: IssueText) -> str | None:
-    if ev.kind not in ("affects", "fix"):
+    if ev.kind not in EVIDENCE_KINDS:
         return f"unknown kind {ev.kind!r}"
     if not quote_in_issue(ev.quote, issue):
         return "citation not found"

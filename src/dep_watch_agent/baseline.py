@@ -4,10 +4,12 @@ This is the system every LLM change is measured against. For each mention of a k
 release in the text, it looks at the words just before the mention (same line or sentence) and
 classifies the mention by the nearest cue:
 
-- fix cues: "fixed in", "merged to", "cherry-picked to", "backported to", "no longer happens in"
-- affects cues: "affects", "since", "reproduced on", "upgraded to", "still present in", and
-  artifact names in stack traces such as ``kafka-clients-2.4.0.jar``
-- neutral cues ("from", "not", "works fine on") cancel the classification
+- introduced: "introduced in", "regression in", "broken since", "started with"
+- affects: "affects", "reproduced on", "upgraded to", "still present in", and artifact names in
+  stack traces such as ``kafka-clients-2.4.0.jar``
+- unaffected: "works fine on", "doesn't happen on", "not reproducible in"
+- fix: "fixed in", "merged to", "cherry-picked to", "backported to", "no longer happens in"
+- neutral cues ("from", "not fixed in") cancel the classification
 
 Mentions with no cue are ignored. Each fact is cited with the line or sentence it came from, so
 citations are valid by construction. The decision itself is made by ``verdict.decide``.
@@ -38,29 +40,40 @@ _CUES: list[tuple[EvidenceKind | None, re.Pattern[str]]] = [
         ("fix", r"\bback-?port(?:ed|ing|s)?\b(?:\s+\w+){0,3}?\s+(?:to|into|on)\b"),
         ("fix", r"\b(?:checked|committed|pushed|landed|included|shipped)\s+(?:in|into|to|on)\b"),
         ("fix", r"\bno\s+longer\s+(?:\w+\s+){0,3}?(?:in|on|with)\b"),
-        # affects
+        # introduced: where the bug starts
+        ("introduced", r"\bintroduc\w*\b(?:\s+\w+){0,2}?\s+(?:in|by|with|since|as\s+of)\b"),
+        ("introduced", r"\bsince\b"),
+        ("introduced", r"\bas\s+of\b"),
+        ("introduced", r"\bregression\s+(?:in|since|with)\b"),
+        ("introduced", r"\bstart(?:ed|s|ing)?\b(?:\s+\w+){0,2}?\s+(?:in|with|after|since)\b"),
+        # affects: the bug was observed here
         ("affects", r"\baffect(?:s|ed|ing)?\b(?:\s+versions?)?\W*"),
-        ("affects", r"\bsince\b"),
-        (
-            "affects",
-            r"\b(?:reproduc|observ|occur|happen|introduc)\w*\b(?:\s+\w+){0,2}?\s+(?:in|on|with)\b",
-        ),
+        ("affects", r"\b(?:reproduc|observ|occur|happen)\w*\b(?:\s+\w+){0,2}?\s+(?:in|on|with)\b"),
         ("affects", r"\b(?:see|seeing|seen|saw)\b(?:\s+\w+){0,3}?\s+(?:in|on|with)\b"),
         ("affects", r"\b(?:running|using|run)\b(?:\s+\w+){0,2}?\s+(?:on|with|kafka)?\b"),
         ("affects", r"\bupgrad\w*\b[^\n]{0,30}?\bto\b"),
         ("affects", r"\bmigrat\w*\s+to\b"),
-        ("affects", r"\b(?:broken|regression|bug|issue|problem|fails?|failing)\s+(?:in|on|with)\b"),
+        ("affects", r"\b(?:broken|bug|issue|problem|fails?|failing)\s+(?:in|on|with)\b"),
         ("affects", r"\bstill\s+(?:\w+\s+){0,2}?(?:in|on|with)\b"),
         ("affects", r"\bkafka(?:[-_](?:clients|streams|connect|tools|server|\d+\.\d+))*[-_]$"),
+        # unaffected: the bug was absent here. Listed before the neutral cues so that on a tie
+        # "doesn't happen on" is unaffected rather than cancelled.
+        (
+            "unaffected",
+            r"\bwork(?:s|ed|ing)?\s+(?:fine|well|ok|correctly|as\s+expected)?\s*(?:in|on|with)\b",
+        ),
+        (
+            "unaffected",
+            r"(?:\bnot\b|\bnever\b|n't\b)\s+(?:happen|occur|reproduc|see|observ|affect|present)\w*"
+            r"\b(?:\s+\w+)?\s+(?:in|on|with)\b",
+        ),
+        ("unaffected", r"\b(?:no|without)\s+(?:issues?|problems?)\s+(?:in|on|with)\b"),
         # neutral: cancels whatever cue came before it
         (None, r"\bfrom\b"),
         (None, r"(?:\bnot\b|\bnever\b|n't\b)(?:\s+\w+){0,2}?\s+(?:in|on|with)\b"),
-        (None, r"\bworks?\s+(?:fine|well|ok|correctly)?\s*(?:in|on|with)\b"),
     ]
 ]
 
-# A line or sentence. Punctuation followed by a word character (3.7.0, e.g., Foo.java) doesn't
-# end it.
 # Between a cue and its version only filler may appear: "fixed in 3.7.1 and 3.8.0",
 # "running Apache Kafka 2.3.1". Anything else ("since it is not ready for 2.0.0") breaks the link.
 _GAP = re.compile(
@@ -69,6 +82,8 @@ _GAP = re.compile(
     re.IGNORECASE,
 )
 
+# A line or sentence. Punctuation followed by a word character (3.7.0, e.g., Foo.java) doesn't
+# end it.
 _SEGMENT = re.compile(r"(?:[^\n.!?]|[.!?](?=\w))+[.!?]?")
 
 

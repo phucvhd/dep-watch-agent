@@ -26,8 +26,9 @@ from sqlalchemy.orm import Session
 from dep_watch_agent.eval.cases import Case, make_cases
 from dep_watch_agent.eval.sampling import (
     DEFAULT_MAX_TEXT_CHARS,
-    DEFAULT_STRATA,
     EXCLUDED_COMMENT_AUTHORS,
+    STRATA_V1,
+    STRATA_V2,
     IssueCandidate,
     load_candidates,
     released_versions,
@@ -53,8 +54,21 @@ LABEL_FIELDS = [
 ]
 
 
+DESIGNS = {
+    "v1": "Text only; fix versions masked. Superseded: the text rarely names the fix release.",
+    "v2": (
+        "Fix versions given as structured input, as in production; affected versions masked. "
+        "Negatives are configs before the bug starts, so the text must say where it starts."
+    ),
+}
+
+
 class DatasetError(Exception):
     pass
+
+
+def _design(manifest: dict[str, Any]) -> str:
+    return manifest.get("design", {}).get("version", "v1")
 
 
 @dataclass(frozen=True)
@@ -81,34 +95,41 @@ def sample_dataset(
     seed: int,
     project: str = "KAFKA",
     max_text_chars: int = DEFAULT_MAX_TEXT_CHARS,
+    design: str = "v2",
     now: datetime | None = None,
 ) -> tuple[dict[str, Any], list[IssueCandidate], list[Case]]:
-    """Sample issues and build their cases. Returns (manifest, sample, cases)."""
+    """Sample issues and build their cases. Returns (manifest, sample, cases).
+
+    ``design`` is ``v2`` (fix versions given to the system, see DESIGNS) or ``v1`` (text only).
+    """
+    if design not in DESIGNS:
+        raise DatasetError(f"unknown design {design!r}; expected one of {sorted(DESIGNS)}")
+    strata = STRATA_V2 if design == "v2" else STRATA_V1
     releases = released_versions(session, project)
     if not releases:
         raise DatasetError(f"no released {project} versions in the database; run sync-jira")
 
     candidates = load_candidates(session, project, max_text_chars=max_text_chars)
-    built = {c.key: make_cases(c, releases, seed=seed) for c in candidates}
+    built = {c.key: make_cases(c, releases, seed=seed, design=design) for c in candidates}
     viable = [c for c in candidates if built[c.key] is not None]
 
-    sample = stratified_sample(viable, size, seed=seed)
+    sample = stratified_sample(viable, size, seed=seed, strata=strata)
     cases = [case for c in sample for case in built[c.key]]
     manifest = {
         "name": name,
         "project": project,
         "seed": seed,
         "size": size,
+        "design": {"version": design, "description": DESIGNS[design]},
         "created_at": (now or datetime.now(UTC)).isoformat(),
         "max_text_chars": max_text_chars,
         "excluded_comment_authors": sorted(EXCLUDED_COMMENT_AUTHORS),
         "candidates": len(candidates),
         "viable_candidates": len(viable),
         "strata_targets": {
-            dim: {str(k): v for k, v in fractions.items()}
-            for dim, fractions in DEFAULT_STRATA.items()
+            dim: {str(k): v for k, v in fractions.items()} for dim, fractions in strata.items()
         },
-        "strata_counts": strata_counts(sample),
+        "strata_counts": strata_counts(sample, strata),
         "case_basis_counts": dict(sorted(Counter(c.basis for c in cases).items())),
     }
     return manifest, sample, cases
@@ -134,7 +155,8 @@ def write_dataset(
 
     by_key = {c.key: c for c in sample}
     (directory / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    _write_jsonl(directory / "issues.jsonl", (_issue_record(c) for c in sample))
+    given_fixes = _design(manifest) == "v2"
+    _write_jsonl(directory / "issues.jsonl", (_issue_record(c, given_fixes) for c in sample))
     _write_jsonl(directory / "cases.jsonl", (asdict(c) for c in cases))
 
     with (directory / "labels.csv").open("w", newline="") as f:
@@ -161,14 +183,17 @@ def write_dataset(
     (directory / "review.md").write_text(_review_markdown(manifest, sample, cases))
 
 
-def _issue_record(candidate: IssueCandidate) -> dict[str, Any]:
-    return {
+def _issue_record(candidate: IssueCandidate, given_fixes: bool) -> dict[str, Any]:
+    record = {
         "issue_key": candidate.key,
         "url": candidate.url,
         "summary": candidate.summary,
         "description": candidate.description,
         "comments": candidate.comments,
     }
+    if given_fixes:
+        record["fix_versions"] = candidate.fix_versions
+    return record
 
 
 def _review_markdown(
@@ -178,20 +203,43 @@ def _review_markdown(
     for case in cases:
         by_issue.setdefault(case.issue_key, []).append(case)
 
+    v2 = _design(manifest) == "v2"
+    question = (
+        [
+            "The fix versions are GIVEN (the system sees them). For each case, decide whether",
+            "the text below plus the given fix versions say enough to conclude the metadata",
+            "answer for that config version: for `affected`, that the bug exists at or before",
+            "the config and isn't fixed by it; for `not_affected` (`before_affected`), that the",
+            'bug did not exist yet at the config ("introduced in", "works on"). "Seen on',
+            '3.6.0" alone says nothing about 3.5.2.',
+        ]
+        if v2
+        else [
+            "For each case, decide whether the text below (and only this text) says enough to",
+            "conclude the metadata answer for that config version.",
+        ]
+    )
     lines = [
         f"# {manifest['name']}: labeling review",
         "",
-        "For each case, decide whether the text below (and only this text) says enough to",
-        "conclude the metadata answer for that config version. Record `yes` or `no` in the",
-        "`answerable_from_text` column of labels.csv, with a short note when it's borderline.",
+        *question,
+        "",
+        "Record `yes` or `no` in the `answerable_from_text` column of labels.csv, with a short",
+        "note when it's borderline.",
         "",
     ]
     for issue in sample:
         lines += [f"## {issue.key}: {issue.summary}", "", issue.url, ""]
-        lines.append(
-            f"JIRA metadata: affects {', '.join(issue.affects_versions)}; fixed in "
-            f"{', '.join(issue.fix_versions)}"
-        )
+        if v2:
+            lines.append(f"Given fix versions: {', '.join(issue.fix_versions)}")
+            lines.append(
+                f"JIRA affects (masked from the system): {', '.join(issue.affects_versions)}"
+            )
+        else:
+            lines.append(
+                f"JIRA metadata: affects {', '.join(issue.affects_versions)}; "
+                f"fixed in {', '.join(issue.fix_versions)}"
+            )
         lines.append("")
         for case in by_issue.get(issue.key, []):
             lines.append(
@@ -294,6 +342,7 @@ def langfuse_items(dataset: Dataset) -> list[dict[str, Any]]:
                     "summary": issue["summary"],
                     "description": issue["description"],
                     "comments": issue["comments"],
+                    **({"fix_versions": issue["fix_versions"]} if "fix_versions" in issue else {}),
                     "kafka_version": case.kafka_version,
                 },
                 "expected_output": {"answer": expected_answer(case, label)},
@@ -318,7 +367,7 @@ def upload(dataset: Dataset, client: LangfuseDatasets) -> int:
     items = langfuse_items(dataset)
     client.create_dataset(
         name=dataset.name,
-        description="Does this Kafka issue affect this version? Masked issue text plus config.",
+        description=DESIGNS[_design(dataset.manifest)],
         metadata={k: v for k, v in dataset.manifest.items() if k != "name"},
     )
     for item in items:

@@ -54,6 +54,7 @@ def test_metric_definitions():
     assert m["abstention_rate"] == 3 / 8
     assert m["abstention_recall"] == 2 / 3
     assert m["citation_validity"] == 6 / 7
+    assert m["always_abstain_accuracy"] == 3 / 8
     assert m["confusion"][NOT_AFFECTED][AFFECTED] == 1
     assert m["accuracy_by_basis"] == {"b": 4 / 6, "fix_version": 1 / 2}
 
@@ -65,6 +66,7 @@ def test_zero_denominators_are_none_not_zero():
     assert m["abstention_recall"] is None
     assert m["citation_validity"] is None
     assert "n/a" in format_metrics(m)
+    assert "(always abstain)" in format_metrics(m)
 
 
 # --- local runs ------------------------------------------------------------------------
