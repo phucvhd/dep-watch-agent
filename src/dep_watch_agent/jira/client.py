@@ -82,7 +82,11 @@ class JiraClient:
             if not batch or len(comments) >= page["total"]:
                 return comments
 
-    def _get(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
+    def project_versions(self, project: str) -> list[dict[str, Any]]:
+        """Every version defined in a project, released or not."""
+        return self._get(f"/rest/api/2/project/{project}/versions", {})
+
+    def _get(self, path: str, params: dict[str, Any]) -> Any:
         attempt = 0
         while True:
             if self._has_requested:

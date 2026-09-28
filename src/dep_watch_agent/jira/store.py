@@ -3,7 +3,8 @@
 These functions don't commit; the caller owns the transaction.
 """
 
-from datetime import datetime
+from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -15,6 +16,7 @@ from dep_watch_agent.orm import (
     JiraIssueComponentRow,
     JiraIssueRow,
     JiraIssueVersionRow,
+    JiraVersionRow,
     SyncStateRow,
 )
 
@@ -74,6 +76,35 @@ def upsert_issue(session: Session, issue: JiraIssue) -> None:
     ):
         if rows:
             session.execute(insert(model), rows)
+
+
+def upsert_versions(session: Session, project: str, versions: list[dict[str, Any]]) -> int:
+    """Insert or update a project's versions from the JIRA API. Returns how many."""
+    rows = [
+        {
+            "id": int(v["id"]),
+            "project": project,
+            "name": v["name"],
+            "released": bool(v.get("released", False)),
+            "archived": bool(v.get("archived", False)),
+            "release_date": date.fromisoformat(v["releaseDate"]) if v.get("releaseDate") else None,
+        }
+        for v in versions
+    ]
+    if not rows:
+        return 0
+    stmt = insert(JiraVersionRow)
+    session.execute(
+        stmt.on_conflict_do_update(
+            index_elements=[JiraVersionRow.id],
+            set_={
+                k: stmt.excluded[k]
+                for k in ("project", "name", "released", "archived", "release_date")
+            },
+        ),
+        rows,
+    )
+    return len(rows)
 
 
 def load_watermark(session: Session, source: str) -> datetime | None:

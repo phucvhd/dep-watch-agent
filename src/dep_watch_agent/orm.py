@@ -7,16 +7,19 @@ Version names are plain text columns. Parsing and comparison happen in
 ``dep_watch_agent.versions``, never in SQL.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
     Index,
     Text,
+    UniqueConstraint,
     func,
     text,
 )
@@ -106,6 +109,20 @@ class JiraCommentRow(Base):
     updated_at: Mapped[datetime] = mapped_column(Timestamp)
 
     issue: Mapped[JiraIssueRow] = relationship(back_populates="comments")
+
+
+class JiraVersionRow(Base):
+    """A version defined in a JIRA project, released or not."""
+
+    __tablename__ = "jira_versions"
+    __table_args__ = (UniqueConstraint("project", "name"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
+    project: Mapped[str] = mapped_column(Text)
+    name: Mapped[str] = mapped_column(Text)
+    released: Mapped[bool] = mapped_column(Boolean)
+    archived: Mapped[bool] = mapped_column(Boolean)
+    release_date: Mapped[date | None] = mapped_column(Date)
 
 
 class SyncStateRow(Base):
