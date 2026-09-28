@@ -1,0 +1,200 @@
+{"case_id": "KAFKA-723@0.8.0", "answerable_from_text": "no", "quotes": [], "note": "No version mentioned anywhere in the text."}
+{"case_id": "KAFKA-723@0.7.2", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information in the text."}
+{"case_id": "KAFKA-1562@0.8.1.1", "answerable_from_text": "no", "quotes": [], "note": "No version mentioned anywhere in the text; only a repro and a trunk patch."}
+{"case_id": "KAFKA-1562@0.8.1", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information in the text."}
+{"case_id": "KAFKA-2024@0.8.2.0", "answerable_from_text": "no", "quotes": [], "note": "No Kafka version mentioned anywhere in the text; stack trace has no version artifact."}
+{"case_id": "KAFKA-2024@0.8.1.1", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information in the text."}
+{"case_id": "KAFKA-3500@0.10.0.0", "answerable_from_text": "no", "quotes": [], "note": "No version mentioned anywhere in the text."}
+{"case_id": "KAFKA-3500@0.9.0.1", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information in the text."}
+{"case_id": "KAFKA-3784@0.10.0.0", "answerable_from_text": "no", "quotes": [], "note": "No version mentioned anywhere in the text."}
+{"case_id": "KAFKA-3784@0.9.0.1", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-introduction info in the text."}
+{"case_id": "KAFKA-3959@0.10.1.1", "answerable_from_text": "no", "quotes": [], "note": "No release named as exhibiting the bug; 'Marked for 0.10.2.0' is a plan; origin given only as KAFKA-1864 with no version."}
+{"case_id": "KAFKA-3959@0.9.0.0", "answerable_from_text": "no", "quotes": [], "note": "Behavior 'came from KAFKA-1864' with no version; nothing says 0.9.0.0 was unaffected."}
+{"case_id": "KAFKA-5003@0.10.2.0", "answerable_from_text": "no", "quotes": [], "note": "Only 'Tracking with JIRA for 0.10.2.1' (a plan) and PRs for trunk / 0.10.2 branch; no statement that the bug exists in 0.10.2.0."}
+{"case_id": "KAFKA-5003@0.10.1.1", "answerable_from_text": "no", "quotes": [], "note": "Nothing about when the bug started or that 0.10.1.1 was fine."}
+{"case_id": "KAFKA-5090@0.10.2.1", "answerable_from_text": "no", "quotes": [], "note": "No release version mentioned; only javadoc code and a KIP link."}
+{"case_id": "KAFKA-5090@0.10.1.1", "answerable_from_text": "no", "quotes": [], "note": "No information about when the javadoc became wrong."}
+{"case_id": "KAFKA-5117@0.10.2.0", "answerable_from_text": "no", "quotes": [], "note": "No Kafka release version mentioned; only KIP references."}
+{"case_id": "KAFKA-5117@0.10.1.1", "answerable_from_text": "no", "quotes": [], "note": "No evidence about when the behavior started or that 0.10.1.1 was fine."}
+{"case_id": "KAFKA-5644@0.11.0.0", "answerable_from_text": "no", "quotes": [], "note": "Flaky test stack trace only; no version mentioned."}
+{"case_id": "KAFKA-5644@0.10.2.2", "answerable_from_text": "no", "quotes": [], "note": "No version or introduction info in the text."}
+{"case_id": "KAFKA-6418@1.0.0", "answerable_from_text": "no", "quotes": [], "note": "Stack trace has a date but no Kafka version or artifact."}
+{"case_id": "KAFKA-6418@0.11.0.3", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information."}
+{"case_id": "KAFKA-6582@1.0.0", "answerable_from_text": "yes", "quotes": ["I encountered the same problem in version 1.0.0."], "note": "Multiple reports on 1.0.0 (description also says Kafka 1.0)."}
+{"case_id": "KAFKA-6582@0.11.0.3", "answerable_from_text": "no", "quotes": [], "note": "contradicts metadata: comments report the same issue on 0.10.0.0 (prod) and kafka_2.11-0.10.2.0, i.e. before 0.11.0.3; the reporter's upgrade from 0.10.2.1 says nothing about 0.11.0.3."}
+{"case_id": "KAFKA-6737@1.0.1", "answerable_from_text": "yes", "quotes": ["I have checked that all released versions of Kafka are using jackson-databind before 2.8.11.1 and 2.9.x before 2.9.5.", "fixed part of upcoming 2.00, 1.1.1, 1.0.2 releases."], "note": "Borderline: 'all released versions' use old jackson and 1.0.2 is the upcoming fix, implying 1.0.1 is released and has the old dependency. Comment 1 says Kafka is not actually exploitable."}
+{"case_id": "KAFKA-6737@0.10.0.1", "answerable_from_text": "no", "quotes": [], "note": "contradicts metadata: text says all released versions use the vulnerable jackson-databind, which includes 0.10.0.1."}
+{"case_id": "KAFKA-6747@1.1.0", "answerable_from_text": "yes", "quotes": ["running tests against kafka-streams 1.1 and get the following stack trace"], "note": "Reporter names the 1.1 line; since 1.1.1 is a given fix version, the only affected 1.1 release is 1.1.0."}
+{"case_id": "KAFKA-6747@1.0.1", "answerable_from_text": "no", "quotes": [], "note": "Reporter says 'everything was working alright using kafka-streams 1.0', but '1.0' is a release line, not a specific release, so it does not clearly cover 1.0.1. The fix was also backported to 1.0.2 and 0.11.0.3, which suggests those older lines had the bug. The evidence conflicts, so no."}
+{"case_id": "KAFKA-7379@2.0.0", "answerable_from_text": "no", "quotes": [], "note": "No version mentioned; only compares to KAFKA-6891."}
+{"case_id": "KAFKA-7379@0.10.2.1", "answerable_from_text": "no", "quotes": [], "note": "No version or introduction info in the text."}
+{"case_id": "KAFKA-7386@2.0.0", "answerable_from_text": "no", "quotes": [], "note": "Only a trunk code link; no release version."}
+{"case_id": "KAFKA-7386@1.1.1", "answerable_from_text": "no", "quotes": [], "note": "No information on when the Scala wrapper/caching was introduced."}
+{"case_id": "KAFKA-7557@2.1.0", "answerable_from_text": "no", "quotes": [], "note": "Performance improvement description with no version mentioned."}
+{"case_id": "KAFKA-7557@1.1.1", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information."}
+{"case_id": "KAFKA-7579@2.0.1", "answerable_from_text": "no", "quotes": [], "note": "Text never says which version/build the test failed on; 'lower the priority to unblock 2.0.1 release' implies a pre-release branch, not a shown failure in the 2.0.1 release."}
+{"case_id": "KAFKA-7579@2.0.0", "answerable_from_text": "no", "quotes": [], "note": "'issue started after PR 5735' gives no version."}
+{"case_id": "KAFKA-7697@2.1.0", "answerable_from_text": "yes", "quotes": ["After upgrading a fairly busy broker from 0.10.2.0 to 2.1.0, it locked up within a few minutes"], "note": ""}
+{"case_id": "KAFKA-7697@2.0.1", "answerable_from_text": "yes", "quotes": ["Had to downgrade all of our clusters back to 2.0.1 to get stable.", "2.0.1 seems pretty stable!"], "note": "Users report downgrading to 2.0.1 as a stable version free of the deadlock."}
+{"case_id": "KAFKA-7755@2.1.0", "answerable_from_text": "yes", "quotes": ["Since 2.1.0 Kafka clients are supporting multiple DNS resolved IP addresses if the first one fails.", "Everyone running Kafka 2.1 or later on top of Kubernetes is impacted when a rolling restart is performed."], "note": ""}
+{"case_id": "KAFKA-7755@2.0.1", "answerable_from_text": "yes", "quotes": ["Since 2.1.0 Kafka clients are supporting multiple DNS resolved IP addresses if the first one fails. This change has been introduced by https://issues.apache.org/jira/browse/KAFKA-6863. However this DNS resolution is now performed only one time by the clients.", "Since https://issues.apache.org/jira/browse/KAFKA-6863 Kafka clients are resolving DNS entries only once."], "note": "Bug introduced by KAFKA-6863 in 2.1.0, after 2.0.1."}
+{"case_id": "KAFKA-7958@2.1.0", "answerable_from_text": "no", "quotes": [], "note": "Broker version before upgrading to 2.1.1 is never stated; only streams lib 2.1.1 and a test on 2.1.1 (resolved) are mentioned."}
+{"case_id": "KAFKA-7958@2.0.1", "answerable_from_text": "no", "quotes": [], "note": "Nothing about behavior at 2.0.1 or when the bug started."}
+{"case_id": "KAFKA-8069@2.1.0", "answerable_from_text": "yes", "quotes": ["This bug is introduced by [PR-5690|https://github.com/apache/kafka/pull/5690] in the kafka 2.1 release", "The only requirement is a 2.1+ broker with IBP set to an old version."], "note": "Introduced in the 2.1 release (2.1.0 is its first release); fix for 2.1 line is 2.1.2."}
+{"case_id": "KAFKA-8069@2.0.1", "answerable_from_text": "yes", "quotes": ["This bug is introduced by [PR-5690|https://github.com/apache/kafka/pull/5690] in the kafka 2.1 release", "After the 2.1 release, if the broker hasn't been upgrade to the latest inter-broker protocol version"], "note": "Bug introduced in 2.1, later than 2.0.1. Borderline: given fix versions include 2.0.2, which hints the 2.0 line may also have received the change."}
+{"case_id": "KAFKA-8104@2.3.0", "answerable_from_text": "yes", "quotes": ["It also happens with version 2.3 of the client", "kafka-client 2.2.0", "while using kafka-clients:1.1.1"], "note": "Seen on earlier releases 2.2.0 and 1.1.1 plus the 2.3 line; fix is 2.4.0."}
+{"case_id": "KAFKA-8104@1.1.1", "answerable_from_text": "no", "quotes": [], "note": "contradicts metadata: comments report the same exception with kafka-clients:1.1.1 and 1.1.1-cp1, and say 1.1.0 is also affected."}
+{"case_id": "KAFKA-8204@2.0.1", "answerable_from_text": "yes", "quotes": ["and therefore was introduced in 1.1", "The bug seems to affect cached state stores in every version of Streams since 0.10.2"], "note": "Introduced in 1.1, fixed in 2.2.1; 2.0.1 is in between."}
+{"case_id": "KAFKA-8204@1.0.2", "answerable_from_text": "yes", "quotes": ["and therefore was introduced in 1.1", "made me re-evaluate the nature of the bug"], "note": "Revised analysis says introduced in 1.1, superseding the earlier 'since 0.10.2' comment; 1.0.2 precedes 1.1."}
+{"case_id": "KAFKA-8366@3.1.1", "answerable_from_text": "yes", "quotes": ["The offline partitions metric is at least a decade old, and has always worked this way in ZK mode."], "note": "Behavior has always existed in ZK mode; 3.1.1 is pre-4.0 (ZK available)."}
+{"case_id": "KAFKA-8366@2.8.2", "answerable_from_text": "no", "quotes": [], "note": "contradicts metadata: comment says the metric 'has always worked this way in ZK mode', so 2.8.2 would be affected."}
+{"case_id": "KAFKA-8448@2.2.0", "answerable_from_text": "no", "quotes": [], "note": "No version mentioned."}
+{"case_id": "KAFKA-8448@2.1.1", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information."}
+{"case_id": "KAFKA-8586@2.3.0", "answerable_from_text": "yes", "quotes": ["This goes way back to Connect v1"], "note": "Committer states the faulty callback logic dates back to the first Connect release, so it exists at 2.3.0; given fixes are later."}
+{"case_id": "KAFKA-8586@2.2.1", "answerable_from_text": "no", "quotes": [], "note": "contradicts metadata: comment says the faulty recordSent/callback behavior 'goes way back to Connect v1', so the bug existed long before 2.2.1 (2.3.0 changes only affect how likely it is to be hit). The fix was also backported down to 1.0.3."}
+{"case_id": "KAFKA-8802@2.3.0", "answerable_from_text": "yes", "quotes": ["caused a performance regression in 2.3.0"], "note": ""}
+{"case_id": "KAFKA-8802@2.2.2", "answerable_from_text": "yes", "quotes": ["caused a performance regression in 2.3.0"], "note": "Regression introduced in 2.3.0, later than config 2.2.2."}
+{"case_id": "KAFKA-8862@2.3.0", "answerable_from_text": "no", "quotes": [], "note": "Caused by KAFKA-6833 change, but no version given."}
+{"case_id": "KAFKA-8862@2.2.2", "answerable_from_text": "no", "quotes": [], "note": "Cause is KAFKA-6833 with no version; nothing shows 2.2.2 unaffected."}
+{"case_id": "KAFKA-9073@2.3.0", "answerable_from_text": "yes", "quotes": ["but I am using the latest 2.3.0 version."], "note": ""}
+{"case_id": "KAFKA-9073@2.2.2", "answerable_from_text": "no", "quotes": [], "note": "Mentions a similar bug reportedly solved in 2.2.0, but nothing shows 2.2.2 was free of this bug; no introduction version."}
+{"case_id": "KAFKA-9074@2.3.0", "answerable_from_text": "yes", "quotes": ["This should be backported as far back as possible: the `Values` class was introduced in AK 1.1.0."], "note": "Bug is inherent to the Values parser since its introduction in 1.1.0; 2.3.0 is after that and below given fix 2.3.2."}
+{"case_id": "KAFKA-9074@1.0.2", "answerable_from_text": "yes", "quotes": ["the `Values` class was introduced in AK 1.1.0"], "note": "The affected class did not exist before 1.1.0, so 1.0.2 cannot have the bug."}
+{"case_id": "KAFKA-9077@2.4.0", "answerable_from_text": "no", "quotes": [], "note": "Only '2.4 and trunk' branch system-test failures, later passing on 2.4 branch; no release version and likely a test-env issue."}
+{"case_id": "KAFKA-9077@2.3.1", "answerable_from_text": "no", "quotes": [], "note": "Nothing about 2.3.1 or when the failure started."}
+{"case_id": "KAFKA-9176@2.4.0", "answerable_from_text": "no", "quotes": [], "note": "Only a CI build link on the kafka-2.4-jdk8 branch job; branch is not a release."}
+{"case_id": "KAFKA-9176@2.3.1", "answerable_from_text": "no", "quotes": [], "note": "No information about when the flaky test began."}
+{"case_id": "KAFKA-9279@2.3.0", "answerable_from_text": "yes", "quotes": ["This is affecting out team as well, with client version 2.3.0."], "note": ""}
+{"case_id": "KAFKA-9279@2.2.2", "answerable_from_text": "no", "quotes": [], "note": "Only 2.3.0 mentioned; nothing about 2.2.2 or when the bug started."}
+{"case_id": "KAFKA-9366@2.4.0", "answerable_from_text": "no", "quotes": [], "note": "Text never ties log4j 1.x usage to Kafka 2.4.0 specifically; only generic 'Kafka is still using' and a 2.7.0 custom build."}
+{"case_id": "KAFKA-9366@2.1.0", "answerable_from_text": "no", "quotes": [], "note": "No evidence 2.1.0 lacked log4j 1.x; if anything implies long-standing use."}
+{"case_id": "KAFKA-9492@2.4.0", "answerable_from_text": "no", "quotes": [], "note": "Only protocol version < 8 is mentioned; no Kafka release named."}
+{"case_id": "KAFKA-9492@2.3.1", "answerable_from_text": "no", "quotes": [], "note": "Record errors were added in ProduceResponse v8 but no release version is given for that change."}
+{"case_id": "KAFKA-9724@2.4.0", "answerable_from_text": "yes", "quotes": ["After upgrading kafka-client to 2.4.0 (while brokers are still at 2.2.0) consumers in a consumer group intermittently stop progressing on assigned partitions"], "note": ""}
+{"case_id": "KAFKA-9724@2.3.1", "answerable_from_text": "no", "quotes": [], "note": "Reporter upgraded to 2.4.0 but never states the prior client version; nothing shows 2.3.1 was fine."}
+{"case_id": "KAFKA-9788@2.4.1", "answerable_from_text": "no", "quotes": [], "note": "Only trunk code links; no version mentioned."}
+{"case_id": "KAFKA-9788@2.4.0", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information."}
+{"case_id": "KAFKA-9841@2.4.1", "answerable_from_text": "no", "quotes": [], "note": "No Kafka version in text; only release planning for 2.5.1."}
+{"case_id": "KAFKA-9841@2.3.0", "answerable_from_text": "no", "quotes": [], "note": "No evidence of bug start or of 2.3.0 being unaffected."}
+{"case_id": "KAFKA-9846@2.5.0", "answerable_from_text": "yes", "quotes": ["this actually is fixed in 2.6.0, but has not been fixed in 2.5.0 (hence the ticket is unresolved)."], "note": ""}
+{"case_id": "KAFKA-9846@2.4.1", "answerable_from_text": "no", "quotes": [], "note": "Text says KIP-535 is a new feature and bug 'would only affect the 2.5 branch', but never states the release KIP-535 shipped in; branch reference only."}
+{"case_id": "KAFKA-9988@2.4.0", "answerable_from_text": "no", "quotes": [], "note": "Log dates only; no Kafka version."}
+{"case_id": "KAFKA-9988@2.2.2", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information."}
+{"case_id": "KAFKA-10029@2.5.0", "answerable_from_text": "yes", "quotes": ["It was a regression in 2.5.0 introduced by KAFKA-7639."], "note": ""}
+{"case_id": "KAFKA-10029@2.4.1", "answerable_from_text": "yes", "quotes": ["It was a regression in 2.5.0 introduced by KAFKA-7639."], "note": "Regression introduced in 2.5.0, later than 2.4.1."}
+{"case_id": "KAFKA-10134@2.5.0", "answerable_from_text": "yes", "quotes": ["High CPU issue during rebalance in Kafka consumer after upgrading to 2.5", "the reason is due to java consumer 2.5.0 code change", "I only tested client 2.5.0 on test env"], "note": ""}
+{"case_id": "KAFKA-10134@2.4.1", "answerable_from_text": "yes", "quotes": ["Also tried the same on the 2.4.1 which seems don't have this issue.", "With 2.5.1 we can reproduce the high CPU issue with both eager and cooperative rebalancing protocol but not in 2.4.1."], "note": ""}
+{"case_id": "KAFKA-10179@2.5.0", "answerable_from_text": "no", "quotes": [], "note": "No version mentioned in the text."}
+{"case_id": "KAFKA-10179@2.4.1", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information."}
+{"case_id": "KAFKA-10224@2.3.0", "answerable_from_text": "yes", "quotes": ["Kafka 2.3.0 and later bundle jersey 2.28.", "Kafka upgraded to Jersey 2.28 starting in 2.3.0"], "note": ""}
+{"case_id": "KAFKA-10224@2.2.2", "answerable_from_text": "yes", "quotes": ["Kafka upgraded to Jersey 2.28 starting in 2.3.0", "Since 2.28, jersey changed the license type from CDDL/GPLv2+CPE to EPLv2."], "note": "Before 2.3.0 the bundled jersey was still CDDL-licensed, so the LICENSE term was correct."}
+{"case_id": "KAFKA-10268@2.1.1", "answerable_from_text": "no", "quotes": [], "note": "Reporter's version not stated; only fix branch 2.6 mentioned."}
+{"case_id": "KAFKA-10268@2.1.0", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information."}
+{"case_id": "KAFKA-10413@2.5.1", "answerable_from_text": "yes", "quotes": ["This is an issue starting with Kafka version 2.4.x onwards.", "that is started with 2.3.0, when the incremental cooperative rebalancing was introduced"], "note": "Bug started at 2.3.0/2.4.x, before 2.5.1; given fixes are later."}
+{"case_id": "KAFKA-10413@2.5.0", "answerable_from_text": "no", "quotes": [], "note": "contradicts metadata: comments say the issue started with 2.4.x (or 2.3.0), so 2.5.0 would be affected."}
+{"case_id": "KAFKA-10710@2.5.1", "answerable_from_text": "no", "quotes": [], "note": "No Kafka version mentioned; only log output and a trunk code link."}
+{"case_id": "KAFKA-10710@2.5.0", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information."}
+{"case_id": "KAFKA-12165@2.7.0", "answerable_from_text": "no", "quotes": [], "note": "Only a link to the '27' javadoc (2.7 release line), not clearly the 2.7.0 release."}
+{"case_id": "KAFKA-12165@2.6.3", "answerable_from_text": "no", "quotes": [], "note": "Nothing about 2.6.x docs or when the omission started."}
+{"case_id": "KAFKA-12303@2.3.1", "answerable_from_text": "no", "quotes": [], "note": "Only a code link at a commit hash; no version."}
+{"case_id": "KAFKA-12303@2.0.0", "answerable_from_text": "no", "quotes": [], "note": "No version or introduction info."}
+{"case_id": "KAFKA-12308@2.5.0", "answerable_from_text": "no", "quotes": [], "note": "No version mentioned; only related KAFKA-7421 and a PR."}
+{"case_id": "KAFKA-12308@2.4.1", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information."}
+{"case_id": "KAFKA-13106@2.3.1", "answerable_from_text": "yes", "quotes": ["version 2.3.1 does not suport it"], "note": "Borderline: the 'bug' is missing delete-offsets support, which the comment ties to 2.3.1."}
+{"case_id": "KAFKA-13106@2.3.0", "answerable_from_text": "no", "quotes": [], "note": "contradicts metadata: if 2.3.1 lacks delete-offsets support, the earlier 2.3.0 lacks it too; nothing says 2.3.0 worked."}
+{"case_id": "KAFKA-13197@2.7.0", "answerable_from_text": "yes", "quotes": ["which used to work prior to 2.7", "As part of KAFKA-10277, the behavior of KStream-GlobalKTable joins was changed."], "note": "Behavior broke starting with the 2.7 line; 2.7.0 is its first release. Mild release-line inference."}
+{"case_id": "KAFKA-13197@2.6.3", "answerable_from_text": "yes", "quotes": ["which used to work prior to 2.7"], "note": "2.6.3 is prior to 2.7, where the behavior still worked."}
+{"case_id": "KAFKA-13214@2.8.0", "answerable_from_text": "no", "quotes": [], "note": "Regression attributed to a commit link only; no version."}
+{"case_id": "KAFKA-13214@2.6.3", "answerable_from_text": "no", "quotes": [], "note": "Regression commit given without a version; cannot tell if 2.6.3 predates it."}
+{"case_id": "KAFKA-13488@2.2.2", "answerable_from_text": "no", "quotes": [], "note": "Says bug started after KAFKA-7738 (KIP-320) but gives no release version."}
+{"case_id": "KAFKA-13488@2.2.1", "answerable_from_text": "no", "quotes": [], "note": "Introduction tied to KAFKA-7738 with no version."}
+{"case_id": "KAFKA-13558@3.0.0", "answerable_from_text": "no", "quotes": [], "note": "No version mentioned."}
+{"case_id": "KAFKA-13558@2.8.2", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information."}
+{"case_id": "KAFKA-13600@2.8.1", "answerable_from_text": "no", "quotes": [], "note": "No release versions mentioned; only trunk/master code links."}
+{"case_id": "KAFKA-13600@2.8.0", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information."}
+{"case_id": "KAFKA-13613@3.0.0", "answerable_from_text": "no", "quotes": [], "note": "No Kafka version mentioned; only JDK versions."}
+{"case_id": "KAFKA-13613@2.8.2", "answerable_from_text": "no", "quotes": [], "note": "No information about when the hard dependency was introduced."}
+{"case_id": "KAFKA-13699@3.0.0", "answerable_from_text": "yes", "quotes": ["However, the methods currentStreamTimeMs or currentSystemTimeMs is missing from for KStreams 3.0+.", "Even if it was voted and partly landed in 3.0.0"], "note": ""}
+{"case_id": "KAFKA-13699@2.8.2", "answerable_from_text": "no", "quotes": [], "note": "KIP-622 landed in 3.0, but the new API lacking these methods also existed before (2.7.0 is discussed); text does not clearly show 2.8.2 unaffected."}
+{"case_id": "KAFKA-13880@2.4.0", "answerable_from_text": "no", "quotes": [], "note": "Sticky partitioner introduced by KAFKA-8601, no version stated."}
+{"case_id": "KAFKA-13880@2.3.1", "answerable_from_text": "no", "quotes": [], "note": "Introduction tied to KAFKA-8601 only, no version."}
+{"case_id": "KAFKA-14062@3.1.0", "answerable_from_text": "no", "quotes": [], "note": "No version mentioned; log has date only."}
+{"case_id": "KAFKA-14062@3.0.2", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information."}
+{"case_id": "KAFKA-14196@3.2.1", "answerable_from_text": "yes", "quotes": ["To clarify, this was introduced in 3.2.1 (not 3.2.0), correct?", "I think that's right, according to the [release notes|https://downloads.apache.org/kafka/3.2.1/RELEASE_NOTES.html]"], "note": "Introduced in 3.2.1, confirmed by reply citing 3.2.1 release notes."}
+{"case_id": "KAFKA-14196@3.2.0", "answerable_from_text": "yes", "quotes": ["To clarify, this was introduced in 3.2.1 (not 3.2.0), correct?", "I think that's right, according to the [release notes|https://downloads.apache.org/kafka/3.2.1/RELEASE_NOTES.html]"], "note": "Borderline: regression confirmed introduced in 3.2.1 not 3.2.0, but other comments say duplicates were possible before (less likely) and the description says '3.2 and onward'."}
+{"case_id": "KAFKA-14260@2.3.1", "answerable_from_text": "no", "quotes": [], "note": "Says re-introduced by KAFKA-8802 but gives no version for that; no Kafka version mentioned."}
+{"case_id": "KAFKA-14260@2.3.0", "answerable_from_text": "no", "quotes": [], "note": "'re-introduced by KAFKA-8802' with no version does not show 2.3.0 was fine."}
+{"case_id": "KAFKA-14324@3.3.1", "answerable_from_text": "no", "quotes": [], "note": "Only the rocksdbjni version is named; no Kafka release version."}
+{"case_id": "KAFKA-14324@3.1.1", "answerable_from_text": "no", "quotes": [], "note": "No Kafka version or dependency-introduction version given."}
+{"case_id": "KAFKA-14337@3.3.1", "answerable_from_text": "yes", "quotes": ["it's worked on kafka Source download: [kafka-3.3.1-src.tgz.", "I deploy to 3 broker kafka running kraft mode ."], "note": "Reporter applied the fix PR to 3.3.1 source and asks how to fix their 3.3.1 binary deployment, implying the bug exists in 3.3.1."}
+{"case_id": "KAFKA-14337@3.3.0", "answerable_from_text": "no", "quotes": [], "note": "Nothing about 3.3.0 or when the bug started."}
+{"case_id": "KAFKA-14545@3.4.0", "answerable_from_text": "no", "quotes": [], "note": "Stack trace without Kafka version; only a trunk code link."}
+{"case_id": "KAFKA-14545@3.2.3", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information."}
+{"case_id": "KAFKA-14816@3.4.0", "answerable_from_text": "no", "quotes": [], "note": "Regression tied only to PR #12828 and 'older/newer versions'; no release number (only a /34/javadoc link)."}
+{"case_id": "KAFKA-14816@3.3.2", "answerable_from_text": "no", "quotes": [], "note": "'Older versions without the linked changes pass' gives no version; cannot tie to 3.3.2."}
+{"case_id": "KAFKA-14843@3.2.3", "answerable_from_text": "no", "quotes": [], "note": "No version mentioned; only KIP-769 link."}
+{"case_id": "KAFKA-14843@3.1.2", "answerable_from_text": "no", "quotes": [], "note": "Endpoint 'introduced in KIP-769' without a version; cannot place start."}
+{"case_id": "KAFKA-14963@3.4.0", "answerable_from_text": "yes", "quotes": ["This is because the following test fail against 3.4.0"], "note": ""}
+{"case_id": "KAFKA-14963@3.3.2", "answerable_from_text": "no", "quotes": [], "note": "Only 3.4.0 mentioned; nothing about 3.3.2."}
+{"case_id": "KAFKA-15096@3.4.1", "answerable_from_text": "no", "quotes": [], "note": "Names snappy-java 1.1.8.4 but no Kafka release; cherry-picks mention branches only."}
+{"case_id": "KAFKA-15096@3.2.3", "answerable_from_text": "no", "quotes": [], "note": "No info on which Kafka releases bundled snappy-java 1.1.8.4."}
+{"case_id": "KAFKA-15243@3.3.2", "answerable_from_text": "no", "quotes": [], "note": "Reporter's Kafka version not stated; only ZK mode and a trunk code link."}
+{"case_id": "KAFKA-15243@3.3.1", "answerable_from_text": "no", "quotes": [], "note": "Sanitizer said to be added 'at some point' after an 'old Kafka version'; no version given."}
+{"case_id": "KAFKA-15338@3.3.0", "answerable_from_text": "no", "quotes": [], "note": "Doc error for metrics from KAFKA-13945; no release version mentioned."}
+{"case_id": "KAFKA-15338@3.2.3", "answerable_from_text": "no", "quotes": [], "note": "No information on when the metrics/docs were added."}
+{"case_id": "KAFKA-15465@3.4.1", "answerable_from_text": "no", "quotes": [], "note": "No Kafka version for the failure; '3.6.0 code freeze' concerns the fix target only."}
+{"case_id": "KAFKA-15465@3.4.0", "answerable_from_text": "no", "quotes": [], "note": "Caused by KAFKA-13401 changes but no version given."}
+{"case_id": "KAFKA-15510@3.5.1", "answerable_from_text": "no", "quotes": [], "note": "Regression introduced by a PR link with no version."}
+{"case_id": "KAFKA-15510@3.5.0", "answerable_from_text": "no", "quotes": [], "note": "Introduced by PR #13843 but no version stated."}
+{"case_id": "KAFKA-15653@3.6.0", "answerable_from_text": "yes", "quotes": ["In 3.6, we started using Buffer pool local to each request handler thread to perform decompression.", "All 3.6 operations which call the following line in ReplicaManager are impacted"], "note": "3.6 line; given fix 3.6.1, 3.6.0 is the only affected 3.6 release."}
+{"case_id": "KAFKA-15653@3.5.2", "answerable_from_text": "yes", "quotes": ["Given that, I don't think 3.5 is impacted and neither does the reproducer suggest so.", "Just for clarification, the AddPartitionsToTxn code was not added until 3.6 since the 3.5 version was reverted"], "note": "Earlier claim 'present since 3.5' was retracted in the quoted comment."}
+{"case_id": "KAFKA-15693@2.8.1", "answerable_from_text": "no", "quotes": [], "note": "Feature tied to KIP-415 with no release version; 'all affected versions' not enumerated."}
+{"case_id": "KAFKA-15693@2.2.2", "answerable_from_text": "no", "quotes": [], "note": "KIP-415 introduction version not stated in text."}
+{"case_id": "KAFKA-15834@3.6.0", "answerable_from_text": "no", "quotes": [], "note": "Test-based report with no release version mentioned."}
+{"case_id": "KAFKA-15834@3.5.2", "answerable_from_text": "no", "quotes": [], "note": "No version or bug-start information."}
+{"case_id": "KAFKA-16017@3.3.1", "answerable_from_text": "no", "quotes": [], "note": "No Kafka version mentioned; repro is on a branch."}
+{"case_id": "KAFKA-16017@3.3.0", "answerable_from_text": "no", "quotes": [], "note": "No information about when the bug started."}
+{"case_id": "KAFKA-16226@3.6.1", "answerable_from_text": "no", "quotes": [], "note": "Caused by KAFKA-15415 / PR 14384, no version stated."}
+{"case_id": "KAFKA-16226@3.6.0", "answerable_from_text": "no", "quotes": [], "note": "Introducing change named without a version."}
+{"case_id": "KAFKA-16243@3.7.0", "answerable_from_text": "no", "quotes": [], "note": "New consumer group protocol mentioned, no version."}
+{"case_id": "KAFKA-16243@3.6.2", "answerable_from_text": "no", "quotes": [], "note": "'With the older consumer, this did not occur' refers to a consumer implementation, not a version."}
+{"case_id": "KAFKA-16254@3.7.0", "answerable_from_text": "yes", "quotes": ["Before KAFKA-14610 in 3.5 MM2 used to just queue the offsets and publish them later but since 3.5 this behaviour changed we now publish any offset syncs that we've queued up, but have not yet been able to publish when `MirrorSourceTask.commit` get invoked. This introduced an over head to commit process."], "note": "Overhead behavior present since the 3.5 line; 3.7.0 is later and below fix 3.9.0. Issue is partly a feature request (no disable switch)."}
+{"case_id": "KAFKA-16254@3.4.1", "answerable_from_text": "no", "quotes": [], "note": "second pass disagreed; resolved to no (if unsure, no): the 3.5 change added the commit overhead, but the core complaint (no switch to disable offset syncs) may predate 3.5"}
+{"case_id": "KAFKA-16541@3.7.0", "answerable_from_text": "no", "quotes": [], "note": "Regression from the KAFKA-15046 patch with no version; wish to fix in 3.7.1 is a plan and only implies 3.7.0 is affected."}
+{"case_id": "KAFKA-16541@3.6.2", "answerable_from_text": "no", "quotes": [], "note": "Regression 'caused by' a KAFKA-15046 patch with no version; 3.6.0 appears only in a code link."}
+{"case_id": "KAFKA-16566@3.7.0", "answerable_from_text": "no", "quotes": [], "note": "No version mentioned; system test update for new protocol."}
+{"case_id": "KAFKA-16566@3.6.2", "answerable_from_text": "no", "quotes": [], "note": "No version or start information (KIP-848 mentioned without version)."}
+{"case_id": "KAFKA-16883@3.6.1", "answerable_from_text": "yes", "quotes": ["It was tested with Kafka 3.6.1, 3.6.2 and 3.7.0."], "note": ""}
+{"case_id": "KAFKA-16883@3.6.0", "answerable_from_text": "no", "quotes": [], "note": "Only 3.6.1+ tested; nothing about 3.6.0."}
+{"case_id": "KAFKA-17112@3.9.0", "answerable_from_text": "no", "quotes": [], "note": "Only commit hashes and code links; no version."}
+{"case_id": "KAFKA-17112@3.8.1", "answerable_from_text": "no", "quotes": [], "note": "No version or introduction info."}
+{"case_id": "KAFKA-17148@3.7.0", "answerable_from_text": "no", "quotes": [], "note": "'on 3.7' names a release line (metadata.version 3.7-IV4), not clearly 3.7.0; could be the 3.7 branch. Introduced by PR #14628 with no version."}
+{"case_id": "KAFKA-17148@3.6.2", "answerable_from_text": "no", "quotes": [], "note": "Absence shown only 'on the 3.6 branch'; branches are not releases, so 3.6.2 is not explicitly covered."}
+{"case_id": "KAFKA-17190@3.8.1", "answerable_from_text": "no", "quotes": [], "note": "Only 'MetadataVersion 3.7-IV2 and above' (a metadata level, not a release) and backports to 3.7/3.8 branches; no release stated as affected."}
+{"case_id": "KAFKA-17190@3.7.0", "answerable_from_text": "no", "quotes": [], "note": "Nothing shows 3.7.0 was unaffected; backport to the 3.7 branch and 'MetadataVersion 3.7-IV2' hint the 3.7 line had the bug."}
+{"case_id": "KAFKA-17233@3.5.0", "answerable_from_text": "no", "quotes": [], "note": "No version mentioned; improvement request."}
+{"case_id": "KAFKA-17233@3.4.1", "answerable_from_text": "no", "quotes": [], "note": "No version or start information."}
+{"case_id": "KAFKA-17448@3.7.0", "answerable_from_text": "no", "quotes": [], "note": "No version mentioned; only code links at a commit."}
+{"case_id": "KAFKA-17448@3.6.2", "answerable_from_text": "no", "quotes": [], "note": "No version for when AsyncKafkaConsumer/seek behavior was introduced."}
+{"case_id": "KAFKA-17478@3.7.1", "answerable_from_text": "no", "quotes": [], "note": "Introduced by KAFKA-15901 (KIP-714) with no version stated."}
+{"case_id": "KAFKA-17478@3.6.2", "answerable_from_text": "no", "quotes": [], "note": "Introduction tied to KAFKA-15901/KIP-714 only, no version."}
+{"case_id": "KAFKA-19054@2.8.0", "answerable_from_text": "no", "quotes": [], "note": "No version mentioned."}
+{"case_id": "KAFKA-19054@2.7.2", "answerable_from_text": "no", "quotes": [], "note": "No information on when SHUTDOWN_APPLICATION handling was introduced."}
+{"case_id": "KAFKA-19171@4.0.0", "answerable_from_text": "no", "quotes": [], "note": "Stack trace from a soak cluster with no version."}
+{"case_id": "KAFKA-19171@3.9.2", "answerable_from_text": "no", "quotes": [], "note": "Called a regression but no version of introduction given."}
+{"case_id": "KAFKA-19208@3.7.0", "answerable_from_text": "no", "quotes": [], "note": "Only KIP-962 referenced, no release version."}
+{"case_id": "KAFKA-19208@3.6.2", "answerable_from_text": "no", "quotes": [], "note": "KIP-962 relaxation given without a version; cannot show 3.6.2 was unaffected."}
+{"case_id": "KAFKA-19359@4.0.0", "answerable_from_text": "yes", "quotes": ["I checked this defect is due to commons-validator version 1.9.0 used in kafka v4.0.0."], "note": "Vulnerable dependency flagged in 4.0.0 (comment 3 disputes exploitability, not presence)."}
+{"case_id": "KAFKA-19359@3.9.1", "answerable_from_text": "no", "quotes": [], "note": "Text only ties the vulnerable commons-beanutils 1.9.4 to kafka 4.0.0; nothing says 3.9.1 was free of it. Comment 3 says core depends on commons-validator:1.7, which brings in beanutils 1.9.4, with no version bound. The fix was also backported to 3.9.2, which suggests the 3.9 line had the dependency."}
+{"case_id": "KAFKA-19668@3.3.0", "answerable_from_text": "no", "quotes": [], "note": "Bug from adding processValues(), version not stated; only 4.x mentioned."}
+{"case_id": "KAFKA-19668@3.2.3", "answerable_from_text": "no", "quotes": [], "note": "No version for when processValues() was added."}
+{"case_id": "KAFKA-19882@4.0.0", "answerable_from_text": "no", "quotes": [], "note": "Bug introduced with KIP-1091 but no release version given."}
+{"case_id": "KAFKA-19882@3.9.2", "answerable_from_text": "no", "quotes": [], "note": "KIP-1091 release version not stated, so cannot show 3.9.2 predates it."}
+{"case_id": "KAFKA-20449@4.3.0", "answerable_from_text": "no", "quotes": [], "note": "Introduced by KAFKA-20131 / PR #21457 with no release version."}
+{"case_id": "KAFKA-20449@4.1.1", "answerable_from_text": "no", "quotes": [], "note": "'Introduced by KAFKA-20131' with no version; cannot place 4.1.1."}
+{"case_id": "KAFKA-20700@4.3.0", "answerable_from_text": "no", "quotes": [], "note": "No Kafka version mentioned."}
+{"case_id": "KAFKA-20700@4.2.1", "answerable_from_text": "no", "quotes": [], "note": "No version or start information."}
+{"case_id": "KAFKA-20845@4.0.2", "answerable_from_text": "no", "quotes": [], "note": "Introduced by KAFKA-19760 with no version stated."}
+{"case_id": "KAFKA-20845@4.0.1", "answerable_from_text": "no", "quotes": [], "note": "Introducing issue named without a version."}
+{"case_id": "KAFKA-20893@4.3.0", "answerable_from_text": "no", "quotes": [], "note": "Caused by KIP-1035 commit, no release version; 4.4 mention is a plan."}
+{"case_id": "KAFKA-20893@4.2.1", "answerable_from_text": "no", "quotes": [], "note": "Introduction tied to KIP-1035 commit only, no version."}

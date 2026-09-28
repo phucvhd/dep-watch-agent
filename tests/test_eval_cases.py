@@ -33,8 +33,8 @@ def candidate(key="KAFKA-1", affects=("3.6.0",), fixes=("3.8.0",)) -> IssueCandi
     )
 
 
-def build(c: IssueCandidate, seed: int = 1):
-    return make_cases(c, RELEASES, seed=seed)
+def build(c: IssueCandidate, seed: int = 1, design: str = "v1"):
+    return make_cases(c, RELEASES, seed=seed, design=design)
 
 
 def rule(case) -> Applicability:
@@ -139,3 +139,42 @@ def test_every_generated_case_agrees_with_the_version_module():
         assert parse_version(positive.kafka_version) in RELEASES
         assert parse_version(negative.kafka_version) in RELEASES
     assert built > 100
+
+
+# --- v2: fix versions are given, so negatives are always "before the bug starts" ------------
+
+
+def test_v2_negative_is_always_before_affected():
+    c = candidate(affects=("3.6.0",), fixes=("3.6.2", "3.7.1", "3.8.0"))
+    negatives = [build(c, s, design="v2")[1] for s in range(100)]
+    assert {n.basis for n in negatives} == {"before_affected"}
+    assert {n.kafka_version for n in negatives} == {"3.5.2"}
+
+
+def test_v2_skips_issues_without_a_release_before_the_bug():
+    # Affected from the very first release: nothing earlier can be a negative.
+    assert build(candidate(affects=("3.5.0",), fixes=("3.8.0",)), design="v2") is None
+    assert build(candidate(affects=("3.5.0",), fixes=("3.8.0",)), design="v1") is not None
+
+
+def test_v2_positive_is_the_same_as_v1():
+    c = candidate(affects=("3.6.1",), fixes=("3.8.0",))
+    assert build(c, 3, design="v2")[0] == build(c, 3, design="v1")[0]
+
+
+def test_default_design_is_v2():
+    c = candidate(affects=("3.6.0",), fixes=("3.6.2", "3.7.1", "3.8.0"))
+    assert make_cases(c, RELEASES, seed=1)[1].basis == "before_affected"
+
+
+def test_before_affected_is_never_a_fixed_release():
+    # Fixed in 3.8.0 and backported to 3.5.2. The release just before 3.6.0 is 3.5.2, but it
+    # contains the fix, so the negative must come from before that line's fix: 3.5.1.
+    c = candidate(affects=("3.6.0",), fixes=("3.5.2", "3.8.0"))
+    negatives = {build(c, s, design="v2")[1].kafka_version for s in range(50)}
+    assert negatives == {"3.5.1"}
+
+
+def test_before_affected_missing_when_every_earlier_release_is_fixed():
+    c = candidate(affects=("3.5.1",), fixes=("3.5.0", "3.8.0"))
+    assert build(c, design="v2") is None

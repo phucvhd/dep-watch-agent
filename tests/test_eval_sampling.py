@@ -3,6 +3,9 @@ from collections import Counter
 import pytest
 
 from dep_watch_agent.eval.sampling import (
+    START_LANGUAGE,
+    STRATA_V1,
+    STRATA_V2,
     IssueCandidate,
     _quota_counts,
     find_known_versions,
@@ -44,7 +47,9 @@ def test_find_known_versions(text, expected):
 # --- strata ---------------------------------------------------------------------
 
 
-def candidate(key: str, fixes=("3.8.0",), mentions=False, affects=("3.6.0",)) -> IssueCandidate:
+def candidate(
+    key: str, fixes=("3.8.0",), mentions=False, affects=("3.6.0",), start=False
+) -> IssueCandidate:
     return IssueCandidate(
         key=key,
         summary="s",
@@ -54,6 +59,7 @@ def candidate(key: str, fixes=("3.8.0",), mentions=False, affects=("3.6.0",)) ->
         fix_versions=list(fixes),
         resolved_at=None,
         versions_in_text=["3.6.0"] if mentions else [],
+        has_start_language=start,
     )
 
 
@@ -80,7 +86,7 @@ def test_quota_counts_sum_to_size():
         assert sum(counts.values()) == size
 
 
-def pool(n_per_bucket: int = 40) -> list[IssueCandidate]:
+def pool(n_per_bucket: int = 40, start: bool = False) -> list[IssueCandidate]:
     shapes = [
         ("1.1.0",),
         ("2.8.1",),
@@ -94,12 +100,16 @@ def pool(n_per_bucket: int = 40) -> list[IssueCandidate]:
         for mentions in (True, False):
             for _ in range(n_per_bucket):
                 n += 1
-                out.append(candidate(f"KAFKA-{n}", fixes=fixes, mentions=mentions))
+                out.append(
+                    candidate(
+                        f"KAFKA-{n}", fixes=fixes, mentions=mentions, start=start or n % 2 == 0
+                    )
+                )
     return out
 
 
-def test_sample_meets_quotas_when_pool_allows():
-    sample = stratified_sample(pool(), 100, seed=1)
+def test_v1_sample_meets_quotas_when_pool_allows():
+    sample = stratified_sample(pool(), 100, seed=1, strata=STRATA_V1)
     assert len(sample) == 100
     assert len({c.key for c in sample}) == 100
     counts = {dim: Counter(c.strata[dim] for c in sample) for dim in ("era", "backport")}
@@ -107,6 +117,29 @@ def test_sample_meets_quotas_when_pool_allows():
     assert counts["era"] == {"legacy": 10, "2.x": 35, "3.x+": 55}
     assert counts["backport"] == {True: 30, False: 70}
     assert mentions == {True: 50, False: 50}
+
+
+def test_v2_sample_balances_start_language():
+    sample = stratified_sample(pool(), 100, seed=1, strata=STRATA_V2)
+    assert Counter(c.strata["start_language"] for c in sample) == {True: 50, False: 50}
+    assert Counter(c.strata["mentions_version"] for c in sample) == {True: 50, False: 50}
+    assert Counter(c.strata["era"] for c in sample) == {"legacy": 10, "2.x": 35, "3.x+": 55}
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("This regression was introduced in 3.6.0", True),
+        ("Broken since 3.6.0", True),
+        ("It works fine on 3.5.2", True),
+        ("This didn't happen before the upgrade", True),
+        ("Not reproducible in older versions", True),
+        ("Reproduced on 3.6.0", False),
+        ("Fixed in 3.7.1", False),
+    ],
+)
+def test_start_language_hint(text, expected):
+    assert bool(START_LANGUAGE.search(text)) is expected
 
 
 def test_sample_is_deterministic_and_sorted():

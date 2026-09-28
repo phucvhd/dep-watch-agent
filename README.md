@@ -56,12 +56,27 @@ since the previous run. Use `--full` to re-sync everything.
 
 ## Evaluation
 
-The ground-truth set lives in `eval/datasets/<name>/` and is committed to git. Each case pairs
-a fixed Kafka bug's text (summary, description, human comments; no structured fields) with a
-config version, and asks: is this version affected?
+The ground-truth set lives in `eval/datasets/<name>/` and is committed to git. Each case asks:
+is this Kafka version affected by this fixed issue?
+
+**Design v2** (`kafka-ground-truth-v2`, the default) mirrors production. The system is given the
+issue text and the **fix versions** (structured data from JIRA, later git), but not JIRA's
+affected versions, which are usually just the reporter's version. What the text must supply is
+where the bug starts:
+
+- `affected` cases: a version JIRA lists as affected. Answerable if the text shows the bug at or
+  before it ("reproduced on", stack traces, "since X").
+- `not_affected` cases: the release just before JIRA's earliest affected version. Answerable
+  only if the text shows the bug hadn't started ("introduced in X", "works on X"). "Seen on
+  3.6.0" says nothing about 3.5.2.
+
+A person (or, for v2, Claude; see `manifest.json` → `labels`) marks each case answerable from
+the text or not; if not, the expected answer is `insufficient_information`. Design v1
+(`kafka-ground-truth-v1`, fix versions masked) is kept for reference: the text named the fix
+release in only ~4% of not-affected cases, so it couldn't tell systems apart.
 
 ```bash
-uv run dep-watch-agent eval sample    # sample 100 issues -> 200 cases, empty labels.csv
+uv run dep-watch-agent eval sample    # sample 100 issues -> 200 cases (--design v2 default)
 uv run dep-watch-agent eval status    # labeling progress
 uv run dep-watch-agent eval upload    # push to the Langfuse dataset (needs .env keys)
 uv run dep-watch-agent eval run --system baseline             # score locally (needs labels)
@@ -70,15 +85,10 @@ uv run dep-watch-agent eval run --provisional                 # before labeling;
 ```
 
 Every system extracts cited version facts from the issue text; `verdict.decide` drops facts
-whose quote isn't in the text, then decides with the version module. The **baseline**
+whose quote isn't in the text, then decides with the version module and the given fix
+versions. The **baseline**
 (`baseline.py`) extracts with regex and cue words, no LLM, and is the number every LLM change
 is reported against. Metric definitions are in `eval/metrics.py`.
 
-- **Metadata answer**: `in_affected_range` over JIRA's affected/fix versions. Each issue gets
-  one affected config and one deliberately hard not-affected config (the fix release, a later
-  patch, the next release line, or the release just before the bug).
-- **Labeling**: for every case, a person records in `labels.csv` whether the text alone
-  (`review.md` shows exactly what the model sees) supports the metadata answer. If not, the
-  expected answer is `insufficient_information`.
 - `eval sample` refuses to overwrite an existing dataset, so labels aren't lost. To change the
-  sample, create a new dataset name (e.g. `-v2`).
+  sample, create a new dataset name (e.g. `-v3`).

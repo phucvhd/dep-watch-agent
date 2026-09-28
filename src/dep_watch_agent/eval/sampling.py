@@ -14,6 +14,7 @@ so later changes to the database don't change an existing dataset.
 import random
 import re
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -30,11 +31,35 @@ EXCLUDED_COMMENT_AUTHORS = frozenset({"ASF GitHub Bot"})
 
 DEFAULT_MAX_TEXT_CHARS = 40_000
 
-DEFAULT_STRATA: dict[str, dict[object, float]] = {
+# v1 (fix versions masked): backports matter because the fix side must come from the text.
+STRATA_V1: dict[str, dict[object, float]] = {
     "era": {"legacy": 0.10, "2.x": 0.35, "3.x+": 0.55},
     "backport": {True: 0.30, False: 0.70},
     "mentions_version": {True: 0.50, False: 0.50},
 }
+
+# v2 (fix versions given): what the text must supply is where the bug starts. Only ~13% of
+# issues say so, so that half is oversampled.
+STRATA_V2: dict[str, dict[object, float]] = {
+    "era": {"legacy": 0.10, "2.x": 0.35, "3.x+": 0.55},
+    "start_language": {True: 0.50, False: 0.50},
+    "mentions_version": {True: 0.50, False: 0.50},
+}
+
+DEFAULT_STRATA = STRATA_V2
+
+_V = r"v?\d+\.\d+(?:\.\d+){0,2}"
+# Language about where a bug starts or where it is absent. A sampling hint, not evidence.
+START_LANGUAGE = re.compile(
+    rf"(?:introduced\s+(?:in|by|with|since|as of)|regression\s+(?:in|since|from|introduced)|"
+    rf"\bsince\s+(?:kafka\s+|version\s+|apache kafka\s+)?{_V}|"
+    rf"works?\s+(?:fine|well|ok|correctly)?\s*(?:on|in|with)\s+(?:kafka\s+)?{_V}|"
+    rf"did(?:n't| not)\s+(?:happen|occur|reproduce|see)|"
+    rf"not\s+(?:affected|present|reproducible)\s+(?:in|on)|"
+    rf"\b(?:prior to|before|until)\s+(?:kafka\s+|version\s+)?{_V}|"
+    rf"started\s+(?:in|with|after|since))",
+    re.IGNORECASE,
+)
 
 _VERSION_IN_TEXT = re.compile(r"(?<![\w.])v?\d+\.\d+(?:\.\d+){0,2}(?![\w.]*\d)")
 
@@ -49,6 +74,7 @@ class IssueCandidate:
     fix_versions: list[str]
     resolved_at: datetime | None
     versions_in_text: list[str]
+    has_start_language: bool = False
 
     @property
     def url(self) -> str:
@@ -67,6 +93,7 @@ class IssueCandidate:
             "era": era,
             "backport": len({f.line for f in fixes}) > 1,
             "mentions_version": bool(self.versions_in_text),
+            "start_language": self.has_start_language,
         }
 
 
@@ -161,6 +188,7 @@ def load_candidates(
             fix_versions=fixes,
             resolved_at=issue.resolved_at,
             versions_in_text=find_known_versions(text, known),
+            has_start_language=bool(START_LANGUAGE.search(text)),
         )
         if candidate.text_chars <= max_text_chars:
             candidates.append(candidate)
@@ -204,11 +232,15 @@ def stratified_sample(
     return sorted(chosen, key=lambda c: _key_sort(c.key))
 
 
-def strata_counts(sample: list[IssueCandidate]) -> dict[str, dict[str, int]]:
+def strata_counts(
+    sample: list[IssueCandidate], dims: Iterable[str] = tuple(DEFAULT_STRATA)
+) -> dict[str, dict[str, int]]:
+    dims = set(dims)
     counts: dict[str, Counter] = {}
     for candidate in sample:
         for dim, value in candidate.strata.items():
-            counts.setdefault(dim, Counter())[str(value)] += 1
+            if dim in dims:
+                counts.setdefault(dim, Counter())[str(value)] += 1
     return {dim: dict(sorted(c.items())) for dim, c in counts.items()}
 
 

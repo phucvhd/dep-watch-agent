@@ -29,21 +29,25 @@ def facts(text: str) -> list[tuple[str, str]]:
         ("Fix Version: 3.8.0", [("fix", "3.8.0")]),
         # affects cues
         ("Affects version 3.6.0", [("affects", "3.6.0")]),
-        ("Broken since 3.6.0.", [("affects", "3.6.0")]),
+        ("Broken since 3.6.0.", [("introduced", "3.6.0")]),
         ("Reproduced on 3.7.0 with 3 brokers", [("affects", "3.7.0")]),
         ("After upgrading to Kafka 3.4.1, the producer logs errors", [("affects", "3.4.1")]),
         ("We run Kafka Streams 4.1.0 with custom processors", [("affects", "4.1.0")]),
         ("3-broker cluster (running Apache Kafka 2.3.1)", [("affects", "2.3.1")]),
-        ("There was a regression in 2.3.0 that made it slow", [("affects", "2.3.0")]),
+        ("There was a regression in 2.3.0 that made it slow", [("introduced", "2.3.0")]),
+        ("This was introduced in 3.6.0 by the refactor", [("introduced", "3.6.0")]),
         ("It is still present in 3.7.1.", [("affects", "3.7.1")]),
         ("Still not fixed in 3.7.1 for us.", [("affects", "3.7.1")]),
         ("at Foo.bar(Foo.java:12) ~[kafka-clients-3.7.0.jar:?]", [("affects", "3.7.0")]),
         ("kafka_2.13-3.6.0 $ bin/kafka-topics.sh", [("affects", "3.6.0")]),
         # upgrade source is not evidence, target is
         ("After upgrading from 2.3.0 to 2.4.0 the consumer hangs.", [("affects", "2.4.0")]),
+        # unaffected: the bug is absent at that version
+        ("It doesn't happen on 3.6.0.", [("unaffected", "3.6.0")]),
+        ("Works fine on 3.6.0.", [("unaffected", "3.6.0")]),
+        ("It worked in 3.6.1 before the upgrade", [("unaffected", "3.6.1")]),
+        ("Not reproducible on 3.6.0.", [("unaffected", "3.6.0")]),
         # neutral cues cancel
-        ("It doesn't happen on 3.6.0.", []),
-        ("Works fine on 3.6.0.", []),
         ("This is not fixed in 3.7.1.", []),
         # a cue far from the version, with real words between, doesn't count
         ("Moving this out to 2.1.0 since it is not ready for 2.0.0", []),

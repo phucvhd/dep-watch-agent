@@ -10,6 +10,9 @@
 - abstention_recall: of the cases expected ``insufficient_information``, how many were
   answered that way. None until the dataset is labeled (metadata answers never abstain).
 - citation_validity: share of extracted facts whose quote exists in the issue text.
+- always_abstain_accuracy: the accuracy of a system that answers ``insufficient_information``
+  to everything, i.e. the share of cases expected to abstain. Not a score of the system; the
+  floor its accuracy must beat to mean anything.
 
 A metric whose denominator is zero is None rather than 0 or 1, so it can't be mistaken for a
 result.
@@ -82,6 +85,7 @@ def compute_metrics(results: list[CaseResult]) -> dict[str, Any]:
         "citation_validity": _ratio(
             sum(r.citations_valid for r in results), sum(r.evidence_total for r in results)
         ),
+        "always_abstain_accuracy": _ratio(len(expected_insufficient), n),
         "confusion": {e: {a: confusion[e][a] for a in ANSWERS} for e in ANSWERS},
         "accuracy_by_basis": {
             basis: _ratio(sum(r.correct for r in rs), len(rs))
@@ -95,6 +99,11 @@ def format_metrics(metrics: dict[str, Any]) -> str:
     for name in RATE_METRICS:
         value = metrics[name]
         lines.append(f"  {name:<18} {'n/a' if value is None else f'{value:.3f}'}")
+    floor = metrics["always_abstain_accuracy"]
+    lines.append(
+        f"  {'(always abstain)':<18} {'n/a' if floor is None else f'{floor:.3f}'}"
+        "  <- accuracy of answering insufficient_information to everything"
+    )
     lines.append("  confusion (rows expected, columns answered):")
     lines.append(f"    {'':<26}" + "".join(f"{a:>26}" for a in ANSWERS))
     for expected, row in metrics["confusion"].items():

@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from dep_watch_agent import __version__
 
 DATASETS_DIR = Path("eval/datasets")
-DEFAULT_DATASET = "kafka-ground-truth-v1"
+DEFAULT_DATASET = "kafka-ground-truth-v2"
 DEFAULT_SEED = 20260927
 RUNS_DIR = Path("eval/runs")
 SYSTEMS = ("baseline",)
@@ -50,6 +50,12 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--size", type=int, default=100, help="issues to sample (default: 100)")
             p.add_argument("--seed", type=int, default=DEFAULT_SEED)
             p.add_argument("--force", action="store_true", help="overwrite an existing dataset")
+            p.add_argument(
+                "--design",
+                choices=["v1", "v2"],
+                default="v2",
+                help="v2: fix versions given as input (default); v1: text only, superseded",
+            )
         if sub == "run":
             p.add_argument("--system", choices=sorted(SYSTEMS), default="baseline")
             p.add_argument("--run-name", help="default: <system>-<UTC timestamp>")
@@ -126,7 +132,7 @@ def _eval(args: argparse.Namespace) -> int:
 
             with session_factory()() as session:
                 manifest, sample, cases = ds.sample_dataset(
-                    session, args.name, size=args.size, seed=args.seed
+                    session, args.name, size=args.size, seed=args.seed, design=args.design
                 )
             ds.write_dataset(directory, manifest, sample, cases, force=args.force)
             print(f"wrote {len(sample)} issues and {len(cases)} cases to {directory}")

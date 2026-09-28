@@ -42,15 +42,21 @@ class Case:
 
 
 def make_cases(
-    candidate: IssueCandidate, releases: list[Version], *, seed: int
+    candidate: IssueCandidate, releases: list[Version], *, seed: int, design: str = "v2"
 ) -> tuple[Case, Case] | None:
-    """Return (affected case, not-affected case), or None if either can't be built."""
+    """Return (affected case, not-affected case), or None if either can't be built.
+
+    ``v1``: negatives of every kind (fix versions are masked, so the fix side is tested too).
+    ``v2``: negatives are always ``before_affected``. Fix versions are given to the system, so
+    fix-side configs are decided by code and aren't worth a case.
+    """
     rng = random.Random(f"{seed}:{candidate.key}")
     affects = [parse_version(v) for v in candidate.affects_versions]
     fixes = [parse_version(v) for v in candidate.fix_versions]
 
     positive = _pick_positive(releases, affects, fixes, rng)
-    negative = _pick_negative(releases, affects, fixes, rng)
+    kinds = None if design == "v1" else {"before_affected"}
+    negative = _pick_negative(releases, affects, fixes, rng, kinds=kinds)
     if positive is None or negative is None:
         return None
 
@@ -86,7 +92,12 @@ def _pick_positive(
 
 
 def _pick_negative(
-    releases: list[Version], affects: list[Version], fixes: list[Version], rng: random.Random
+    releases: list[Version],
+    affects: list[Version],
+    fixes: list[Version],
+    rng: random.Random,
+    *,
+    kinds: set[str] | None = None,
 ) -> tuple[Version, str] | None:
     safe = [
         r for r in releases if in_affected_range(r, affects, fixes) is Applicability.NOT_AFFECTED
@@ -106,10 +117,18 @@ def _pick_negative(
     later_lines = [r for r in safe if r > newest_fix and r.line not in fix_lines]
     if later_lines:
         options["later_line"] = min(later_lines)
-    before = [r for r in safe if r < min(affects)]
+    # Before the bug, and not merely a backport of the fix to an older line: that case would be
+    # decided by the fix versions alone and wouldn't test whether the bug had started.
+    before = [
+        r
+        for r in safe
+        if r < min(affects) and in_affected_range(r, [], fixes) is not Applicability.NOT_AFFECTED
+    ]
     if before:
         options["before_affected"] = max(before)
 
+    if kinds is not None:
+        options = {k: v for k, v in options.items() if k in kinds}
     if not options:
         return None
     kinds = sorted(options)

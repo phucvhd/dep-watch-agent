@@ -222,3 +222,42 @@ def test_cli_status(written, capsys):
 def test_cli_reports_missing_dataset(tmp_path, capsys):
     assert main(["eval", "status", "--dir", str(tmp_path)]) == 1
     assert "no dataset" in capsys.readouterr().err
+
+
+# --- design v2: fix versions given --------------------------------------------------------
+
+V2_MANIFEST = {"name": "test-v2", "seed": 1, "design": {"version": "v2", "description": "d"}}
+
+
+def test_v2_gives_fix_versions_to_the_system(tmp_path):
+    directory = tmp_path / "test-v2"
+    write_dataset(directory, V2_MANIFEST, [issue("KAFKA-1")], cases_for("KAFKA-1"))
+    record = json.loads((directory / "issues.jsonl").read_text())
+    assert record["fix_versions"] == ["3.7.1", "3.8.0"]
+
+    review = (directory / "review.md").read_text()
+    assert "Given fix versions: 3.7.1, 3.8.0" in review
+    assert "masked from the system" in review
+
+    fill_labels(directory, {"KAFKA-1@3.7.0": "yes", "KAFKA-1@3.7.1": "no"})
+    item = langfuse_items(load_dataset(directory))[0]
+    assert item["input"]["fix_versions"] == ["3.7.1", "3.8.0"]
+    assert "affects_versions" not in item["input"]
+
+
+def test_v1_does_not_give_fix_versions(written):
+    record = json.loads((written / "issues.jsonl").read_text().splitlines()[0])
+    assert "fix_versions" not in record
+
+
+def test_sample_dataset_v2(db):
+    seed_db(db)
+    manifest, sample, cases = sample_dataset(db, "e2e", size=4, seed=5, design="v2")
+    assert manifest["design"]["version"] == "v2"
+    assert set(manifest["strata_counts"]) == {"era", "start_language", "mentions_version"}
+    assert {c.basis for c in cases if c.metadata_answer == "not_affected"} == {"before_affected"}
+
+
+def test_sample_dataset_rejects_unknown_design(db):
+    with pytest.raises(DatasetError, match="unknown design"):
+        sample_dataset(db, "x", size=1, seed=1, design="v9")
