@@ -171,3 +171,15 @@ def test_comments_paginates():
     assert client.comments("KAFKA-9") == all_comments
     assert requests[0].url.path == "/rest/api/2/issue/KAFKA-9/comment"
     assert [r.url.params["startAt"] for r in requests] == ["0", "3", "6"]
+
+
+def test_project_versions():
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(200, json=[{"id": "1", "name": "3.7.0", "released": True}])
+
+    client, _ = make_client(handler)
+    assert client.project_versions("KAFKA") == [{"id": "1", "name": "3.7.0", "released": True}]
+    assert requests[0].url.path == "/rest/api/2/project/KAFKA/versions"

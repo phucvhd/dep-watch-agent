@@ -116,7 +116,10 @@ def in_affected_range(
 
     Rules, in order:
 
-    1. ``version`` listed in ``affected_versions``: affected. Explicit evidence wins.
+    1. ``version`` listed in ``affected_versions`` and not in ``fix_versions``: affected.
+       Explicit evidence wins over the inference in rule 2. A version listed as both means the
+       bug was found and fixed during that release's development, so the release itself
+       shipped with the fix (rule 2 applies). 28% of fixed Kafka bugs look like this.
     2. ``version`` contains a fix: not affected. A fix covers later patches on its own release
        line (a 3.7.1 fix covers 3.7.2), and the highest fix version is assumed to be on trunk,
        so it also covers every version above it. Lines between fixes without their own fix
@@ -132,7 +135,7 @@ def in_affected_range(
     affected = [parse_version(v) for v in affected_versions]
     fixes = [parse_version(v) for v in fix_versions]
 
-    if target in affected:
+    if target in affected and target not in fixes:
         return Applicability.AFFECTED
     if _contains_fix(target, fixes):
         return Applicability.NOT_AFFECTED

@@ -1,0 +1,50 @@
+{
+  "name": "kafka-ground-truth-v1",
+  "project": "KAFKA",
+  "seed": 20260927,
+  "size": 100,
+  "created_at": "2026-09-28T00:26:44.554054+00:00",
+  "max_text_chars": 40000,
+  "excluded_comment_authors": [
+    "ASF GitHub Bot"
+  ],
+  "candidates": 2546,
+  "viable_candidates": 1933,
+  "strata_targets": {
+    "era": {
+      "legacy": 0.1,
+      "2.x": 0.35,
+      "3.x+": 0.55
+    },
+    "backport": {
+      "True": 0.3,
+      "False": 0.7
+    },
+    "mentions_version": {
+      "True": 0.5,
+      "False": 0.5
+    }
+  },
+  "strata_counts": {
+    "era": {
+      "2.x": 35,
+      "3.x+": 55,
+      "legacy": 10
+    },
+    "backport": {
+      "False": 70,
+      "True": 30
+    },
+    "mentions_version": {
+      "False": 50,
+      "True": 50
+    }
+  },
+  "case_basis_counts": {
+    "before_affected": 20,
+    "fix_version": 39,
+    "later_line": 18,
+    "later_patch": 23,
+    "listed_affected": 100
+  }
+}

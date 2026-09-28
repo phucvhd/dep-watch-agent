@@ -53,3 +53,24 @@ before landing; a test fails when there is more than one head.
 from `issues.apache.org` anonymously. The first run fetches all ~20k KAFKA issues (about
 7 minutes with the default 1 s delay between requests); later runs fetch only issues updated
 since the previous run. Use `--full` to re-sync everything.
+
+## Evaluation
+
+The ground-truth set lives in `eval/datasets/<name>/` and is committed to git. Each case pairs
+a fixed Kafka bug's text (summary, description, human comments; no structured fields) with a
+config version, and asks: is this version affected?
+
+```bash
+uv run dep-watch-agent eval sample    # sample 100 issues -> 200 cases, empty labels.csv
+uv run dep-watch-agent eval status    # labeling progress
+uv run dep-watch-agent eval upload    # push to the Langfuse dataset (needs .env keys)
+```
+
+- **Metadata answer**: `in_affected_range` over JIRA's affected/fix versions. Each issue gets
+  one affected config and one deliberately hard not-affected config (the fix release, a later
+  patch, the next release line, or the release just before the bug).
+- **Labeling**: for every case, a person records in `labels.csv` whether the text alone
+  (`review.md` shows exactly what the model sees) supports the metadata answer. If not, the
+  expected answer is `insufficient_information`.
+- `eval sample` refuses to overwrite an existing dataset, so labels aren't lost. To change the
+  sample, create a new dataset name (e.g. `-v2`).

@@ -1,26 +1,36 @@
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import func, select
 
 from dep_watch_agent.jira.models import parse_issue
-from dep_watch_agent.jira.store import load_watermark, upsert_issue
+from dep_watch_agent.jira.store import load_watermark, upsert_issue, upsert_versions
 from dep_watch_agent.jira.sync import FIELDS, build_jql, sync_project
 from dep_watch_agent.orm import (
     JiraCommentRow,
     JiraIssueComponentRow,
     JiraIssueRow,
     JiraIssueVersionRow,
+    JiraVersionRow,
 )
 from tests.jira_factory import raw_comment, raw_issue
 
 
 class FakeClient:
-    def __init__(self, issues: list[dict], comments: dict[str, list[dict]] | None = None):
+    def __init__(
+        self,
+        issues: list[dict],
+        comments: dict[str, list[dict]] | None = None,
+        versions: list[dict] | None = None,
+    ):
         self.issues = issues
         self.extra_comments = comments or {}
+        self.versions = versions or []
         self.queries: list[str] = []
         self.comment_requests: list[str] = []
+
+    def project_versions(self, project):
+        return self.versions
 
     def search(self, jql, fields):
         assert fields == FIELDS
@@ -248,3 +258,36 @@ def test_resync_is_idempotent(db):
     sync_project(db, FakeClient(issues), full=True, now=clock(T1))
     assert count(db, JiraIssueRow) == 2
     assert count(db, JiraIssueVersionRow) == 1
+
+
+def raw_version(id: int, name: str, released: bool = True, date: str | None = "2024-01-01"):
+    v = {"id": str(id), "name": name, "released": released, "archived": False}
+    if date:
+        v["releaseDate"] = date
+    return v
+
+
+def test_sync_stores_project_versions(db):
+    client = FakeClient(
+        [], versions=[raw_version(1, "3.7.0"), raw_version(2, "4.5.0", False, None)]
+    )
+    result = sync_project(db, client, now=clock(T0))
+
+    assert result.versions_synced == 2
+    rows = db.execute(
+        select(JiraVersionRow.name, JiraVersionRow.released, JiraVersionRow.release_date).order_by(
+            JiraVersionRow.name
+        )
+    ).all()
+    assert [tuple(r) for r in rows] == [
+        ("3.7.0", True, date(2024, 1, 1)),
+        ("4.5.0", False, None),
+    ]
+
+
+def test_upsert_versions_updates_release_state(db):
+    upsert_versions(db, "KAFKA", [raw_version(1, "4.5.0", released=False, date=None)])
+    upsert_versions(db, "KAFKA", [raw_version(1, "4.5.0", released=True, date="2026-10-01")])
+    row = db.execute(select(JiraVersionRow.released, JiraVersionRow.release_date)).one()
+    assert tuple(row) == (True, date(2026, 10, 1))
+    assert upsert_versions(db, "KAFKA", []) == 0

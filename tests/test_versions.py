@@ -306,6 +306,29 @@ def test_explicit_affected_overrides_inferred_fix():
     assert in_affected_range("3.9.1", ["3.9.0"], ["3.8.1"]) == NOT_AFFECTED
 
 
+@pytest.mark.parametrize(
+    ("version", "expected"),
+    [
+        ("2.3.1", NOT_AFFECTED),  # before the bug
+        ("2.4.0", NOT_AFFECTED),  # found and fixed before 2.4.0 shipped
+        ("2.4.1", NOT_AFFECTED),
+        ("2.5.0", NOT_AFFECTED),
+    ],
+)
+def test_found_and_fixed_in_same_release(version, expected):
+    # JIRA lists the version as both affected and fixed: the bug only existed in unreleased
+    # code, so no release is affected.
+    assert in_affected_range(version, ["2.4.0"], ["2.4.0"]) == expected
+
+
+def test_same_release_fix_with_earlier_affected_versions():
+    # Reported on 2.3.0, also seen in 2.4.0 pre-release builds, fixed before 2.4.0 shipped.
+    kwargs = {"affected_versions": ["2.3.0", "2.4.0"], "fix_versions": ["2.3.1", "2.4.0"]}
+    assert in_affected_range("2.3.0", **kwargs) == AFFECTED
+    assert in_affected_range("2.3.1", **kwargs) == NOT_AFFECTED
+    assert in_affected_range("2.4.0", **kwargs) == NOT_AFFECTED
+
+
 def test_explicit_affected_matches_padded_forms():
     assert in_affected_range("3.9.0", ["3.9"], ["3.8.1"]) == AFFECTED
 

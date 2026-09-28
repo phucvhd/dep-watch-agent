@@ -22,7 +22,12 @@ from sqlalchemy.orm import Session
 
 from dep_watch_agent.jira.client import JiraClient
 from dep_watch_agent.jira.models import comments_truncated, parse_issue
-from dep_watch_agent.jira.store import load_watermark, save_watermark, upsert_issue
+from dep_watch_agent.jira.store import (
+    load_watermark,
+    save_watermark,
+    upsert_issue,
+    upsert_versions,
+)
 
 FIELDS = [
     "summary",
@@ -49,6 +54,7 @@ class SyncResult:
     source: str
     since: datetime | None
     issues_synced: int
+    versions_synced: int
     watermark: datetime
 
 
@@ -69,12 +75,17 @@ def sync_project(
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
     on_issue: Callable[[int], None] | None = None,
 ) -> SyncResult:
-    """Sync issues updated since the last run, or every issue if ``full``.
+    """Sync the project's versions, then issues updated since the last run (or every issue if
+    ``full``).
 
     Commits after each issue, so no transaction stays open while waiting on JIRA.
     """
     source = f"jira:{project}"
     started_at = now()
+    # One small request; always synced in full so release flags and dates stay current.
+    versions_synced = upsert_versions(session, project, client.project_versions(project))
+    session.commit()
+
     watermark = None if full else load_watermark(session, source)
     session.commit()
     since = watermark - overlap if watermark is not None else None
@@ -91,4 +102,10 @@ def sync_project(
 
     save_watermark(session, source, started_at)
     session.commit()
-    return SyncResult(source=source, since=since, issues_synced=count, watermark=started_at)
+    return SyncResult(
+        source=source,
+        since=since,
+        issues_synced=count,
+        versions_synced=versions_synced,
+        watermark=started_at,
+    )
