@@ -43,7 +43,7 @@ def run_local(
         if problems:
             raise DatasetError(
                 f"{len(problems)} labeling problem(s), first: {problems[0]}. "
-                "Finish labeling or pass --provisional."
+                "Finish labeling or run as provisional."
             )
 
     extractions: dict[str, Extraction] = {}

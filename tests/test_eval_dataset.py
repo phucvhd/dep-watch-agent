@@ -3,7 +3,6 @@ import json
 
 import pytest
 
-from dep_watch_agent.cli import main
 from dep_watch_agent.eval.dataset import (
     INSUFFICIENT_INFORMATION,
     DatasetError,
@@ -207,21 +206,6 @@ def test_sample_dataset_end_to_end(db, tmp_path):
 def test_sample_dataset_needs_versions(db):
     with pytest.raises(DatasetError, match="no released KAFKA versions"):
         sample_dataset(db, "x", size=1, seed=1)
-
-
-def test_cli_status(written, capsys):
-    args = ["eval", "status", "--name", "test-set", "--dir", str(written.parent)]
-    assert main(args) == 1
-    assert "0/4 cases labeled" in capsys.readouterr().out
-
-    fill_labels(written, ALL_YES)
-    assert main(args) == 0
-    assert "4/4 cases labeled" in capsys.readouterr().out
-
-
-def test_cli_reports_missing_dataset(tmp_path, capsys):
-    assert main(["eval", "status", "--dir", str(tmp_path)]) == 1
-    assert "no dataset" in capsys.readouterr().err
 
 
 # --- design v2: fix versions given --------------------------------------------------------
