@@ -6,6 +6,9 @@ import type { components } from './schema'
 type Schemas = components['schemas']
 export type Health = Schemas['Health']
 export type Dependency = Schemas['DependencyOut']
+export type RepoFile = Schemas['RepoFile']
+export type RepoScan = Schemas['RepoScanResponse']
+export type DetectedDependency = Schemas['DetectedDependencyOut']
 export type KafkaVersion = Schemas['KafkaVersion']
 export type IssuePage = Schemas['IssuePage']
 export type IssueSummary = Schemas['IssueSummary']
@@ -83,6 +86,7 @@ function query(params: Record<string, string | number | undefined | null>): stri
 export const api = {
   health: () => request<Health>('/health'),
   dependencies: () => request<Dependency[]>('/dependencies'),
+  scanRepo: (files: RepoFile[]) => post<RepoScan>('/repo/scan', { files }),
   systems: () => request<string[]>('/systems'),
   versions: (project: string) => request<KafkaVersion[]>(`/versions${query({ project })}`),
   issues: (params: {

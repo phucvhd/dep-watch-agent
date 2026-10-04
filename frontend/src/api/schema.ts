@@ -242,6 +242,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/repo/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan Repo
+         * @description Every dependency the manifests declare, grouped by family and version. Files that aren't
+         *     manifests are ignored; paths are labels and are never opened on the server.
+         */
+        post: operations["scan_repo_repo_scan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/eval/datasets": {
         parameters: {
             query?: never;
@@ -462,6 +483,37 @@ export interface components {
             project: string;
             /** Tracker Url */
             tracker_url: string;
+        };
+        /** DetectedDependencyOut */
+        DetectedDependencyOut: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /**
+             * Version
+             * @description None when the manifests don't resolve it
+             */
+            version: string | null;
+            /**
+             * Family
+             * @description A known family id, e.g. kafka or spark
+             */
+            family: string | null;
+            /**
+             * Watchable
+             * @description Supported and at a known release: can be watched
+             */
+            watchable: boolean;
+            /**
+             * Reason
+             * @description Why it can't be watched
+             */
+            reason: string | null;
+            /** Artifacts */
+            artifacts: string[];
+            /** Files */
+            files: string[];
         };
         /** DroppedEvidenceOut */
         DroppedEvidenceOut: {
@@ -698,6 +750,31 @@ export interface components {
             archived: boolean;
             /** Release Date */
             release_date: string | null;
+        };
+        /** RepoFile */
+        RepoFile: {
+            /**
+             * Path
+             * @description Path in the repository; a label only
+             */
+            path: string;
+            /** Content */
+            content: string;
+        };
+        /** RepoScanRequest */
+        RepoScanRequest: {
+            /**
+             * Files
+             * @description Manifest files and their text
+             */
+            files: components["schemas"]["RepoFile"][];
+        };
+        /** RepoScanResponse */
+        RepoScanResponse: {
+            /** Files Read */
+            files_read: string[];
+            /** Dependencies */
+            dependencies: components["schemas"]["DetectedDependencyOut"][];
         };
         /** SampleRequest */
         SampleRequest: {
@@ -1303,6 +1380,39 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    scan_repo_repo_scan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepoScanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoScanResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

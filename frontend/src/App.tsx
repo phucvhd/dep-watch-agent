@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { api, type Dependency, type ScanResponse } from './api/client'
+import { api, type ScanResponse } from './api/client'
 import { VersionOrder } from './components/versionOrder'
 import { formatAgo } from './format'
 import { useLoad, useWatch } from './hooks'
@@ -7,6 +7,7 @@ import { Alerts } from './pages/Alerts'
 import { Check } from './pages/Check'
 import { Issues } from './pages/Issues'
 import { Operations } from './pages/Operations'
+import { Setup } from './pages/Setup'
 
 const PAGES = {
   alerts: 'New bugs',
@@ -14,11 +15,11 @@ const PAGES = {
   issues: 'Issues',
   operations: 'Data and models',
 } as const
-type Page = keyof typeof PAGES
+type Page = keyof typeof PAGES | 'setup'
 
 function routeFromHash(): { page: Page; key?: string } {
   const [page, key] = window.location.hash.replace(/^#\/?/, '').split('/')
-  return page in PAGES ? { page: page as Page, key } : { page: 'alerts' }
+  return page in PAGES || page === 'setup' ? { page: page as Page, key } : { page: 'alerts' }
 }
 
 export function App() {
@@ -31,8 +32,10 @@ export function App() {
 
   const watch = useWatch()
   const dependencies = useLoad(() => api.dependencies(), [])
-  const dependency: Dependency | undefined =
-    dependencies.data?.find((d) => d.id === watch.dependency) ?? dependencies.data?.[0]
+  const nameOf = (id: string) => dependencies.data?.find((d) => d.id === id)?.name ?? id
+  // The dependency every page answers for: the active watched one, if the API supports it.
+  const dependency = dependencies.data?.find((d) => d.id === watch.active?.dependency)
+  const version = watch.active?.version ?? ''
   const project = dependency?.project ?? ''
 
   const versions = useLoad(() => (project ? api.versions(project) : Promise.resolve([])), [project])
@@ -44,17 +47,8 @@ export function App() {
     () => new Map((versions.data ?? []).map((v, i) => [v.name, i])),
     [versions.data],
   )
-  // Released versions, newest first: what someone can actually run.
-  const released = useMemo(
-    () =>
-      (versions.data ?? [])
-        .filter((v) => v.released && /^\d+(\.\d+)+$/.test(v.name))
-        .reverse(),
-    [versions.data],
-  )
-  const version = watch.version
 
-  // The latest scan of what is watched, for the badge and the New bugs page.
+  // The latest scan of what is watched, for the count and the New bugs page.
   const latestScan = scans.data?.find(
     (j) => j.params.kafka_version === version && (j.params.project ?? 'KAFKA') === project,
   )
@@ -66,6 +60,7 @@ export function App() {
   const model = systems.data?.[0]
 
   const apiDown = dependencies.error && !dependencies.data
+  const needsSetup = !dependency && route.page !== 'operations'
   return (
     <VersionOrder.Provider value={order}>
       <a className="skip" href="#main">
@@ -85,7 +80,7 @@ export function App() {
           </div>
 
           <nav className="sb-section nav" aria-label="Pages">
-            {(Object.keys(PAGES) as Page[]).map((page) => (
+            {(Object.keys(PAGES) as (keyof typeof PAGES)[]).map((page) => (
               <a
                 key={page}
                 href={`#/${page}`}
@@ -100,34 +95,29 @@ export function App() {
           </nav>
 
           <div className="sb-section watch" aria-label="What you run">
-            <label>
-              <span>Dependency</span>
-              <select
-                value={dependency?.id ?? ''}
-                onChange={(e) => watch.setDependency(e.target.value)}
-              >
-                {dependencies.data?.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
+            <p className="watch-label">
+              {watch.repo ? 'Repository' : watch.items.length ? 'Added by hand' : 'Nothing watched'}
+            </p>
+            {watch.repo && <p className="watch-repo">{watch.repo}</p>}
+            {watch.items.length > 0 && (
+              <ul className="watch-items">
+                {watch.items.map((item, i) => (
+                  <li key={`${item.dependency}@${item.version}`}>
+                    <button
+                      aria-pressed={i === watch.activeIndex}
+                      onClick={() => watch.select(i)}
+                      title={item.files?.join(', ')}
+                    >
+                      <span className="watch-name">{nameOf(item.dependency)}</span>
+                      <span className="watch-version">{item.version}</span>
+                    </button>
+                  </li>
                 ))}
-              </select>
-            </label>
-            <label>
-              <span>Version you run</span>
-              <select
-                className="version-select"
-                value={version}
-                onChange={(e) => watch.setVersion(e.target.value)}
-              >
-                <option value="" disabled>
-                  Choose
-                </option>
-                {released.map((v) => (
-                  <option key={v.name}>{v.name}</option>
-                ))}
-              </select>
-            </label>
+              </ul>
+            )}
+            <a className="watch-change" href="#/setup" aria-current={route.page === 'setup' ? 'page' : undefined}>
+              {watch.items.length ? 'Change' : 'Choose a repository'}
+            </a>
           </div>
 
           <div className="sb-section status">
@@ -135,12 +125,11 @@ export function App() {
               <span className={model ? 'status-dot' : 'status-dot status-off'} aria-hidden="true" />
               {model ? `Reading with ${model}` : 'No model configured'}
             </p>
-            <p>{watermark ? `Issues synced ${formatAgo(watermark)}` : 'Issues not synced yet'}</p>
             {dependency && (
               <p>
-                <a href={dependency.tracker_url} target="_blank" rel="noreferrer">
-                  {dependency.name} on JIRA
-                </a>
+                {watermark
+                  ? `${dependency.name} issues synced ${formatAgo(watermark)}`
+                  : `${dependency.name} issues not synced yet`}
               </p>
             )}
           </div>
@@ -154,16 +143,18 @@ export function App() {
                 <p>{dependencies.error}</p>
               </div>
             </div>
-          ) : !dependency ? null : !version && route.page !== 'operations' ? (
-            <div className="page">
-              <div className="empty">
-                <h2>Which {dependency.name} version do you run?</h2>
-                <p>
-                  Choose it in the sidebar. Every page then answers for that version: which new
-                  upstream bugs affect it, and the sentences in each issue that show why.
-                </p>
-              </div>
-            </div>
+          ) : !dependencies.data ? null : route.page === 'setup' || needsSetup ? (
+            <Setup
+              dependencies={dependencies.data}
+              current={watch.items}
+              onWatch={watch.replace}
+            />
+          ) : route.page === 'operations' || !dependency ? (
+            <Operations
+              dependency={dependency ?? dependencies.data[0]}
+              systems={systems.data ?? []}
+              onSynced={sync.reload}
+            />
           ) : route.page === 'alerts' ? (
             <Alerts
               key={`${project}/${version}`}
@@ -180,14 +171,12 @@ export function App() {
               version={version}
               initialKey={route.key}
             />
-          ) : route.page === 'issues' ? (
+          ) : (
             <Issues
               dependency={dependency}
               version={version}
-              onCheck={(key) => (window.location.hash = `#/check/${key}`)}
+              onCheck={(key) => window.location.assign(`#/check/${key}`)}
             />
-          ) : (
-            <Operations dependency={dependency} systems={systems.data ?? []} onSynced={sync.reload} />
           )}
         </main>
       </div>

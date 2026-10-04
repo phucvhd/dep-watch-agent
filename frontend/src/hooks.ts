@@ -69,56 +69,61 @@ export function useJob(id: string | undefined, onDone?: (job: Job) => void) {
   return { job: job?.id === id ? job : undefined, error }
 }
 
-const WATCH_KEY = 'dep-watch.watch'
+const WATCH_KEY = 'dep-watch.watch.v2'
 
-export interface Watch {
+/** One dependency the team runs, at the version they run it. */
+export interface WatchItem {
   dependency: string // a dependency id from GET /dependencies
-  versions: Record<string, string> // the version run, per dependency
+  version: string
+  files?: string[] // the build files it was found in, if it came from a repository scan
 }
 
-function readWatch(): Watch {
-  const fallback: Watch = { dependency: 'kafka', versions: {} }
-  let stored = fallback
+export interface WatchState {
+  repo: string | null // the repository folder the items were read from
+  items: WatchItem[]
+  active: number // the item every page answers for
+}
+
+const EMPTY: WatchState = { repo: null, items: [], active: 0 }
+
+function readWatch(): WatchState {
+  // A shared link (?dependency=kafka&version=3.9.1) wins over what this browser remembers.
+  const link = new URLSearchParams(window.location.search)
+  const version = link.get('version')
+  if (version) {
+    return { repo: null, items: [{ dependency: link.get('dependency') ?? 'kafka', version }], active: 0 }
+  }
   try {
-    stored = { ...fallback, ...JSON.parse(localStorage.getItem(WATCH_KEY) ?? '{}') }
+    const stored = JSON.parse(localStorage.getItem(WATCH_KEY) ?? 'null')
+    if (stored && Array.isArray(stored.items)) return { ...EMPTY, ...stored }
   } catch {
     // unreadable or blocked storage: start fresh
   }
-  // A shared link (?dependency=kafka&version=3.9.1) wins over what this browser remembers.
-  const link = new URLSearchParams(window.location.search)
-  const dependency = link.get('dependency') ?? stored.dependency
-  const version = link.get('version')
-  return {
-    dependency,
-    versions: version ? { ...stored.versions, [dependency]: version } : stored.versions,
-  }
+  return EMPTY
 }
 
-/** What this team watches: a dependency and the version of it they run. Kept in the browser. */
+/** What this team watches: the dependencies of their repository they chose, with versions. */
 export function useWatch() {
-  const [watch, setWatch] = useState(readWatch)
-  const save = useCallback((next: Watch) => {
-    setWatch(next)
+  const [state, setState] = useState(readWatch)
+  const save = useCallback((next: WatchState) => {
+    setState(next)
     try {
       localStorage.setItem(WATCH_KEY, JSON.stringify(next))
     } catch {
       // private mode: the choice lasts for this visit only
     }
   }, [])
-  const setDependency = useCallback(
-    (dependency: string) => save({ ...watch, dependency }),
-    [save, watch],
-  )
-  const setVersion = useCallback(
-    (version: string) =>
-      save({ ...watch, versions: { ...watch.versions, [watch.dependency]: version } }),
-    [save, watch],
-  )
+  const active = state.items[Math.min(state.active, state.items.length - 1)]
   return {
-    dependency: watch.dependency,
-    version: watch.versions[watch.dependency] ?? '',
-    setDependency,
-    setVersion,
+    repo: state.repo,
+    items: state.items,
+    active,
+    activeIndex: active ? state.items.indexOf(active) : -1,
+    select: useCallback((index: number) => save({ ...state, active: index }), [save, state]),
+    replace: useCallback(
+      (repo: string | null, items: WatchItem[]) => save({ repo, items, active: 0 }),
+      [save],
+    ),
   }
 }
 

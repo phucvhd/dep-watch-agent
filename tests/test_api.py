@@ -141,6 +141,36 @@ def test_dependencies_are_listed(client):
     assert (kafka["id"], kafka["name"], kafka["project"]) == ("kafka", "Apache Kafka", "KAFKA")
 
 
+def test_repo_scan_reads_manifests_only(client):
+    lockfile = "org.apache.kafka:kafka-clients:3.9.1=runtimeClasspath\n"
+    sbt = '"org.apache.spark" %% "spark-sql" % "3.5.1"\n'
+    response = client.post(
+        "/repo/scan",
+        json={
+            "files": [
+                {"path": "gradle.lockfile", "content": lockfile},
+                {"path": "build.sbt", "content": sbt},
+                {"path": "/etc/passwd", "content": "root:x:0:0"},  # not a manifest: ignored
+            ]
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["files_read"] == ["gradle.lockfile", "build.sbt"]
+    kafka, spark = body["dependencies"]
+    assert (kafka["key"], kafka["version"], kafka["watchable"]) == ("kafka", "3.9.1", True)
+    assert (spark["name"], spark["watchable"], spark["reason"]) == (
+        "Apache Spark",
+        False,
+        "Not watched yet",
+    )
+
+
+def test_repo_scan_limits_its_input(client):
+    too_many = [{"path": "pom.xml", "content": ""}] * 501
+    assert client.post("/repo/scan", json={"files": too_many}).status_code == 422
+
+
 def test_systems_lists_the_default_first(client, make_client):
     assert client.get("/systems").json() == ["phrases", "phrases-2"]
     assert make_client(systems={}).get("/systems").json() == []

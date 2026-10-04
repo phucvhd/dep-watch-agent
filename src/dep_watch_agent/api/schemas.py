@@ -25,6 +25,36 @@ class DependencyOut(BaseModel):
     tracker_url: str
 
 
+# --- repository scan -----------------------------------------------------------------------
+
+
+class RepoFile(BaseModel):
+    path: str = Field(max_length=512, description="Path in the repository; a label only")
+    content: str = Field(max_length=2_000_000)
+
+
+class RepoScanRequest(BaseModel):
+    files: list[RepoFile] = Field(max_length=500, description="Manifest files and their text")
+
+
+class DetectedDependencyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    key: str
+    name: str
+    version: str | None = Field(description="None when the manifests don't resolve it")
+    family: str | None = Field(description="A known family id, e.g. kafka or spark")
+    watchable: bool = Field(description="Supported and at a known release: can be watched")
+    reason: str | None = Field(description="Why it can't be watched")
+    artifacts: list[str]
+    files: list[str]
+
+
+class RepoScanResponse(BaseModel):
+    files_read: list[str]
+    dependencies: list[DetectedDependencyOut]
+
+
 class Health(BaseModel):
     status: Literal["ok"]
     version: str

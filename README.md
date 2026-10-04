@@ -36,9 +36,13 @@ origin (see `.env.example`). Tests use
 
 ### Web UI
 
-`frontend/` is a React + TypeScript app (Vite) over the API. In the sidebar you pick a
-dependency (from `GET /dependencies`; Apache Kafka for now) and the version you run; every page
-answers for it: new bugs as a triage list (affects you / can't tell / doesn't affect you) with
+`frontend/` is a React + TypeScript app (Vite) over the API. It starts by asking for your
+repository folder: the browser reads its build files (Maven `pom.xml` with properties, Gradle
+build files, lockfile and version catalog, sbt, CycloneDX SBOMs, Kafka images in Compose files)
+and sends only their text to `POST /repo/scan`, which lists every dependency and version found.
+You tick the ones to watch; every dependency is shown, but only Apache Kafka can be watched for
+now. A version can also be added by hand. Every page then answers for the watched dependency
+chosen in the sidebar: new bugs as a triage list (affects you / can't tell / doesn't affect you) with
 each issue's version ruler and quoted evidence, checking one issue, browsing synced issues, and
 JIRA sync, models and eval runs.
 
@@ -50,7 +54,8 @@ npm run gen:api    # regenerate src/api/schema.ts from /openapi.json after chang
 npm run build      # type-check and build to dist/
 ```
 
-The choice is kept in the browser; a link with `?dependency=kafka&version=3.9.1` opens on it.
+The choice is kept in the browser; a link with `?dependency=kafka&version=3.9.1` opens on that
+version without a repository.
 
 ### Schema migrations
 
