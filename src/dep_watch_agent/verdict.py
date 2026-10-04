@@ -14,16 +14,18 @@ Evidence kinds, from strongest start-of-bug signal to fix:
 
 ``decide``:
 
-1. drops facts whose quote isn't in the issue text (no valid citation, no fact), and versions
-   that name a release line (``3.7``) rather than a release;
+1. drops facts whose quote isn't in the issue text (no valid citation, no fact), whose quote
+   doesn't contain the fact's version (the model inferred the version rather than read it),
+   and versions that name a release line (``3.7``) rather than a release;
 2. **not affected** if the version contains a fix, by the version module's backport rules, or
    the text says this exact version is unaffected;
 3. **affected** if the version is at or after a version where the bug exists (``affects`` or
    ``introduced``) and before a fix;
-4. **not affected** if the version is before the bug starts: below an ``introduced`` version, or
-   at or below an ``unaffected`` one;
+4. **not affected** if the version is below an ``introduced`` version: before the bug starts;
 5. otherwise **insufficient_information**. In particular "seen on 3.6.0" says nothing about
-   3.5.2: the reporter's version is not where the bug starts.
+   3.5.2: the reporter's version is not where the bug starts. Nor does "absent on 4.2.0" say
+   anything about 3.9.1: an ``unaffected`` fact covers only its own version (rule 2), since
+   "not a problem in 4.2.0" is as often said of a version past the bug as before it.
 
 Extractions don't depend on the config version, so one extraction serves every config.
 """
@@ -137,7 +139,7 @@ def decide(issue: IssueText, kafka_version: str, extraction: Extraction) -> Deci
         answer = NOT_AFFECTED  # a statement about this exact version beats range inference
     elif present and in_affected_range(target, present, fixes) is Applicability.AFFECTED:
         answer = AFFECTED
-    elif (introduced and target < min(introduced)) or any(target <= u for u in unaffected):
+    elif introduced and target < min(introduced):
         answer = NOT_AFFECTED
     else:
         answer = INSUFFICIENT_INFORMATION
@@ -165,7 +167,17 @@ def _rejection(ev: Evidence, issue: IssueText) -> str | None:
         return "not a version"
     if not is_release(ev.version):
         return "release line, not a release"
+    if not version_in_quote(ev.version, ev.quote):
+        return "version not in quote"
     return None
+
+
+def version_in_quote(version: str, quote: str) -> bool:
+    """True if ``quote`` names ``version`` itself: ``3.6.0`` in "kafka-raft-3.6.0.jar" or
+    "{{3.6.0}}", but not in "13.6.0" or "3.6.01". A fact the quote doesn't name was inferred."""
+    plain = version.strip().lstrip("vV")
+    pattern = rf"(?<![\d.])[vV]?{re.escape(plain)}(?!\d|\.\d)"
+    return re.search(pattern, quote) is not None
 
 
 def _normalize(text: str) -> str:

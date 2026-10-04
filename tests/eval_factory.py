@@ -14,7 +14,7 @@ def issue(key: str) -> IssueCandidate:
         key=key,
         summary=f"{key} summary",
         description="Consumer hangs after upgrade to 3.7.0",
-        comments=["Fixed in trunk", "Backported to 3.7"],
+        comments=["Fixed in trunk and 3.7.1", "Backported to 3.7"],
         affects_versions=["3.7.0"],
         fix_versions=["3.7.1", "3.8.0"],
         resolved_at=None,

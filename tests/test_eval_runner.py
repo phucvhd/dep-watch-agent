@@ -82,15 +82,20 @@ def test_zero_denominators_are_none_not_zero():
 
 
 class CountingExtractor:
-    """Says every issue is affected from 3.7.0 and fixed in 3.7.1, quoting the description."""
+    """Says every issue is affected from 3.7.0 (quoting the description) and fixed in 3.7.1
+    (quoting the first comment)."""
 
     def __init__(self):
         self.calls = []
 
     def extract(self, issue: IssueText) -> Extraction:
         self.calls.append(issue.summary)
-        quote = issue.description
-        return Extraction([Evidence("3.7.0", "affects", quote), Evidence("3.7.1", "fix", quote)])
+        return Extraction(
+            [
+                Evidence("3.7.0", "affects", issue.description),
+                Evidence("3.7.1", "fix", issue.comments[0]),
+            ]
+        )
 
 
 def test_local_run_requires_labels(written):

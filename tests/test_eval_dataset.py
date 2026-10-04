@@ -51,7 +51,7 @@ def test_round_trip(written):
         "KAFKA-2@3.7.1",
     ]
     assert ds.cases[0] == cases_for("KAFKA-1")[0]
-    assert ds.issues["KAFKA-1"]["comments"] == ["Fixed in trunk", "Backported to 3.7"]
+    assert ds.issues["KAFKA-1"]["comments"] == ["Fixed in trunk and 3.7.1", "Backported to 3.7"]
 
 
 def test_labels_csv_prefilled_for_the_labeler(written):

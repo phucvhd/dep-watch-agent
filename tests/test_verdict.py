@@ -10,6 +10,7 @@ from dep_watch_agent.verdict import (
     decide,
     is_release,
     quote_in_issue,
+    version_in_quote,
 )
 
 ISSUE = IssueText(
@@ -146,12 +147,24 @@ def test_introduced_sets_where_the_bug_starts(version, answer):
     assert start_run(version, INTRODUCED_360) == answer
 
 
-def test_unaffected_covers_that_version_and_earlier_only():
+def test_unaffected_covers_only_that_version():
     assert start_run("3.5.2", AFFECTS_361, UNAFFECTED_352) == NOT_AFFECTED
-    assert start_run("3.4.0", AFFECTS_361, UNAFFECTED_352) == NOT_AFFECTED
+    # "Works on 3.5.2" says nothing about 3.4.0: only "introduced" marks where the bug starts.
+    assert start_run("3.4.0", AFFECTS_361, UNAFFECTED_352) == INSUFFICIENT_INFORMATION
     # Between "works on 3.5.2" and "seen on 3.6.1": unknown.
     assert start_run("3.6.0", AFFECTS_361, UNAFFECTED_352) == INSUFFICIENT_INFORMATION
     assert start_run("3.6.1", AFFECTS_361, UNAFFECTED_352) == AFFECTED
+    # With the start stated, versions before it are settled.
+    assert start_run("3.4.0", INTRODUCED_360, UNAFFECTED_352) == NOT_AFFECTED
+
+
+def test_absent_on_a_later_version_says_nothing_about_earlier_ones():
+    # KAFKA-20003: "not causing a real problem in 4.2.0" was read as every version up to 4.2.0
+    # being unaffected, a silent miss for 3.9.1.
+    issue = IssueText("s", "This issue is not causing a real problem in 4.2.0.")
+    absent = Evidence("4.2.0", "unaffected", "This issue is not causing a real problem in 4.2.0.")
+    assert start_run("3.9.1", absent, issue=issue) == INSUFFICIENT_INFORMATION
+    assert start_run("4.2.0", absent, issue=issue) == NOT_AFFECTED
 
 
 def test_observed_only_is_insufficient_below_it():
@@ -179,6 +192,48 @@ def test_explicit_unaffected_version_beats_range():
 def test_release_lines_in_given_fix_versions_are_ignored():
     issue = IssueText("s", "Reproduced on 3.6.1.", fix_versions=["3.7"])
     assert start_run("3.7.0", AFFECTS_361, issue=issue) == AFFECTED
+
+
+def test_a_fact_whose_quote_does_not_name_its_version_is_dropped():
+    # KAFKA-14102: a stack trace line cited as evidence for 3.0.1; KAFKA-20770: "introduced by
+    # KIP-1023" cited as "introduced 4.3.0".
+    issue = IssueText(
+        "s",
+        "Caused by: java.lang.IllegalArgumentException: Callback handler must be castable.\n"
+        "Identified while comparing the implementations introduced by KIP-1023.",
+    )
+    decision = decide(
+        issue,
+        "3.9.1",
+        Extraction(
+            [
+                Evidence("3.0.1", "affects", "Caused by: java.lang.IllegalArgumentException"),
+                Evidence("4.3.0", "introduced", "the implementations introduced by KIP-1023."),
+            ]
+        ),
+    )
+    assert decision.answer == INSUFFICIENT_INFORMATION  # was affected and not_affected
+    assert [d.reason for d in decision.dropped] == ["version not in quote"] * 2
+    assert decision.citations_valid == 2  # the quotes exist; they just don't name the version
+
+
+@pytest.mark.parametrize(
+    ("version", "quote", "named"),
+    [
+        ("3.6.0", "Seen on 3.6.0.", True),
+        ("3.6.0", "Kafka Version: {{3.6.0}}", True),
+        ("3.6.0", "at kafka-raft-3.6.0.jar", True),
+        ("3.6.0", "upgraded to v3.6.0 today", True),
+        ("0.10.2.0", "版本 kafka_2.11-0.10.2.0 中", True),
+        ("v3.6.0", "Seen on 3.6.0", True),
+        ("3.6.0", "Seen on 13.6.0", False),
+        ("3.6.0", "Seen on 3.6.01", False),
+        ("3.6.0", "Seen on 3.6.0.1", False),
+        ("3.6.0", "Seen on the 3.6 line", False),
+    ],
+)
+def test_version_in_quote(version, quote, named):
+    assert version_in_quote(version, quote) is named
 
 
 def test_fix_versions_are_not_quotable_text():
