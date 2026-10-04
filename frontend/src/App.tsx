@@ -73,16 +73,33 @@ export function App() {
       </a>
       <div className="shell">
         <aside className="sidebar">
-          <a className="brand" href="#/alerts">
-            <svg viewBox="0 0 24 24" aria-hidden="true" className="brand-mark">
-              <line x1="2" x2="22" y1="15" y2="15" />
-              <circle cx="7" cy="15" r="2.6" />
-              <line className="brand-pin" x1="15" x2="15" y1="4" y2="20" />
-            </svg>
-            dep-watch
-          </a>
+          <div className="sb-section sb-brand">
+            <a className="brand" href="#/alerts">
+              <svg viewBox="0 0 24 24" aria-hidden="true" className="brand-mark">
+                <line x1="2" x2="22" y1="15" y2="15" />
+                <circle cx="7" cy="15" r="2.6" />
+                <line className="brand-pin" x1="15" x2="15" y1="4" y2="20" />
+              </svg>
+              dep-watch
+            </a>
+          </div>
 
-          <div className="watch" aria-label="What you run">
+          <nav className="sb-section nav" aria-label="Pages">
+            {(Object.keys(PAGES) as Page[]).map((page) => (
+              <a
+                key={page}
+                href={`#/${page}`}
+                aria-current={route.page === page ? 'page' : undefined}
+              >
+                {PAGES[page]}
+                {page === 'alerts' && affected !== undefined && affected > 0 && (
+                  <sup aria-label={`, ${affected} affect you`}>{affected}</sup>
+                )}
+              </a>
+            ))}
+          </nav>
+
+          <div className="sb-section watch" aria-label="What you run">
             <label>
               <span>Dependency</span>
               <select
@@ -104,7 +121,7 @@ export function App() {
                 onChange={(e) => watch.setVersion(e.target.value)}
               >
                 <option value="" disabled>
-                  Choose a version
+                  Choose
                 </option>
                 {released.map((v) => (
                   <option key={v.name}>{v.name}</option>
@@ -113,29 +130,19 @@ export function App() {
             </label>
           </div>
 
-          <nav className="nav" aria-label="Pages">
-            {(Object.keys(PAGES) as Page[]).map((page) => (
-              <a
-                key={page}
-                href={`#/${page}`}
-                aria-current={route.page === page ? 'page' : undefined}
-              >
-                {PAGES[page]}
-                {page === 'alerts' && affected !== undefined && affected > 0 && (
-                  <span className="badge" aria-label={`${affected} affect you`}>
-                    {affected}
-                  </span>
-                )}
-              </a>
-            ))}
-          </nav>
-
-          <div className="status">
+          <div className="sb-section status">
             <p>
               <span className={model ? 'status-dot' : 'status-dot status-off'} aria-hidden="true" />
               {model ? `Reading with ${model}` : 'No model configured'}
             </p>
             <p>{watermark ? `Issues synced ${formatAgo(watermark)}` : 'Issues not synced yet'}</p>
+            {dependency && (
+              <p>
+                <a href={dependency.tracker_url} target="_blank" rel="noreferrer">
+                  {dependency.name} on JIRA
+                </a>
+              </p>
+            )}
           </div>
         </aside>
 

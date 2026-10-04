@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { api, type Dependency } from '../api/client'
-import { ErrorNote } from '../components/common'
+import { ErrorNote, PageIntro } from '../components/common'
 import { formatDay } from '../format'
 import { useLoad } from '../hooks'
 
@@ -38,12 +38,9 @@ export function Issues({ dependency, version, onCheck }: Props) {
   const current = selected ?? items[0]?.key
   return (
     <div className="page">
-      <header className="page-head">
-        <div>
-          <h1>Issues</h1>
-          <p className="page-sub">Every {dependency.name} issue synced from JIRA, newest first.</p>
-        </div>
-      </header>
+      <PageIntro title="Issues">
+        <p>Every {dependency.name} issue synced from JIRA, newest first.</p>
+      </PageIntro>
       <form className="toolbar toolbar-wide" onSubmit={search} role="search">
         <label className="grow">
           <span>Search</span>

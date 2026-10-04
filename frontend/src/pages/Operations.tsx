@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { api, type Dependency, type EvalRunSummary, type Job } from '../api/client'
-import { ErrorNote, JobLine } from '../components/common'
+import { ErrorNote, JobLine, PageIntro } from '../components/common'
 import { formatAgo, formatDate, plural } from '../format'
 import { message, useJob, useLoad } from '../hooks'
 
@@ -22,12 +22,9 @@ interface Props {
 export function Operations({ dependency, systems, onSynced }: Props) {
   return (
     <div className="page">
-      <header className="page-head">
-        <div>
-          <h1>Data and models</h1>
-          <p className="page-sub">Where the issues come from, and how well each model reads them.</p>
-        </div>
-      </header>
+      <PageIntro title="Data and models">
+        <p>Where the issues come from, and how well each model reads them.</p>
+      </PageIntro>
       <div className="panes">
         <Sync dependency={dependency} onSynced={onSynced} />
         <Models systems={systems} />

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, type CheckResponse, type Dependency } from '../api/client'
 import { IssueDetail } from '../components/IssueResult'
 import { RulerKey } from '../components/VersionRuler'
-import { ErrorNote } from '../components/common'
+import { ErrorNote, PageIntro } from '../components/common'
 import { message } from '../hooks'
 
 interface Props {
@@ -52,15 +52,10 @@ export function Check({ dependency, version: pinned, initialKey = '' }: Props) {
 
   return (
     <div className="page">
-      <header className="page-head">
-        <div>
-          <h1>Check an issue</h1>
-          <p className="page-sub">
-            Does one {dependency.name} issue affect a version? The first check of an issue waits
-            for the model; later ones, for any version, use stored facts.
-          </p>
-        </div>
-      </header>
+      <PageIntro title="Check an issue">
+        <p>Does one {dependency.name} issue affect a version? The first check of an issue waits
+            for the model; later ones, for any version, use stored facts.</p>
+      </PageIntro>
       <form className="toolbar toolbar-wide" onSubmit={submit}>
         <label className="grow">
           <span>Issue</span>

@@ -27,3 +27,13 @@ export function JobLine({ job, describe }: { job: Job; describe: (job: Job) => s
     </p>
   )
 }
+
+/** The top of every page: a large title on the left, what the page is for on the right. */
+export function PageIntro({ title, children }: { title: string; children?: ReactNode }) {
+  return (
+    <header className="intro">
+      <h1>{title}</h1>
+      {children && <div className="intro-text">{children}</div>}
+    </header>
+  )
+}
