@@ -78,6 +78,7 @@ class KafkaVersion(BaseModel):
 class CheckRequest(BaseModel):
     issue_key: IssueKey
     kafka_version: str = Field(examples=["3.6.1"])
+    system: str | None = Field(None, description="Default: the first registered system")
 
 
 class EvidenceOut(BaseModel):
@@ -179,7 +180,7 @@ class UploadResponse(BaseModel):
 
 class EvalRunRequest(BaseModel):
     dataset: FileName = "kafka-ground-truth-v2"
-    system: Literal["baseline"] = "baseline"
+    system: str = Field(description="A registered system; runs are compared with each other")
     run_name: FileName | None = Field(None, description="Default: <system>-<UTC timestamp>")
     provisional: bool = Field(
         False, description="Score against JIRA metadata answers; allowed before labeling is done"

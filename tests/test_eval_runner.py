@@ -73,8 +73,6 @@ def test_zero_denominators_are_none_not_zero():
 class CountingExtractor:
     """Says every issue is affected from 3.7.0 and fixed in 3.7.1, quoting the description."""
 
-    name = "counting"
-
     def __init__(self):
         self.calls = []
 
@@ -113,8 +111,6 @@ def test_labeled_run_uses_expected_answers(written):
 
 def test_runner_enforces_citations(written):
     class Fabricator:
-        name = "fabricator"
-
         def extract(self, issue):
             return Extraction([Evidence("3.7.0", "affects", "a quote that is not in the issue")])
 
@@ -171,7 +167,9 @@ def test_langfuse_run_scores_items_and_run(written):
     fake = FakeDataset(items)
     extractor = CountingExtractor()
 
-    run, metrics = run_langfuse(FakeLangfuse(fake), "test-set", extractor, run_name="r1")
+    run, metrics = run_langfuse(
+        FakeLangfuse(fake), "test-set", extractor, system="counting", run_name="r1"
+    )
 
     assert run["name"] == "counting"
     assert run["run_name"] == "r1"
@@ -188,5 +186,7 @@ def test_langfuse_run_skips_undefined_metrics(written):
     fill_labels(written, ALL_YES)  # nothing expected to abstain
     items = [SimpleNamespace(**i) for i in langfuse_items(load_dataset(written))]
     fake = FakeDataset(items)
-    run_langfuse(FakeLangfuse(fake), "test-set", CountingExtractor(), run_name="r1")
+    run_langfuse(
+        FakeLangfuse(fake), "test-set", CountingExtractor(), system="counting", run_name="r1"
+    )
     assert "abstention_recall" not in fake.runs[0]["run_scores"]

@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
 
-from dep_watch_agent.api.deps import SessionDep
+from dep_watch_agent.api.deps import SessionDep, SystemsDep
 from dep_watch_agent.api.schemas import (
     CheckRequest,
     CheckResponse,
@@ -109,16 +109,21 @@ def list_versions(
     return sorted(rows, key=lambda r: order[r.name])
 
 
-@router.post("/check", response_model=CheckResponse, responses={404: {}, 422: {}})
-def check(body: CheckRequest, session: SessionDep) -> CheckResponse:
+@router.post("/check", response_model=CheckResponse, responses={404: {}, 422: {}, 503: {}})
+def check(body: CheckRequest, session: SessionDep, systems: SystemsDep) -> CheckResponse:
     """Is ``kafka_version`` affected by the issue? Decided by code from cited facts; the answer
-    may be ``insufficient_information``."""
+    may be ``insufficient_information``. 503 until a system is registered."""
     if not is_release(body.kafka_version):
         raise HTTPException(
             422, f"{body.kafka_version!r} is not a specific Kafka release, e.g. 3.6.1"
         )
+    if not systems:
+        raise HTTPException(503, "no system registered to answer checks")
+    name = body.system or next(iter(systems))
+    if name not in systems:
+        raise HTTPException(422, f"unknown system {name!r}; registered: {sorted(systems)}")
     try:
-        result = check_issue(session, body.issue_key, body.kafka_version)
+        result = check_issue(session, body.issue_key, body.kafka_version, name, systems[name]())
     except IssueNotFound:
         raise HTTPException(404, f"issue {body.issue_key} not synced") from None
 

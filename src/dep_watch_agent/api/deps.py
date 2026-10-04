@@ -10,6 +10,7 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session, sessionmaker
 
 from dep_watch_agent.api.jobs import JobRegistry
+from dep_watch_agent.systems import SystemRegistry
 
 DEFAULT_CORS_ORIGINS = "http://localhost:5173,http://localhost:3000"
 
@@ -57,9 +58,14 @@ def get_langfuse_factory(request: Request) -> Callable[[], Any]:
     return request.app.state.langfuse_factory
 
 
+def get_systems(request: Request) -> SystemRegistry:
+    return request.app.state.systems
+
+
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 SessionDep = Annotated[Session, Depends(get_session)]
 SessionsDep = Annotated[sessionmaker[Session], Depends(get_sessions)]
 JobsDep = Annotated[JobRegistry, Depends(get_jobs)]
 JiraClientFactoryDep = Annotated[Callable[..., Any], Depends(get_jira_client_factory)]
 LangfuseFactoryDep = Annotated[Callable[[], Any], Depends(get_langfuse_factory)]
+SystemsDep = Annotated[SystemRegistry, Depends(get_systems)]

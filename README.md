@@ -74,7 +74,9 @@ curl -XPOST localhost:8000/check -H 'content-type: application/json' \
 
 The answer is `affected`, `not_affected` or `insufficient_information`, with the cited facts it
 used, the facts it rejected (and why), and a link to the issue. The system sees what it sees in
-the eval: issue text without bot comments, plus JIRA's fix versions.
+the eval: issue text without bot comments, plus JIRA's fix versions. Pass `"system"` to pick
+one; the default is the first registered in `systems.SYSTEMS`. Until a system is registered,
+`/check` returns 503.
 
 ## Evaluation
 
@@ -102,16 +104,16 @@ release in only ~4% of not-affected cases, so it couldn't tell systems apart.
 | `POST /eval/datasets` `{"name": ...}` | sample 100 issues -> 200 cases (`design` v2 default) |
 | `GET /eval/datasets/{name}/status` | labeling progress and problems |
 | `POST /eval/datasets/{name}/upload` | push to the Langfuse dataset (needs `.env` keys) |
-| `POST /eval/runs` `{}` | score the baseline locally (needs labels); a job |
-| `POST /eval/runs` `{"langfuse": true}` | record a Langfuse experiment |
-| `POST /eval/runs` `{"provisional": true}` | before labeling; not a result |
+| `POST /eval/runs` `{"system": ...}` | score a system locally (needs labels); a job |
+| `POST /eval/runs` `{"system": ..., "langfuse": true}` | record a Langfuse experiment |
+| `POST /eval/runs` `{"system": ..., "provisional": true}` | before labeling; not a result |
 | `GET /eval/runs`, `GET /eval/runs/{dataset}/{run}` | saved local runs and their results |
 
 Every system extracts cited version facts from the issue text; `verdict.decide` drops facts
 whose quote isn't in the text, then decides with the version module and the given fix
-versions. The **baseline**
-(`baseline.py`) extracts with regex and cue words, no LLM, and is the number every LLM change
-is reported against. Metric definitions are in `eval/metrics.py`.
+versions. Systems (models) are registered by name in `systems.SYSTEMS` and compared with each
+other on the same metrics; there is no fixed baseline. Metric definitions are in
+`eval/metrics.py`.
 
 - `POST /eval/datasets` refuses (409) to overwrite an existing dataset, so labels aren't lost. To change the
   sample, create a new dataset name (e.g. `-v3`).

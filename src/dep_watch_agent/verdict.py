@@ -1,8 +1,8 @@
 """Turn extracted, cited facts about an issue into a decision for one Kafka version.
 
-This is where "the LLM extracts facts, code decides" is enforced. Every system (the rule-based
-baseline, the LLM pipeline) produces an ``Extraction``: version facts, each with a quote from
-the issue text. Fix versions also arrive as structured input (``IssueText.fix_versions``, from
+This is where "the LLM extracts facts, code decides" is enforced. Every system (see
+``systems``) produces an ``Extraction``: version facts, each with a quote from the issue
+text. Fix versions also arrive as structured input (``IssueText.fix_versions``, from
 JIRA or git), as they do in production.
 
 Evidence kinds, from strongest start-of-bug signal to fix:

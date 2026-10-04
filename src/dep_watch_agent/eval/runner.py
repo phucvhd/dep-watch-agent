@@ -14,7 +14,8 @@ from dep_watch_agent.verdict import Decision, Extraction, IssueText, decide
 
 
 class Extractor(Protocol):
-    name: str
+    """Turns issue text into cited facts. Its name is the key it is registered under in
+    ``systems.SYSTEMS``, so one class can back several systems (e.g. one per model)."""
 
     def extract(self, issue: IssueText) -> Extraction: ...
 
@@ -79,6 +80,7 @@ def run_langfuse(
     dataset_name: str,
     extractor: Extractor,
     *,
+    system: str,
     run_name: str,
     metadata: dict[str, Any] | None = None,
 ) -> tuple[Any, dict[str, Any]]:
@@ -136,13 +138,13 @@ def run_langfuse(
 
     dataset = client.get_dataset(dataset_name)
     experiment = dataset.run_experiment(
-        name=extractor.name,
+        name=system,
         run_name=run_name,
-        description=f"{extractor.name} on {dataset_name}",
+        description=f"{system} on {dataset_name}",
         task=task,
         evaluators=[per_case],
         run_evaluators=[per_run],
         max_concurrency=1,
-        metadata={"system": extractor.name, **(metadata or {})},
+        metadata={"system": system, **(metadata or {})},
     )
     return experiment, compute_metrics(results)

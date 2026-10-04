@@ -16,8 +16,8 @@ from dep_watch_agent.api.deps import (
     JobsDep,
     LangfuseFactoryDep,
     SessionDep,
-    SessionsDep,
     SettingsDep,
+    SystemsDep,
 )
 from dep_watch_agent.api.schemas import (
     FILE_NAME_PATTERN,
@@ -101,17 +101,22 @@ def upload_dataset(name: Name, settings: SettingsDep, langfuse: LangfuseFactoryD
 
 
 @router.post(
-    "/runs", response_model=JobOut, status_code=status.HTTP_202_ACCEPTED, responses={404: {}}
+    "/runs",
+    response_model=JobOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={404: {}, 422: {}},
 )
 def start_run(
     body: EvalRunRequest,
     jobs: JobsDep,
-    sessions: SessionsDep,
     settings: SettingsDep,
     langfuse: LangfuseFactoryDep,
+    systems: SystemsDep,
 ):
     """Score a system on the dataset. Poll ``/jobs/{id}``; the result has the metrics, and local
     runs are saved under ``/eval/runs``."""
+    if body.system not in systems:
+        raise HTTPException(422, f"unknown system {body.system!r}; registered: {sorted(systems)}")
     if body.langfuse and body.provisional:
         raise HTTPException(400, "provisional runs are local only; Langfuse holds labeled data")
     dataset = None if body.langfuse else _load(settings.datasets_dir, body.dataset)
@@ -126,24 +131,23 @@ def start_run(
     run_name = body.run_name or f"{body.system}-{datetime.now(UTC):%Y%m%dT%H%M%SZ}"
 
     def run(progress):
-        from dep_watch_agent.baseline import RuleBasedExtractor
         from dep_watch_agent.eval.metrics import compute_metrics
         from dep_watch_agent.eval.runner import run_langfuse, run_local
-        from dep_watch_agent.eval.sampling import known_versions
 
-        with sessions() as session:
-            extractor = RuleBasedExtractor(known_versions(session, "KAFKA"))
+        extractor = systems[body.system]()
 
         if dataset is None:
             client = langfuse()
-            _, metrics = run_langfuse(client, body.dataset, extractor, run_name=run_name)
+            _, metrics = run_langfuse(
+                client, body.dataset, extractor, system=body.system, run_name=run_name
+            )
             client.flush()
-            return {"run_name": run_name, "system": extractor.name, "metrics": metrics}
+            return {"run_name": run_name, "system": body.system, "metrics": metrics}
 
         results = run_local(dataset, extractor, provisional=body.provisional)
         payload = {
             "run_name": run_name,
-            "system": extractor.name,
+            "system": body.system,
             "dataset": body.dataset,
             "provisional": body.provisional,
             "metrics": compute_metrics(results),
