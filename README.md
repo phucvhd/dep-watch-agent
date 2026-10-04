@@ -8,8 +8,10 @@ never get a CVE.
 
 - Version parsing and affected-range checks (`dep_watch_agent.versions`)
 - Incremental JIRA sync into Postgres (`POST /sync/jira`)
+- An LLM system on any OpenAI-compatible server (LM Studio, vLLM, Ollama) that extracts cited
+  version facts; code makes every decision (`dep_watch_agent.llm`)
 - Web API for the frontend: issues, versions, "does this issue affect my version?" (`POST /check`),
-  sync and eval jobs
+  "which issues affect my version?" (`POST /scan`), sync and eval jobs
 
 ## Development
 
@@ -65,6 +67,24 @@ progress (issues synced so far) and the result; `GET /sync/state` shows the wate
 curl -XPOST localhost:8000/sync/jira -H 'content-type: application/json' -d '{}'
 ```
 
+### The LLM system
+
+The system that reads issue text is an open model behind an OpenAI-compatible server. With LM
+Studio, load a model, start its server (default `http://localhost:1234/v1`) and set in `.env`:
+
+```bash
+DEP_WATCH_LLM_MODEL=google/gemma-4-e4b   # the model id the server lists at /v1/models
+```
+
+It is registered as `gemma-4-e4b` (override with `DEP_WATCH_LLM_SYSTEM`). Without a model,
+`/check` and `/scan` return 503. The prompt is `src/dep_watch_agent/llm/prompts/extract_facts.md`.
+The model answers in text and the JSON is parsed out of it: reasoning models such as gemma-4
+skip their thinking under schema-constrained decoding and then find no facts at all
+(`DEP_WATCH_LLM_OUTPUT=json_schema` turns constraints on for models that don't reason). Invalid
+output is retried, then counts as no facts.
+Issues longer than one chunk (30k characters) are read in chunks, up to six. Calls are traced to
+Langfuse when its keys are set.
+
 ### Checking an issue
 
 ```bash
@@ -74,9 +94,23 @@ curl -XPOST localhost:8000/check -H 'content-type: application/json' \
 
 The answer is `affected`, `not_affected` or `insufficient_information`, with the cited facts it
 used, the facts it rejected (and why), and a link to the issue. The system sees what it sees in
-the eval: issue text without bot comments, plus JIRA's fix versions. Pass `"system"` to pick
-one; the default is the first registered in `systems.SYSTEMS`. Until a system is registered,
-`/check` returns 503.
+the eval: issue text without bot comments, plus JIRA's fix versions. If the fix versions alone
+put the version past the fix, the answer is `not_affected` without a model call
+(`decided_by: "fix_versions"`). Pass `"system"` to pick one; the default is the first registered.
+
+### Scanning for a version
+
+```bash
+curl -XPOST localhost:8000/scan -H 'content-type: application/json' \
+  -d '{"kafka_version": "3.9.1", "since": "2026-09-27T00:00:00Z", "limit": 200}'
+```
+
+A background job answers every candidate issue for the version: bugs (not duplicates, invalid
+or not-a-bug), updated since `since`, newest first, at most `limit`. Poll `GET /jobs/{id}`; the
+result lists affected issues first, then `insufficient_information`, then `not_affected`, each
+with cited facts and a link. An issue that fails (e.g. the model server is down) is reported
+with its `error`, not dropped. Each issue the fix versions don't settle costs one model call
+(5–30 s on a laptop), so scan this week's issues with `since`; a whole version is ~3k issues.
 
 ## Evaluation
 

@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
 
-from dep_watch_agent.api.deps import SessionDep, SystemsDep
+from dep_watch_agent.api.deps import SessionDep, SystemsDep, pick_system
 from dep_watch_agent.api.schemas import (
     CheckRequest,
     CheckResponse,
@@ -89,8 +89,8 @@ def get_issue(key: str, session: SessionDep) -> IssueDetail:
         description=issue.description,
         labels=issue.labels,
         components=sorted(c.component for c in issue.components),
-        affects_versions=_sorted_versions(v.name for v in issue.versions if v.kind == "affects"),
-        fix_versions=_sorted_versions(v.name for v in issue.versions if v.kind == "fix"),
+        affects_versions=sorted_versions(v.name for v in issue.versions if v.kind == "affects"),
+        fix_versions=sorted_versions(v.name for v in issue.versions if v.kind == "fix"),
         comments=issue.comments,
     )
 
@@ -105,7 +105,7 @@ def list_versions(
     if released is not None:
         stmt = stmt.where(JiraVersionRow.released.is_(released))
     rows = list(session.scalars(stmt))
-    order = {name: i for i, name in enumerate(_sorted_versions(r.name for r in rows))}
+    order = {name: i for i, name in enumerate(sorted_versions(r.name for r in rows))}
     return sorted(rows, key=lambda r: order[r.name])
 
 
@@ -117,11 +117,7 @@ def check(body: CheckRequest, session: SessionDep, systems: SystemsDep) -> Check
         raise HTTPException(
             422, f"{body.kafka_version!r} is not a specific Kafka release, e.g. 3.6.1"
         )
-    if not systems:
-        raise HTTPException(503, "no system registered to answer checks")
-    name = body.system or next(iter(systems))
-    if name not in systems:
-        raise HTTPException(422, f"unknown system {name!r}; registered: {sorted(systems)}")
+    name = pick_system(systems, body.system)
     try:
         result = check_issue(session, body.issue_key, body.kafka_version, name, systems[name]())
     except IssueNotFound:
@@ -135,20 +131,27 @@ def check(body: CheckRequest, session: SessionDep, systems: SystemsDep) -> Check
         kafka_version=result.kafka_version,
         answer=decision.answer,
         system=result.system,
-        fix_versions=_sorted_versions(result.issue_text.fix_versions),
-        evidence=[
-            EvidenceOut(version=e.version, kind=e.kind, quote=e.quote) for e in decision.used
-        ],
-        dropped=[
-            DroppedEvidenceOut(
-                version=d.evidence.version,
-                kind=d.evidence.kind,
-                quote=d.evidence.quote,
-                reason=d.reason,
-            )
-            for d in decision.dropped
-        ],
+        decided_by=result.decided_by,
+        fix_versions=sorted_versions(result.issue_text.fix_versions),
+        evidence=evidence_out(decision.used),
+        dropped=dropped_out(decision.dropped),
     )
+
+
+def evidence_out(used) -> list[EvidenceOut]:
+    return [EvidenceOut(version=e.version, kind=e.kind, quote=e.quote) for e in used]
+
+
+def dropped_out(dropped) -> list[DroppedEvidenceOut]:
+    return [
+        DroppedEvidenceOut(
+            version=d.evidence.version,
+            kind=d.evidence.kind,
+            quote=d.evidence.quote,
+            reason=d.reason,
+        )
+        for d in dropped
+    ]
 
 
 def _summary(row: JiraIssueRow) -> IssueSummary:
@@ -166,7 +169,7 @@ def _summary(row: JiraIssueRow) -> IssueSummary:
     )
 
 
-def _sorted_versions(names) -> list[str]:
+def sorted_versions(names) -> list[str]:
     """Version order from the version module; unparseable names last, by name."""
     parsed, other = [], []
     for name in names:

@@ -98,9 +98,61 @@ class CheckResponse(BaseModel):
     kafka_version: str
     answer: Answer
     system: str
+    decided_by: str = Field(
+        description="fix_versions when JIRA's fix versions settle it (the system isn't called); "
+        "otherwise the system"
+    )
     fix_versions: list[str] = Field(description="Given as structured input, from JIRA")
     evidence: list[EvidenceOut] = Field(description="Cited facts the decision used")
     dropped: list[DroppedEvidenceOut] = Field(description="Facts rejected, with the reason")
+
+
+# --- scan --------------------------------------------------------------------------------
+
+
+class ScanRequest(BaseModel):
+    kafka_version: str = Field(examples=["3.9.1"])
+    project: ProjectKey = "KAFKA"
+    since: datetime | None = Field(
+        None, description="Only issues updated since then, e.g. the last scan (alerting)"
+    )
+    limit: int = Field(
+        50,
+        ge=1,
+        le=10_000,
+        description="At most this many issues, newest first. Each one the "
+        "fix versions don't settle costs a model call.",
+    )
+    system: str | None = Field(None, description="Default: the first registered system")
+
+
+class ScanItemOut(BaseModel):
+    issue_key: str
+    url: str
+    summary: str
+    status: str | None
+    resolution: str | None
+    updated_at: datetime
+    answer: Answer
+    decided_by: str
+    fix_versions: list[str]
+    evidence: list[EvidenceOut]
+    dropped: list[DroppedEvidenceOut]
+    error: str | None = Field(description="Why the issue couldn't be answered, if it failed")
+
+
+class ScanResponse(BaseModel):
+    """The ``result`` of a finished scan job. Items: affected first, then
+    insufficient_information, then not_affected; newest first within each."""
+
+    kafka_version: str
+    system: str
+    since: datetime | None
+    candidates_total: int = Field(description="Issues matching the filters, before the limit")
+    scanned: int
+    counts: dict[str, int]
+    errors: int
+    items: list[ScanItemOut]
 
 
 # --- jobs --------------------------------------------------------------------------------

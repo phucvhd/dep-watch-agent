@@ -208,7 +208,13 @@ def test_check_affected_cites_the_issue(client):
     assert body["system"] == "phrases"  # the first registered system
     assert body["url"] == "https://issues.apache.org/jira/browse/KAFKA-100"
     assert body["fix_versions"] == ["3.9.0"]
+    assert body["decided_by"] == "phrases"
     assert {"version": "3.6.0", "kind": "introduced", "quote": DEADLOCK_QUOTE} in body["evidence"]
+
+
+def test_check_past_the_fix_is_decided_by_code(client):
+    body = check(client, "3.9.0").json()
+    assert (body["answer"], body["decided_by"]) == ("not_affected", "fix_versions")
 
 
 DEADLOCK_QUOTE = "Regression in 3.6.0: the consumer hangs."
@@ -255,6 +261,49 @@ def test_check_unknown_system(client):
 def test_check_needs_a_registered_system(make_client):
     response = check(make_client(systems={}), "3.6.0")
     assert response.status_code == 503
+
+
+# --- scan --------------------------------------------------------------------------------
+
+
+def scan(client, **body):
+    return client.post("/scan", json={"kafka_version": "3.6.0", **body})
+
+
+def test_scan_answers_each_issue(client):
+    response = scan(client)
+    assert response.status_code == 202
+    job = wait(client, response.json())
+
+    assert job["status"] == "succeeded", job["error"]
+    assert job["params"]["system"] == "phrases"
+    result = job["result"]
+    assert result["counts"] == {"affected": 1, "not_affected": 0, "insufficient_information": 1}
+    assert result["candidates_total"] == result["scanned"] == 2
+    assert result["errors"] == 0
+    affected, vague = result["items"]
+    assert (affected["issue_key"], affected["answer"]) == ("KAFKA-100", "affected")
+    assert affected["url"] == "https://issues.apache.org/jira/browse/KAFKA-100"
+    assert affected["evidence"][0]["quote"] == DEADLOCK_QUOTE
+    assert (vague["issue_key"], vague["answer"]) == ("KAFKA-101", "insufficient_information")
+
+
+def test_scan_past_the_fix(client):
+    job = wait(client, scan(client, kafka_version="3.10.0").json())
+    deadlock = next(i for i in job["result"]["items"] if i["issue_key"] == "KAFKA-100")
+    assert (deadlock["answer"], deadlock["decided_by"]) == ("not_affected", "fix_versions")
+
+
+def test_scan_since_filters_by_update_time(client):
+    job = wait(client, scan(client, since="2030-01-01T00:00:00Z").json())
+    assert job["result"]["items"] == []
+
+
+def test_scan_validates_its_request(client, make_client):
+    assert scan(client, kafka_version="3.6").status_code == 422
+    assert scan(client, limit=0).status_code == 422
+    assert scan(client, system="nope").status_code == 422
+    assert scan(make_client(systems={}), kafka_version="3.6.0").status_code == 503
 
 
 # --- sync --------------------------------------------------------------------------------
