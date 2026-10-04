@@ -602,3 +602,26 @@ def test_issue_stats(client):
     assert (stats["total"], stats["bugs"], stats["open_bugs"], stats["fixed_bugs"]) == (2, 2, 1, 1)
     assert stats["read"] == 0
     assert stats["newest"].startswith("2024-01-05")
+
+
+def test_monthly_bugs_filed_and_fixed(client):
+    rows = client.get(
+        "/stats/issues/monthly", params={"months": 3, "now": "2024-02-15T00:00:00Z"}
+    ).json()
+    # DEADLOCK: created 2024-01-01, resolved (Fixed) 2024-01-05. CPU: created 2024-02-01, open.
+    assert rows == [
+        {"month": "2023-12", "filed": 0, "fixed": 0},
+        {"month": "2024-01", "filed": 1, "fixed": 1},
+        {"month": "2024-02", "filed": 1, "fixed": 0},
+    ]
+
+
+def test_reading_time(make_client):
+    client = make_client(systems={"phrases": CountingPhrases})
+    empty = client.get("/stats/reading").json()
+    assert (empty["count"], empty["median_ms"], len(empty["bins"])) == (0, None, 8)
+    check(client, "3.6.0")
+    stats = client.get("/stats/reading").json()
+    assert stats["count"] == 1
+    assert stats["bins"][0]["count"] == 1  # a fake reads in well under 15 s
+    assert stats["bins"][-1]["to_s"] is None

@@ -17,6 +17,8 @@ export type CheckRequest = Schemas['CheckRequest']
 export type CheckResponse = Schemas['CheckResponse']
 export type StoredAnswer = Schemas['StoredAnswer']
 export type IssueStats = Schemas['IssueStats']
+export type MonthCount = Schemas['MonthCount']
+export type ReadingTime = Schemas['ReadingTime']
 export type ScanRequest = Schemas['ScanRequest']
 export type ScanResponse = Schemas['ScanResponse']
 export type ScanItem = Schemas['ScanItemOut']
@@ -108,6 +110,9 @@ export const api = {
       `/issues/${encodeURIComponent(key)}/answer${query({ kafka_version: kafkaVersion })}`,
     ),
   issueStats: (project: string) => request<IssueStats>(`/stats/issues${query({ project })}`),
+  monthly: (project: string, months = 24) =>
+    request<MonthCount[]>(`/stats/issues/monthly${query({ project, months })}`),
+  readingTime: (project: string) => request<ReadingTime>(`/stats/reading${query({ project })}`),
   startScan: (body: ScanRequest) => post<Job>('/scan', body),
   jobs: (kind?: string) => request<Job[]>(`/jobs${query({ kind })}`),
   job: (id: string) => request<Job>(`/jobs/${id}`),

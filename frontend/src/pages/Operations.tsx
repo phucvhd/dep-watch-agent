@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, type Dependency, type EvalRunSummary, type Job } from '../api/client'
+import { ColumnChart } from '../components/charts'
 import { ErrorNote, JobLine, PageIntro } from '../components/common'
 import { formatAgo, formatDate, plural } from '../format'
 import { message, useJob, useLoad } from '../hooks'
@@ -28,6 +29,7 @@ export function Operations({ dependency, systems, onSynced }: Props) {
       <Sync dependency={dependency} onSynced={onSynced} />
       <Models systems={systems} />
       <Facts dependency={dependency} />
+      <ReadingTimeChart dependency={dependency} />
       <Evaluation systems={systems} />
       <Jobs />
     </div>
@@ -100,6 +102,27 @@ function Facts({ dependency }: { dependency: Dependency }) {
           ? `of ${s.bugs.toLocaleString()} ${dependency.name} bugs have been read by a model. Their answers, for any version, need no model call.`
           : 'Loading…'}
       </span>
+    </section>
+  )
+}
+
+function ReadingTimeChart({ dependency }: { dependency: Dependency }) {
+  const reading = useLoad(() => api.readingTime(dependency.project), [dependency.project])
+  const r = reading.data
+  if (!r || r.count === 0) return null
+  const seconds = (ms: number | null | undefined) => (ms == null ? 'n/a' : `${Math.round(ms / 1000)} s`)
+  return (
+    <section className="widget w-12">
+      <ColumnChart
+        title="Time the model takes to read an issue"
+        note={`${r.count.toLocaleString()} issues read; half took under ${seconds(r.median_ms)}, nine in ten under ${seconds(r.p90_ms)}. Stored facts answer again without this wait.`}
+        categories={r.bins.map((b) => (b.to_s == null ? `${b.from_s} s+` : `${b.from_s}–${b.to_s} s`))}
+        categoryLabel="Reading time"
+        series={[
+          { key: 'issues', label: 'Issues', color: 'var(--series-a)', values: r.bins.map((b) => b.count) },
+        ]}
+        height={170}
+      />
     </section>
   )
 }

@@ -21,7 +21,7 @@ from dep_watch_agent import __version__
 from dep_watch_agent.api.deps import Settings
 from dep_watch_agent.api.jobs import JobConflict, JobRegistry
 from dep_watch_agent.api.routes import eval as eval_routes
-from dep_watch_agent.api.routes import issues, ops, repo, scan
+from dep_watch_agent.api.routes import issues, ops, repo, scan, stats
 from dep_watch_agent.api.schemas import JobOut
 from dep_watch_agent.eval.dataset import DatasetError
 from dep_watch_agent.systems import SystemRegistry, configured_systems
@@ -83,6 +83,7 @@ def create_app(
     app.include_router(issues.router)
     app.include_router(scan.router)
     app.include_router(repo.router)
+    app.include_router(stats.router)
     app.include_router(eval_routes.router)
     return app
 

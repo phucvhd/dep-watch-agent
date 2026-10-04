@@ -164,6 +164,25 @@ class IssueStats(BaseModel):
     newest: datetime | None = Field(description="The most recent update among synced issues")
 
 
+class MonthCount(BaseModel):
+    month: str = Field(examples=["2026-09"])
+    filed: int = Field(description="Bugs created that month")
+    fixed: int = Field(description="Bugs resolved as Fixed that month")
+
+
+class ReadingTimeBin(BaseModel):
+    from_s: int
+    to_s: int | None = Field(description="None for the last bin: everything slower")
+    count: int
+
+
+class ReadingTime(BaseModel):
+    count: int = Field(description="Stored extractions")
+    median_ms: int | None
+    p90_ms: int | None
+    bins: list[ReadingTimeBin]
+
+
 # --- scan --------------------------------------------------------------------------------
 
 

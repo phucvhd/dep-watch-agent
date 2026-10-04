@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { api, type CheckResponse, type Dependency } from '../api/client'
 import { AnswerBody } from '../components/IssueResult'
 import { RulerKey } from '../components/VersionRuler'
+import { LineChart } from '../components/charts'
 import { ErrorNote, PageIntro } from '../components/common'
 import { ANSWER_TEXT, formatAgo, formatDay } from '../format'
 import { message, useLoad } from '../hooks'
@@ -31,6 +32,11 @@ export function Issues({ dependency, version, systems, issueKey }: Props) {
     [dependency.project, filters, offset],
   )
   const stats = useLoad(() => api.issueStats(dependency.project), [dependency.project])
+  // The current month is still filling up: plotted, it reads as a drop. Complete months only.
+  const monthly = useLoad(
+    () => api.monthly(dependency.project, 25).then((rows) => rows.slice(0, -1)),
+    [dependency.project],
+  )
 
   function search(event: FormEvent) {
     event.preventDefault()
@@ -75,6 +81,28 @@ export function Issues({ dependency, version, systems, issueKey }: Props) {
             </div>
           ))}
         </div>
+      )}
+
+      {monthly.data && (
+        <section className="widget w-12">
+          <LineChart
+            title="Bugs filed and fixed each month"
+            note="The last 24 complete months. A gap that stays open is a backlog growing upstream."
+            categories={monthly.data.map((m) => m.month)}
+            categoryLabel="Month"
+            formatCategory={(m) =>
+              new Date(`${m}-01T00:00:00Z`).toLocaleDateString(undefined, {
+                month: 'short',
+                year: '2-digit',
+                timeZone: 'UTC',
+              })
+            }
+            series={[
+              { key: 'filed', label: 'Filed', color: 'var(--series-a)', values: monthly.data.map((m) => m.filed) },
+              { key: 'fixed', label: 'Fixed', color: 'var(--series-b)', values: monthly.data.map((m) => m.fixed) },
+            ]}
+          />
+        </section>
       )}
 
       <form className="widget w-12 toolbar search-widget" onSubmit={search} role="search">

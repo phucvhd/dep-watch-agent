@@ -305,6 +305,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/stats/issues/monthly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Monthly
+         * @description Bugs filed and bugs fixed per calendar month (UTC), oldest first, the last ``months``
+         *     months including the current one. Months with none are included as zero.
+         */
+        get: operations["monthly_stats_issues_monthly_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/stats/reading": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reading Time
+         * @description How long reading one issue took the model, over the stored extractions.
+         */
+        get: operations["reading_time_stats_reading_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/eval/datasets": {
         parameters: {
             query?: never;
@@ -823,6 +864,50 @@ export interface components {
             archived: boolean;
             /** Release Date */
             release_date: string | null;
+        };
+        /** MonthCount */
+        MonthCount: {
+            /**
+             * Month
+             * @example 2026-09
+             */
+            month: string;
+            /**
+             * Filed
+             * @description Bugs created that month
+             */
+            filed: number;
+            /**
+             * Fixed
+             * @description Bugs resolved as Fixed that month
+             */
+            fixed: number;
+        };
+        /** ReadingTime */
+        ReadingTime: {
+            /**
+             * Count
+             * @description Stored extractions
+             */
+            count: number;
+            /** Median Ms */
+            median_ms: number | null;
+            /** P90 Ms */
+            p90_ms: number | null;
+            /** Bins */
+            bins: components["schemas"]["ReadingTimeBin"][];
+        };
+        /** ReadingTimeBin */
+        ReadingTimeBin: {
+            /** From S */
+            from_s: number;
+            /**
+             * To S
+             * @description None for the last bin: everything slower
+             */
+            to_s: number | null;
+            /** Count */
+            count: number;
         };
         /** RepoFile */
         RepoFile: {
@@ -1557,6 +1642,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RepoScanResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    monthly_stats_issues_monthly_get: {
+        parameters: {
+            query?: {
+                project?: string;
+                months?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthCount"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reading_time_stats_reading_get: {
+        parameters: {
+            query?: {
+                project?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingTime"];
                 };
             };
             /** @description Validation Error */
