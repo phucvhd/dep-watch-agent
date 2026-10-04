@@ -739,6 +739,11 @@ export interface components {
             /** Fixed Bugs */
             fixed_bugs: number;
             /**
+             * Read
+             * @description Issues whose text a model has read (facts stored)
+             */
+            read: number;
+            /**
              * Newest
              * @description The most recent update among synced issues
              */

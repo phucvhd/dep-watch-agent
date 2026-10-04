@@ -50,42 +50,34 @@ export function Issues({ dependency, version, systems, issueKey }: Props) {
   const current = selected ?? items[0]?.key
   const s = stats.data
   return (
-    <div className="page">
+    <div className="dash">
       <PageIntro title="Issues">
         <p>
-          Every {dependency.name} issue synced from JIRA. Pick one to see whether it affects{' '}
-          {version ? `${dependency.name} ${version}` : 'the version you run'}, and the sentences
-          that show it.
+          Every {dependency.name} issue synced from JIRA
+          {s ? ` (${s.total.toLocaleString()}, newest update ${s.newest ? formatAgo(s.newest) : 'unknown'})` : ''}.
+          Pick one to see whether it affects{' '}
+          {version ? `${dependency.name} ${version}` : 'the version you run'}.
         </p>
-        {s && (
-          <dl className="stats">
-            <div>
-              <dt>Issues</dt>
-              <dd>{s.total.toLocaleString()}</dd>
-            </div>
-            <div>
-              <dt>Bugs</dt>
-              <dd>{s.bugs.toLocaleString()}</dd>
-            </div>
-            <div>
-              <dt>Open bugs</dt>
-              <dd>{s.open_bugs.toLocaleString()}</dd>
-            </div>
-            <div>
-              <dt>Fixed bugs</dt>
-              <dd>{s.fixed_bugs.toLocaleString()}</dd>
-            </div>
-            {s.newest && (
-              <div>
-                <dt>Newest update</dt>
-                <dd>{formatAgo(s.newest)}</dd>
-              </div>
-            )}
-          </dl>
-        )}
       </PageIntro>
 
-      <form className="toolbar toolbar-wide" onSubmit={search} role="search">
+      {s && (
+        <div className="w-12 stat-tiles">
+          {[
+            ['Bugs', s.bugs, 'of every issue type'],
+            ['Open bugs', s.open_bugs, 'not resolved yet'],
+            ['Fixed bugs', s.fixed_bugs, 'with a fix in some release'],
+            ['Read by the model', s.read, 'answered from stored facts'],
+          ].map(([label, value, hint]) => (
+            <div key={label as string} className="widget stat-tile">
+              <span className="count-label">{label}</span>
+              <span className="count-value">{(value as number).toLocaleString()}</span>
+              <span className="count-hint">{hint}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <form className="widget w-12 toolbar search-widget" onSubmit={search} role="search">
         <label className="grow">
           <span>Search</span>
           <input
@@ -127,60 +119,67 @@ export function Issues({ dependency, version, systems, issueKey }: Props) {
         </label>
         <button type="submit">Search</button>
       </form>
-      <ErrorNote>{page.error}</ErrorNote>
+      {page.error && (
+        <div className="w-12">
+          <ErrorNote>{page.error}</ErrorNote>
+        </div>
+      )}
 
-      <div className="split split-wide">
-        <div className="list-pane">
-          <p className="list-count" aria-live="polite">
-            {page.loading ? 'Loading…' : `${total.toLocaleString()} matching`}
-          </p>
-          <ul className="rows">
-            {items.map((issue) => (
-              <li key={issue.key}>
-                <button
-                  className="row"
-                  aria-current={issue.key === current ? 'true' : undefined}
-                  onClick={() => {
-                    setSelected(issue.key)
-                    window.history.replaceState(null, '', `#/issues/${issue.key}`)
-                  }}
-                >
-                  <span className="row-key">{issue.key}</span>
-                  <span className="row-state">
-                    {[issue.status, issue.resolution].filter(Boolean).join(', ')}
-                  </span>
-                  <span className="row-title">{issue.summary}</span>
-                  <span className="row-date">{formatDay(issue.created_at)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          <nav className="pager" aria-label="Pages">
-            <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>
-              Newer
-            </button>
-            <span>
-              {total
-                ? `${offset + 1}–${Math.min(offset + PAGE, total)} of ${total.toLocaleString()}`
-                : ''}
-            </span>
-            <button disabled={offset + PAGE >= total} onClick={() => setOffset(offset + PAGE)}>
-              Older
-            </button>
-          </nav>
+      <section className="widget w-5 list-widget" aria-label="Issues">
+        <div className="widget-head">
+          <h2 className="widget-title">
+            Matching
+            <sup>{page.loading ? '…' : total.toLocaleString()}</sup>
+          </h2>
         </div>
-        <div className="detail-pane">
-          {current && (
-            <IssuePanel
-              key={`${current}@${version}`}
-              issueKey={current}
-              dependency={dependency}
-              version={version}
-              systems={systems}
-            />
-          )}
-        </div>
-      </div>
+        <ul className="rows">
+          {items.map((issue) => (
+            <li key={issue.key}>
+              <button
+                className="row"
+                aria-current={issue.key === current ? 'true' : undefined}
+                onClick={() => {
+                  setSelected(issue.key)
+                  window.history.replaceState(null, '', `#/issues/${issue.key}`)
+                }}
+              >
+                <span className="row-key">{issue.key}</span>
+                <span className="row-state">
+                  {[issue.status, issue.resolution].filter(Boolean).join(', ')}
+                </span>
+                <span className="row-title">{issue.summary}</span>
+                <span className="row-date">{formatDay(issue.created_at)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <nav className="pager" aria-label="Pages">
+          <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>
+            Newer
+          </button>
+          <span>
+            {total
+              ? `${offset + 1}–${Math.min(offset + PAGE, total)} of ${total.toLocaleString()}`
+              : ''}
+          </span>
+          <button disabled={offset + PAGE >= total} onClick={() => setOffset(offset + PAGE)}>
+            Older
+          </button>
+        </nav>
+      </section>
+      <section className="widget w-7 detail-widget">
+        {current ? (
+          <IssuePanel
+            key={`${current}@${version}`}
+            issueKey={current}
+            dependency={dependency}
+            version={version}
+            systems={systems}
+          />
+        ) : (
+          <p className="list-empty">No issue matches.</p>
+        )}
+      </section>
     </div>
   )
 }

@@ -8,6 +8,12 @@ import { isActive, message, useJob } from '../hooks'
 
 const TABS: Answer[] = ['affected', 'insufficient_information', 'not_affected']
 
+const TAB_HINT: Record<Answer, string> = {
+  affected: 'The issue shows the bug at your version, unfixed',
+  insufficient_information: "The text doesn't say where the bug starts",
+  not_affected: 'Fixed in your version, or starts after it',
+}
+
 function weekAgo(): string {
   return new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString().slice(0, 10)
 }
@@ -20,6 +26,7 @@ interface Props {
   onScanned: () => void
 }
 
+/** The dashboard: is the watched version affected by what changed upstream, as widgets. */
 export function Alerts({ dependency, version, systems, latestScanId, onScanned }: Props) {
   const [startedId, setStartedId] = useState<string>()
   const { job } = useJob(startedId ?? latestScanId, onScanned)
@@ -50,7 +57,8 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
   const tab: Answer = chosenTab ?? (affected > 0 ? 'affected' : 'insufficient_information')
   const target = `${dependency.name} ${version}`
 
-  // The hero is the status: warm when something affects you, cool when nothing does.
+  // The status tile's color is the answer: warm when something affects you, cool when nothing
+  // does, neutral before a scan.
   const tone = !result ? 'idle' : affected > 0 ? 'hit' : 'calm'
   const headline = running
     ? `Reading new bugs against ${target}.`
@@ -61,86 +69,98 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
         : `${plural(affected, 'bug')} ${affected === 1 ? 'affects' : 'affect'} ${target}.`
 
   return (
-    <div className="page">
-      <section className={`hero hero-${tone}`} aria-live="polite">
+    <div className="dash">
+      <section className={`widget w-8 status-tile hero-${tone}`} aria-live="polite">
         <h1 className="hero-line">{headline}</h1>
+        {result && (
+          <p className="status-sub">
+            {plural(result.scanned, 'bug')}
+            {result.since ? ` updated since ${formatDay(result.since)}` : ''}, read with{' '}
+            {result.system}.
+          </p>
+        )}
       </section>
 
-      <div className="intro">
-        {result ? (
-          <div className="answer-tabs" role="tablist" aria-label="Answers">
+      <section className="widget w-4" aria-labelledby="scan-title">
+        <h2 id="scan-title" className="widget-title">
+          Scan upstream
+        </h2>
+        <p className="widget-text">
+          Bugs the fix versions settle are answered at once; the model reads the rest, 30 to 90
+          seconds each the first time, then from stored facts.
+        </p>
+        <form className="toolbar" onSubmit={startScan}>
+          <label>
+            <span>Updated since</span>
+            <input type="date" value={since} onChange={(e) => setSince(e.target.value)} />
+          </label>
+          <label>
+            <span>At most</span>
+            <input
+              type="number"
+              min={1}
+              max={10000}
+              value={limit}
+              onChange={(e) => setLimit(Number(e.target.value))}
+            />
+          </label>
+          <button className="primary" type="submit" disabled={running || systems.length === 0}>
+            {running ? 'Scanning…' : 'Scan'}
+          </button>
+        </form>
+        {systems.length === 0 && (
+          <ErrorNote>No model is configured. Set DEP_WATCH_LLM_MODEL and restart the API.</ErrorNote>
+        )}
+        <ErrorNote>{error}</ErrorNote>
+        {job && job.status !== 'succeeded' && (
+          <JobLine
+            job={job}
+            describe={(j: Job) =>
+              j.status === 'queued' ? 'Waiting to start.' : `${plural(j.progress, 'issue')} read so far.`
+            }
+          />
+        )}
+        {result && (
+          <p className="widget-foot">
+            {result.cached > 0 && `${result.cached} answered from stored facts. `}
+            {result.candidates_total > result.scanned &&
+              `${plural(result.candidates_total - result.scanned, 'more bug')} matched; raise the limit. `}
+            {result.errors > 0 && `${plural(result.errors, 'issue')} couldn't be read.`}
+          </p>
+        )}
+      </section>
+
+      {result ? (
+        <>
+          <div className="w-12 count-tiles" role="tablist" aria-label="Answers">
             {TABS.map((answer) => (
               <button
                 key={answer}
                 role="tab"
                 aria-selected={tab === answer}
-                className={`answer-tab answer-tab-${answer}`}
+                className={`widget count-tile count-${answer}`}
                 onClick={() => setTab(answer)}
               >
-                {ANSWER_TEXT[answer]}
-                <sup>{result.counts[answer] ?? 0}</sup>
+                <span className="count-label">{ANSWER_TEXT[answer]}</span>
+                <span className="count-value">{result.counts[answer] ?? 0}</span>
+                <span className="count-hint">{TAB_HINT[answer]}</span>
               </button>
             ))}
           </div>
-        ) : (
-          <h2 className="intro-title">New bugs</h2>
-        )}
-        <div className="intro-text">
-          {result ? (
+          <Triage key={tab} result={result} tab={tab} version={version} />
+        </>
+      ) : (
+        !running && (
+          <section className="widget w-12 empty-tile">
+            <h2>No scan of {version} yet</h2>
             <p>
-              Read {plural(result.scanned, 'bug')}
-              {result.since ? ` updated since ${formatDay(result.since)}` : ''} with{' '}
-              {result.system}
-              {result.cached > 0 ? `, ${result.cached} of them from stored facts` : ''}.
-              {result.candidates_total > result.scanned &&
-                ` ${plural(result.candidates_total - result.scanned, 'more bug')} matched; raise the limit to read them.`}
-              {result.errors > 0 && ` ${plural(result.errors, 'issue')} couldn't be read.`}
+              Scan reads the bugs updated since the day you pick and answers each for {target}.
+              The answers show up here, split into what affects you, what can't be told, and what
+              doesn't.
             </p>
-          ) : (
-            <p>
-              A scan reads the bugs filed or updated upstream since the day you pick and answers
-              each for {target}. Bugs the fix versions settle are answered at once; the model reads
-              the rest, 30 to 90 seconds each the first time.
-            </p>
-          )}
-          <form className="toolbar" onSubmit={startScan}>
-            <label>
-              <span>Updated since</span>
-              <input type="date" value={since} onChange={(e) => setSince(e.target.value)} />
-            </label>
-            <label>
-              <span>At most</span>
-              <input
-                type="number"
-                min={1}
-                max={10000}
-                value={limit}
-                onChange={(e) => setLimit(Number(e.target.value))}
-              />
-            </label>
-            <button className="primary" type="submit" disabled={running || systems.length === 0}>
-              {running ? 'Scanning…' : 'Scan'}
-            </button>
-          </form>
-          {systems.length === 0 && (
-            <ErrorNote>
-              No model is configured, so issue text can't be read. Set DEP_WATCH_LLM_MODEL and
-              restart the API.
-            </ErrorNote>
-          )}
-          <ErrorNote>{error}</ErrorNote>
-          {job && job.status !== 'succeeded' && (
-            <JobLine
-              job={job}
-              describe={(j: Job) =>
-                j.status === 'queued' ? 'Waiting to start.' : `${plural(j.progress, 'issue')} read so far.`
-              }
-            />
-          )}
-        </div>
-      </div>
-
-      {result && <Triage key={tab} result={result} tab={tab} version={version} />}
+          </section>
+        )
+      )}
     </div>
   )
 }
@@ -161,16 +181,26 @@ function Triage({ result, tab, version }: { result: ScanResponse; tab: Answer; v
   const selected = items.find((i) => i.issue_key === selectedKey) ?? items[0]
 
   return (
-    <div className="split" role="tabpanel" aria-label={ANSWER_TEXT[tab]}>
-      <div className="list-pane">
-        <input
-          className="filter"
-          type="search"
-          placeholder="Filter by key or title"
-          aria-label="Filter issues"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        />
+    <>
+      <section
+        className="widget w-5 list-widget"
+        role="tabpanel"
+        aria-label={ANSWER_TEXT[tab]}
+      >
+        <div className="widget-head">
+          <h2 className="widget-title">
+            {ANSWER_TEXT[tab]}
+            <sup>{items.length}</sup>
+          </h2>
+          <input
+            className="filter"
+            type="search"
+            placeholder="Filter"
+            aria-label="Filter issues"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+        </div>
         {items.length === 0 ? (
           <p className="list-empty">
             {filter ? 'No issue here matches the filter.' : 'No issue has this answer.'}
@@ -193,11 +223,15 @@ function Triage({ result, tab, version }: { result: ScanResponse; tab: Answer; v
             ))}
           </ul>
         )}
-      </div>
-      <div className="detail-pane" ref={detailRef}>
-        {selected && <IssueDetail key={selected.issue_key} item={selected} pinned={version} />}
+      </section>
+      <section className="widget w-7 detail-widget" ref={detailRef}>
+        {selected ? (
+          <IssueDetail key={selected.issue_key} item={selected} pinned={version} />
+        ) : (
+          <p className="list-empty">Pick an issue to see why.</p>
+        )}
         <RulerKey />
-      </div>
-    </div>
+      </section>
+    </>
   )
 }

@@ -586,6 +586,7 @@ def test_stored_answer_never_calls_the_model(make_client):
     assert stored["answered"] and stored["result"]["answer"] == "affected"
     assert stored["result"]["cached"] is True
     assert CountingPhrases.calls == 1  # no further model call
+    assert client.get("/stats/issues").json()["read"] == 1
 
 
 def test_stored_answer_without_a_model(make_client):
@@ -599,4 +600,5 @@ def test_stored_answer_without_a_model(make_client):
 def test_issue_stats(client):
     stats = client.get("/stats/issues").json()
     assert (stats["total"], stats["bugs"], stats["open_bugs"], stats["fixed_bugs"]) == (2, 2, 1, 1)
+    assert stats["read"] == 0
     assert stats["newest"].startswith("2024-01-05")

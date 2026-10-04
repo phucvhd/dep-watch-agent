@@ -29,6 +29,7 @@ from dep_watch_agent.check import (
     load_issue,
 )
 from dep_watch_agent.orm import (
+    ExtractionRow,
     JiraIssueComponentRow,
     JiraIssueRow,
     JiraIssueVersionRow,
@@ -195,8 +196,21 @@ def issue_stats(session: SessionDep, project: ProjectKey = "KAFKA") -> IssueStat
     newest = session.scalar(
         select(func.max(JiraIssueRow.updated_at)).where(JiraIssueRow.project == project)
     )
+    read = (
+        session.scalar(
+            select(func.count(func.distinct(ExtractionRow.issue_id)))
+            .join(JiraIssueRow, JiraIssueRow.id == ExtractionRow.issue_id)
+            .where(JiraIssueRow.project == project)
+        )
+        or 0
+    )
     return IssueStats(
-        total=total, bugs=bug_count, open_bugs=open_bugs, fixed_bugs=fixed_bugs, newest=newest
+        total=total,
+        bugs=bug_count,
+        open_bugs=open_bugs,
+        fixed_bugs=fixed_bugs,
+        read=read,
+        newest=newest,
     )
 
 

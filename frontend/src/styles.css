@@ -6,6 +6,7 @@
 :root {
   --bg: #ffffff;
   --bg-soft: #f8f8f6;
+  --canvas: #f3f3f0; /* behind widgets */
   --line: #e6e6e3;
   --ink: #0e0e0e;
   --ink-2: #6b6b6b;
@@ -31,6 +32,7 @@
   :root {
     --bg: #0d0d0d;
     --bg-soft: #151515;
+    --canvas: #080808;
     --line: #262626;
     --ink: #f2f2f2;
     --ink-2: #a3a3a3;
@@ -1381,6 +1383,290 @@ th {
   color: var(--ink);
 }
 
+/* --- dashboards: a grid of widgets on a quiet canvas --------------------------------- */
+
+main {
+  background: var(--canvas);
+}
+
+.page {
+  background: var(--bg);
+}
+
+.dash {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+  padding: 28px 32px 56px;
+  align-items: start;
+}
+
+.w-4 {
+  grid-column: span 4;
+}
+.w-5 {
+  grid-column: span 5;
+}
+.w-7 {
+  grid-column: span 7;
+}
+.w-8 {
+  grid-column: span 8;
+}
+.w-12 {
+  grid-column: 1 / -1;
+}
+
+.widget {
+  /* background-color only, so a tile's gradient (background-image) survives. */
+  background-color: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 22px 24px;
+  min-width: 0;
+}
+
+/* Tiles in a row share its height, as a grid of widgets should. */
+.widget.w-4 {
+  align-self: stretch;
+}
+
+.widget-title {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.widget-text {
+  margin: 0 0 16px;
+  font-size: 14.5px;
+  color: var(--ink-2);
+}
+
+.widget-foot {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.widget-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.widget-head .widget-title {
+  margin: 0;
+}
+
+.widget .toolbar input,
+.widget .toolbar select {
+  height: 38px;
+}
+
+/* The page title, compact so the widgets lead. */
+.dash > .intro {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  padding: 0 4px;
+  border: 0;
+}
+
+.dash > .intro h1 {
+  font-size: 32px;
+  letter-spacing: -0.035em;
+}
+
+.dash > .intro .intro-text {
+  font-size: 15.5px;
+  max-width: 80ch;
+}
+
+.dash > .intro .intro-text p {
+  margin: 0;
+}
+
+/* The status tile: the answer on the gradient, which is the status itself. */
+.status-tile {
+  min-height: 236px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 28px 32px;
+  color: #0e0e0e;
+  border-color: transparent;
+  align-self: stretch;
+}
+
+.status-tile .hero-line {
+  font-size: 48px;
+  max-width: 17ch;
+}
+
+.status-sub {
+  margin: 0;
+  font-size: 15px;
+  color: rgb(14 14 14 / 0.7);
+}
+
+/* Counts as tiles; the three answers double as the filter for the list below. */
+.count-tiles,
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.count-tile,
+.stat-tile {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  text-align: left;
+  height: auto;
+  border-radius: 18px;
+  padding: 20px 22px;
+  font-weight: 400;
+}
+
+.count-tile {
+  cursor: pointer;
+  position: relative;
+}
+
+.count-tile:hover:not(:disabled) {
+  border-color: var(--ink-3);
+  background: var(--bg);
+}
+
+.count-tile[aria-selected='true'] {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.count-tile::after {
+  content: '';
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.count-affected::after {
+  background: var(--hit);
+}
+.count-insufficient_information::after {
+  background: var(--unknown);
+}
+.count-not_affected::after {
+  background: var(--clear);
+}
+
+.count-label {
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.count-value {
+  font-size: 52px;
+  line-height: 1.05;
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  color: var(--ink);
+}
+
+.count-hint {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+/* List and detail as widgets: the list scrolls inside its own tile. */
+.list-widget,
+.detail-widget {
+  padding: 0;
+  overflow: hidden;
+}
+
+.list-widget .filter {
+  width: 160px;
+  height: 34px;
+  margin: 0;
+}
+
+.list-widget .rows {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.list-widget .row {
+  padding: 16px 20px 14px 22px;
+}
+
+.list-widget .rows li:last-child {
+  border-bottom: 0;
+}
+
+.list-widget .pager {
+  border-top: 1px solid var(--line);
+  padding: 12px 16px;
+}
+
+.list-widget .list-empty {
+  padding: 18px 20px;
+}
+
+.detail-widget {
+  padding: 28px 32px 32px;
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.empty-tile h2 {
+  font-size: 26px;
+  letter-spacing: -0.03em;
+  margin-bottom: 8px;
+}
+
+.empty-tile p {
+  margin: 0;
+  color: var(--ink-2);
+  max-width: 64ch;
+}
+
+.search-widget {
+  padding: 18px 20px;
+}
+
+.dash .pane-head {
+  margin-bottom: 14px;
+}
+
+.dash .pane-lead {
+  font-size: 14.5px;
+  margin: 0 0 14px;
+}
+
+.dash .pane-head .pane-lead {
+  margin: 0;
+}
+
+.dash .stat-tile .widget-title {
+  margin-bottom: 4px;
+}
+
 /* --- narrow screens and motion ------------------------------------------------------ */
 
 @media (max-width: 1100px) {
@@ -1391,6 +1677,25 @@ th {
   .intro h1,
   .intro-title {
     font-size: 52px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .dash {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    padding: 20px;
+  }
+  .w-4 {
+    grid-column: span 3;
+  }
+  .w-5,
+  .w-7,
+  .w-8 {
+    grid-column: 1 / -1;
+  }
+  .detail-widget {
+    position: static;
+    max-height: none;
   }
 }
 
@@ -1469,6 +1774,45 @@ th {
   .panes .pane + .pane {
     border-left: 0;
     border-top: 1px solid var(--line);
+  }
+  .dash {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px;
+    gap: 12px;
+  }
+  .w-4 {
+    grid-column: 1 / -1;
+  }
+  .status-tile {
+    min-height: 180px;
+    padding: 22px;
+  }
+  .status-tile .hero-line {
+    font-size: 32px;
+  }
+  .count-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .count-tile {
+    padding: 12px 14px;
+    border-radius: 14px;
+  }
+  .count-tile::after {
+    top: 14px;
+    right: 14px;
+    width: 8px;
+    height: 8px;
+  }
+  .count-label {
+    font-size: 12.5px;
+    padding-right: 10px;
+  }
+  .count-value {
+    font-size: 32px;
+  }
+  .count-tile .count-hint {
+    display: none;
   }
   .detected-head {
     grid-template-columns: minmax(0, 1fr);

@@ -160,6 +160,7 @@ class IssueStats(BaseModel):
     bugs: int
     open_bugs: int
     fixed_bugs: int
+    read: int = Field(description="Issues whose text a model has read (facts stored)")
     newest: datetime | None = Field(description="The most recent update among synced issues")
 
 

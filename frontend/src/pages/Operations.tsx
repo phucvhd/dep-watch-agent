@@ -21,14 +21,13 @@ interface Props {
 
 export function Operations({ dependency, systems, onSynced }: Props) {
   return (
-    <div className="page">
+    <div className="dash">
       <PageIntro title="Data and models">
         <p>Where the issues come from, and how well each model reads them.</p>
       </PageIntro>
-      <div className="panes">
-        <Sync dependency={dependency} onSynced={onSynced} />
-        <Models systems={systems} />
-      </div>
+      <Sync dependency={dependency} onSynced={onSynced} />
+      <Models systems={systems} />
+      <Facts dependency={dependency} />
       <Evaluation systems={systems} />
       <Jobs />
     </div>
@@ -55,8 +54,10 @@ function Sync({ dependency, onSynced }: { dependency: Dependency; onSynced: () =
   }
 
   return (
-    <section className="pane" aria-labelledby="sync-title">
-      <h2 id="sync-title">Issue tracker</h2>
+    <section className="widget w-4" aria-labelledby="sync-title">
+      <h2 id="sync-title" className="widget-title">
+        Issue tracker
+      </h2>
       <p className="pane-lead">
         {dependency.name} issues from{' '}
         <a href={dependency.tracker_url} target="_blank" rel="noreferrer">
@@ -85,10 +86,30 @@ function Sync({ dependency, onSynced }: { dependency: Dependency; onSynced: () =
   )
 }
 
+function Facts({ dependency }: { dependency: Dependency }) {
+  const stats = useLoad(() => api.issueStats(dependency.project), [dependency.project])
+  const s = stats.data
+  return (
+    <section className="widget w-4 stat-tile" aria-labelledby="facts-title">
+      <h2 id="facts-title" className="widget-title">
+        Stored facts
+      </h2>
+      <span className="count-value">{s ? s.read.toLocaleString() : '…'}</span>
+      <span className="count-hint">
+        {s
+          ? `of ${s.bugs.toLocaleString()} ${dependency.name} bugs have been read by a model. Their answers, for any version, need no model call.`
+          : 'Loading…'}
+      </span>
+    </section>
+  )
+}
+
 function Models({ systems }: { systems: string[] }) {
   return (
-    <section className="pane" aria-labelledby="models-title">
-      <h2 id="models-title">Models</h2>
+    <section className="widget w-4" aria-labelledby="models-title">
+      <h2 id="models-title" className="widget-title">
+        Models
+      </h2>
       {systems.length === 0 ? (
         <p className="pane-lead">
           None configured. Set DEP_WATCH_LLM_MODEL to a model on an OpenAI-compatible server and
@@ -134,10 +155,12 @@ function Evaluation({ systems }: { systems: string[] }) {
   }
 
   return (
-    <section className="pane" aria-labelledby="eval-title">
+    <section className="widget w-12" aria-labelledby="eval-title">
       <div className="pane-head">
         <div>
-          <h2 id="eval-title">Evaluation</h2>
+          <h2 id="eval-title" className="widget-title">
+            Evaluation
+          </h2>
           <p className="pane-lead">
             Scores a model on labeled issues through the same decision code as scans. Every issue
             is read again, so a 100-issue run takes about an hour.
@@ -232,10 +255,12 @@ function RunsTable({ runs }: { runs: EvalRunSummary[] }) {
 function Jobs() {
   const jobs = useLoad(() => api.jobs(), [])
   return (
-    <section className="pane" aria-labelledby="jobs-title">
+    <section className="widget w-12" aria-labelledby="jobs-title">
       <div className="pane-head">
         <div>
-          <h2 id="jobs-title">Background jobs</h2>
+          <h2 id="jobs-title" className="widget-title">
+            Background jobs
+          </h2>
           <p className="pane-lead">Since the API last started; a restart forgets them.</p>
         </div>
         <button onClick={jobs.reload}>Refresh</button>
