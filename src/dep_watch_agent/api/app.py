@@ -1,7 +1,7 @@
 """The FastAPI application.
 
 ``create_app`` takes every external dependency as an argument (database sessions, JIRA client,
-Langfuse client, job registry) so tests can replace them; by default they come from the
+Langfuse client, job registry, systems) so tests can replace them; by default they come from the
 environment, as documented in ``.env.example``.
 """
 
@@ -24,6 +24,7 @@ from dep_watch_agent.api.routes import eval as eval_routes
 from dep_watch_agent.api.routes import issues, ops
 from dep_watch_agent.api.schemas import JobOut
 from dep_watch_agent.eval.dataset import DatasetError
+from dep_watch_agent.systems import SYSTEMS, SystemRegistry
 
 
 def create_app(
@@ -33,6 +34,7 @@ def create_app(
     jobs: JobRegistry | None = None,
     jira_client_factory: Callable[..., Any] | None = None,
     langfuse_factory: Callable[[], Any] | None = None,
+    systems: SystemRegistry | None = None,
 ) -> FastAPI:
     load_dotenv()  # .env in the working directory; real environment variables win
     settings = settings or Settings.from_env()
@@ -56,6 +58,7 @@ def create_app(
     app.state.jobs = jobs or JobRegistry()
     app.state.jira_client_factory = jira_client_factory or _default_jira_client
     app.state.langfuse_factory = langfuse_factory or _default_langfuse
+    app.state.systems = SYSTEMS if systems is None else systems
 
     if settings.cors_origins:
         app.add_middleware(

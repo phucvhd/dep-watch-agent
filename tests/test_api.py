@@ -9,6 +9,7 @@ from dep_watch_agent.api.deps import Settings
 from dep_watch_agent.db import migrate
 from dep_watch_agent.jira.models import parse_issue
 from dep_watch_agent.jira.store import upsert_issue, upsert_versions
+from dep_watch_agent.verdict import Evidence, Extraction, IssueText
 from tests.eval_factory import ALL_YES, fill_labels
 from tests.jira_factory import raw_comment, raw_issue
 
@@ -57,6 +58,30 @@ CPU = raw_issue(
 )
 
 
+class PhraseExtractor:
+    """Cites a fact for each known phrase in the issue text, quoting the field it is in."""
+
+    name = "phrases"
+    PHRASES = {
+        "Regression in 3.6.0": ("3.6.0", "introduced"),
+        "Works fine on 3.5.2": ("3.5.2", "unaffected"),
+        "introduced in 3.5.2": ("3.5.2", "introduced"),
+    }
+
+    def extract(self, issue: IssueText) -> Extraction:
+        return Extraction(
+            [
+                Evidence(version, kind, text)
+                for text in issue.fields()
+                for phrase, (version, kind) in self.PHRASES.items()
+                if phrase in text
+            ]
+        )
+
+
+SYSTEMS = {"phrases": PhraseExtractor}
+
+
 @pytest.fixture
 def sessions(schema):
     migrate(schema.url, schema=schema.name)
@@ -72,6 +97,7 @@ def sessions(schema):
 @pytest.fixture
 def make_client(sessions, tmp_path):
     def make(datasets_dir=None, **deps) -> TestClient:
+        deps.setdefault("systems", SYSTEMS)
         settings = Settings(
             datasets_dir=datasets_dir or tmp_path / "datasets",
             runs_dir=tmp_path / "runs",
@@ -172,13 +198,14 @@ def test_versions_are_ordered_numerically(client):
 # --- check -------------------------------------------------------------------------------
 
 
-def check(client, version, key="KAFKA-100"):
-    return client.post("/check", json={"issue_key": key, "kafka_version": version})
+def check(client, version, key="KAFKA-100", **extra):
+    return client.post("/check", json={"issue_key": key, "kafka_version": version, **extra})
 
 
 def test_check_affected_cites_the_issue(client):
     body = check(client, "3.6.0").json()
     assert body["answer"] == "affected"
+    assert body["system"] == "phrases"  # the first registered system
     assert body["url"] == "https://issues.apache.org/jira/browse/KAFKA-100"
     assert body["fix_versions"] == ["3.9.0"]
     assert {"version": "3.6.0", "kind": "introduced", "quote": DEADLOCK_QUOTE} in body["evidence"]
@@ -213,6 +240,17 @@ def test_check_needs_a_specific_release(client, version):
 def test_check_missing_issue(client):
     assert check(client, "3.6.0", key="KAFKA-999").status_code == 404
     assert check(client, "3.6.0", key="not-a-key").status_code == 422
+
+
+def test_check_unknown_system(client):
+    response = check(client, "3.6.0", system="baseline")
+    assert response.status_code == 422
+    assert "phrases" in response.json()["detail"]
+
+
+def test_check_needs_a_registered_system(make_client):
+    response = check(make_client(systems={}), "3.6.0")
+    assert response.status_code == 503
 
 
 # --- sync --------------------------------------------------------------------------------
@@ -332,24 +370,36 @@ def test_path_traversal_is_rejected(eval_client):
     assert eval_client.post("/eval/datasets", json={"name": "../x"}).status_code == 422
 
 
+def run_body(**fields) -> dict:
+    return {"dataset": "test-set", "system": "phrases", **fields}
+
+
 def test_run_needs_labels_unless_provisional(eval_client):
-    response = eval_client.post("/eval/runs", json={"dataset": "test-set"})
+    response = eval_client.post("/eval/runs", json=run_body())
     assert response.status_code == 400
     assert "provisional" in response.json()["detail"]
 
 
+def test_run_needs_a_registered_system(eval_client):
+    body = run_body(provisional=True)
+    assert eval_client.post("/eval/runs", json={**body, "system": "baseline"}).status_code == 422
+    del body["system"]
+    assert eval_client.post("/eval/runs", json=body).status_code == 422
+
+
 def test_provisional_runs_are_local_only(eval_client):
-    body = {"dataset": "test-set", "provisional": True, "langfuse": True}
+    body = run_body(provisional=True, langfuse=True)
     assert eval_client.post("/eval/runs", json=body).status_code == 400
 
 
 def test_provisional_run_saves_results(eval_client):
-    body = {"dataset": "test-set", "provisional": True, "run_name": "t1"}
+    body = run_body(provisional=True, run_name="t1")
     response = eval_client.post("/eval/runs", json=body)
     assert response.status_code == 202
     job = wait(eval_client, response.json())
 
     assert job["status"] == "succeeded", job["error"]
+    assert job["result"]["system"] == "phrases"
     assert job["result"]["metrics"]["n"] == 4
     runs = eval_client.get("/eval/runs").json()
     assert [(r["run_name"], r["provisional"]) for r in runs] == [("t1", True)]

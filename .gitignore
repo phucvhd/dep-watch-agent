@@ -31,3 +31,6 @@ CLAUDE.md
 
 # Local eval run outputs (the record of a run is the Langfuse experiment)
 eval/runs/
+
+# Local working docs
+docs/

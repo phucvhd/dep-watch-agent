@@ -10,8 +10,8 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from dep_watch_agent.baseline import RuleBasedExtractor
-from dep_watch_agent.eval.sampling import EXCLUDED_COMMENT_AUTHORS, JIRA_BROWSE_URL, known_versions
+from dep_watch_agent.eval.runner import Extractor
+from dep_watch_agent.eval.sampling import EXCLUDED_COMMENT_AUTHORS, JIRA_BROWSE_URL
 from dep_watch_agent.orm import JiraIssueRow
 from dep_watch_agent.verdict import Decision, IssueText, decide
 
@@ -66,13 +66,14 @@ def issue_text(issue: JiraIssueRow) -> IssueText:
     )
 
 
-def check_issue(session: Session, key: str, kafka_version: str) -> CheckResult:
-    """Decide whether ``kafka_version`` is affected by issue ``key``, with the baseline system.
+def check_issue(
+    session: Session, key: str, kafka_version: str, extractor: Extractor
+) -> CheckResult:
+    """Decide whether ``kafka_version`` is affected by issue ``key``, with ``extractor``.
 
     ``kafka_version`` must already be validated as a release (``verdict.is_release``).
     """
     issue = load_issue(session, key)
     text = issue_text(issue)
-    extractor = RuleBasedExtractor(known_versions(session, issue.project))
     decision = decide(text, kafka_version, extractor.extract(text))
     return CheckResult(issue, text, kafka_version, extractor.name, decision)
