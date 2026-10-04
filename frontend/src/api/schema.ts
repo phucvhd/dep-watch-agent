@@ -219,6 +219,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/issues/{key}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stored Answer
+         * @description The answer for ``kafka_version`` if it needs no model call: the fix versions settle it,
+         *     or the system's facts for this issue are stored. Otherwise ``answered`` is false and
+         *     ``POST /check`` reads the issue.
+         */
+        get: operations["stored_answer_issues__key__answer_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/stats/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Issue Stats
+         * @description Counts over the synced issues, for the top of the issues page.
+         */
+        get: operations["issue_stats_stats_issues_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/scan": {
         parameters: {
             query?: never;
@@ -686,6 +728,22 @@ export interface components {
             /** Items */
             items: components["schemas"]["IssueSummary"][];
         };
+        /** IssueStats */
+        IssueStats: {
+            /** Total */
+            total: number;
+            /** Bugs */
+            bugs: number;
+            /** Open Bugs */
+            open_bugs: number;
+            /** Fixed Bugs */
+            fixed_bugs: number;
+            /**
+             * Newest
+             * @description The most recent update among synced issues
+             */
+            newest: string | null;
+        };
         /** IssueSummary */
         IssueSummary: {
             /** Key */
@@ -929,6 +987,17 @@ export interface components {
             cached: number;
             /** Items */
             items: components["schemas"]["ScanItemOut"][];
+        };
+        /** StoredAnswer */
+        StoredAnswer: {
+            /**
+             * Answered
+             * @description False when only a model call (POST /check) can answer
+             */
+            answered: boolean;
+            /** System */
+            system: string | null;
+            result?: components["schemas"]["CheckResponse"] | null;
         };
         /** SyncRequest */
         SyncRequest: {
@@ -1336,6 +1405,76 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    stored_answer_issues__key__answer_get: {
+        parameters: {
+            query: {
+                kafka_version: string;
+                system?: string | null;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredAnswer"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_stats_stats_issues_get: {
+        parameters: {
+            query?: {
+                project?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueStats"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

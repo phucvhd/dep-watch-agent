@@ -134,6 +134,7 @@ def scan_version(
         }
         try:
             answered = answer_issue(session, issue.id, text, kafka_version, system, extractor)
+            assert answered is not None  # read=True always answers
             error = None
         except Exception as exc:  # one failed issue must not lose the others
             session.rollback()

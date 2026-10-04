@@ -13,18 +13,28 @@ from dep_watch_agent.api.schemas import (
     EvidenceOut,
     IssueDetail,
     IssuePage,
+    IssueStats,
     IssueSummary,
     KafkaVersion,
     ProjectKey,
+    StoredAnswer,
 )
-from dep_watch_agent.check import IssueNotFound, check_issue, issue_url, load_issue
+from dep_watch_agent.check import (
+    FIX_VERSIONS,
+    CheckResult,
+    IssueNotFound,
+    check_issue,
+    issue_text,
+    issue_url,
+    load_issue,
+)
 from dep_watch_agent.orm import (
     JiraIssueComponentRow,
     JiraIssueRow,
     JiraIssueVersionRow,
     JiraVersionRow,
 )
-from dep_watch_agent.verdict import is_release
+from dep_watch_agent.verdict import NOT_AFFECTED, Extraction, decide, is_release
 from dep_watch_agent.versions import VersionParseError, parse_version
 
 router = APIRouter(tags=["issues"])
@@ -122,7 +132,75 @@ def check(body: CheckRequest, session: SessionDep, systems: SystemsDep) -> Check
         result = check_issue(session, body.issue_key, body.kafka_version, name, systems[name]())
     except IssueNotFound:
         raise HTTPException(404, f"issue {body.issue_key} not synced") from None
+    assert result is not None  # read=True always answers
+    return check_response(result)
 
+
+@router.get("/issues/{key}/answer", response_model=StoredAnswer, responses={404: {}, 422: {}})
+def stored_answer(
+    key: str,
+    session: SessionDep,
+    systems: SystemsDep,
+    kafka_version: Annotated[str, Query(examples=["3.9.1"])],
+    system: str | None = None,
+) -> StoredAnswer:
+    """The answer for ``kafka_version`` if it needs no model call: the fix versions settle it,
+    or the system's facts for this issue are stored. Otherwise ``answered`` is false and
+    ``POST /check`` reads the issue."""
+    if not is_release(kafka_version):
+        raise HTTPException(422, f"{kafka_version!r} is not a specific Kafka release, e.g. 3.6.1")
+    name = pick_system(systems, system) if systems else None
+    try:
+        if name is None:  # no model: only the fix versions can answer
+            issue = load_issue(session, key)
+            text = issue_text(issue)
+            decision = decide(text, kafka_version, Extraction([]))
+            if decision.answer != NOT_AFFECTED:
+                return StoredAnswer(answered=False, system=None)
+            result = CheckResult(issue, text, kafka_version, "", decision, FIX_VERSIONS, False)
+        else:
+            result = check_issue(session, key, kafka_version, name, systems[name](), read=False)
+    except IssueNotFound:
+        raise HTTPException(404, f"issue {key} not synced") from None
+    if result is None:
+        return StoredAnswer(answered=False, system=name)
+    return StoredAnswer(answered=True, system=name, result=check_response(result))
+
+
+@router.get("/stats/issues", response_model=IssueStats)
+def issue_stats(session: SessionDep, project: ProjectKey = "KAFKA") -> IssueStats:
+    """Counts over the synced issues, for the top of the issues page."""
+    issues = select(JiraIssueRow).where(JiraIssueRow.project == project).subquery()
+    total = session.scalar(select(func.count()).select_from(issues)) or 0
+    bugs = select(JiraIssueRow).where(
+        JiraIssueRow.project == project, JiraIssueRow.issue_type == "Bug"
+    )
+    bug_count = session.scalar(select(func.count()).select_from(bugs.subquery())) or 0
+    open_bugs = (
+        session.scalar(
+            select(func.count()).select_from(
+                bugs.where(JiraIssueRow.resolution.is_(None)).subquery()
+            )
+        )
+        or 0
+    )
+    fixed_bugs = (
+        session.scalar(
+            select(func.count()).select_from(
+                bugs.where(JiraIssueRow.resolution == "Fixed").subquery()
+            )
+        )
+        or 0
+    )
+    newest = session.scalar(
+        select(func.max(JiraIssueRow.updated_at)).where(JiraIssueRow.project == project)
+    )
+    return IssueStats(
+        total=total, bugs=bug_count, open_bugs=open_bugs, fixed_bugs=fixed_bugs, newest=newest
+    )
+
+
+def check_response(result: CheckResult) -> CheckResponse:
     decision = result.decision
     return CheckResponse(
         issue_key=result.issue.key,

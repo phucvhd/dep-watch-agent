@@ -78,10 +78,6 @@ export function IssueRow({
 }
 
 export function IssueDetail({ item, pinned }: { item: AnsweredIssue; pinned: string }) {
-  const source =
-    item.decided_by === 'fix_versions'
-      ? 'Settled by JIRA fix versions, without reading the text'
-      : `Read by ${item.decided_by}${item.cached ? ' (stored facts)' : ''}`
   return (
     <article className="detail" aria-labelledby={`detail-${item.issue_key}`}>
       <header className="detail-head">
@@ -95,7 +91,19 @@ export function IssueDetail({ item, pinned }: { item: AnsweredIssue; pinned: str
           {item.fix_versions.length > 0 && <span>Fix in {item.fix_versions.join(', ')}</span>}
         </p>
       </header>
+      <AnswerBody item={item} pinned={pinned} />
+    </article>
+  )
+}
 
+/** The answer for one version: the ruler, the reason, and the quotes it rests on. */
+export function AnswerBody({ item, pinned }: { item: AnsweredIssue; pinned: string }) {
+  const source =
+    item.decided_by === 'fix_versions'
+      ? 'Settled by JIRA fix versions, without reading the text'
+      : `Read by ${item.decided_by}${item.cached ? ' (stored facts)' : ''}`
+  return (
+    <>
       <div className="detail-ruler">
         <VersionRuler pinned={pinned} evidence={item.evidence} fixVersions={item.fix_versions} />
       </div>
@@ -138,6 +146,6 @@ export function IssueDetail({ item, pinned }: { item: AnsweredIssue; pinned: str
       )}
 
       <p className="detail-source">{source}.</p>
-    </article>
+    </>
   )
 }

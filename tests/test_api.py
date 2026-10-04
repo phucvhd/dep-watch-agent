@@ -550,3 +550,53 @@ def test_upload_needs_labels(make_client, written):
         "uploaded": 4,
     }
     assert len(fake.items) == 4
+
+
+# --- stored answers and stats ------------------------------------------------------------
+
+
+class CountingPhrases(PhraseExtractor):
+    version = "v1"
+    calls = 0
+
+    def extract(self, issue):
+        CountingPhrases.calls += 1
+        return super().extract(issue)
+
+
+def answer(client, key="KAFKA-100", version="3.6.0"):
+    return client.get(f"/issues/{key}/answer", params={"kafka_version": version})
+
+
+def test_stored_answer_never_calls_the_model(make_client):
+    client = make_client(systems={"phrases": CountingPhrases})
+    CountingPhrases.calls = 0
+
+    body = answer(client).json()
+    assert (body["answered"], body["system"], body["result"]) == (False, "phrases", None)
+
+    # Past the fix, code answers without stored facts.
+    past = answer(client, version="3.9.0").json()
+    assert past["answered"] and past["result"]["decided_by"] == "fix_versions"
+
+    # Once /check has read the issue, its stored facts answer any version.
+    check(client, "3.6.0")
+    assert CountingPhrases.calls == 1
+    stored = answer(client, version="3.6.1").json()
+    assert stored["answered"] and stored["result"]["answer"] == "affected"
+    assert stored["result"]["cached"] is True
+    assert CountingPhrases.calls == 1  # no further model call
+
+
+def test_stored_answer_without_a_model(make_client):
+    client = make_client(systems={})
+    assert answer(client).json() == {"answered": False, "system": None, "result": None}
+    assert answer(client, version="3.9.0").json()["answered"] is True
+    assert answer(client, key="KAFKA-999").status_code == 404
+    assert answer(client, version="3.6").status_code == 422
+
+
+def test_issue_stats(client):
+    stats = client.get("/stats/issues").json()
+    assert (stats["total"], stats["bugs"], stats["open_bugs"], stats["fixed_bugs"]) == (2, 2, 1, 1)
+    assert stats["newest"].startswith("2024-01-05")

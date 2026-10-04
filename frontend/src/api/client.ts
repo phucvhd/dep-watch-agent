@@ -15,6 +15,8 @@ export type IssueSummary = Schemas['IssueSummary']
 export type IssueDetail = Schemas['IssueDetail']
 export type CheckRequest = Schemas['CheckRequest']
 export type CheckResponse = Schemas['CheckResponse']
+export type StoredAnswer = Schemas['StoredAnswer']
+export type IssueStats = Schemas['IssueStats']
 export type ScanRequest = Schemas['ScanRequest']
 export type ScanResponse = Schemas['ScanResponse']
 export type ScanItem = Schemas['ScanItemOut']
@@ -101,6 +103,11 @@ export const api = {
   }) => request<IssuePage>(`/issues${query(params)}`),
   issue: (key: string) => request<IssueDetail>(`/issues/${encodeURIComponent(key)}`),
   check: (body: CheckRequest) => post<CheckResponse>('/check', body),
+  storedAnswer: (key: string, kafkaVersion: string) =>
+    request<StoredAnswer>(
+      `/issues/${encodeURIComponent(key)}/answer${query({ kafka_version: kafkaVersion })}`,
+    ),
+  issueStats: (project: string) => request<IssueStats>(`/stats/issues${query({ project })}`),
   startScan: (body: ScanRequest) => post<Job>('/scan', body),
   jobs: (kind?: string) => request<Job[]>(`/jobs${query({ kind })}`),
   job: (id: string) => request<Job>(`/jobs/${id}`),

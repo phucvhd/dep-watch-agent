@@ -32,6 +32,27 @@ def text_hash(text: IssueText) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
+def _key(issue_id: int, text: IssueText, system: str, version: str) -> dict:
+    return {
+        "issue_id": issue_id,
+        "system": system,
+        "extractor_version": version,
+        "text_hash": text_hash(text),
+    }
+
+
+def stored(
+    session: Session, issue_id: int, text: IssueText, system: str, extractor: Extractor
+) -> Extraction | None:
+    """The stored extraction for this text, system and version, without calling the system."""
+    version = getattr(extractor, "version", None)
+    if version is None:
+        return None
+    key = _key(issue_id, text, system, version)
+    row = session.scalars(select(ExtractionRow).filter_by(**key)).one_or_none()
+    return Extraction([Evidence(**e) for e in row.evidence]) if row else None
+
+
 def extract(
     session: Session, issue_id: int, text: IssueText, system: str, extractor: Extractor
 ) -> Extracted:
@@ -41,15 +62,10 @@ def extract(
     if version is None:
         return Extracted(extractor.extract(text), cached=False)
 
-    key = {
-        "issue_id": issue_id,
-        "system": system,
-        "extractor_version": version,
-        "text_hash": text_hash(text),
-    }
-    row = session.scalars(select(ExtractionRow).filter_by(**key)).one_or_none()
-    if row is not None:
-        return Extracted(Extraction([Evidence(**e) for e in row.evidence]), cached=True)
+    known = stored(session, issue_id, text, system, extractor)
+    if known is not None:
+        return Extracted(known, cached=True)
+    key = _key(issue_id, text, system, version)
 
     start = time.monotonic()
     extraction = extractor.extract(text)

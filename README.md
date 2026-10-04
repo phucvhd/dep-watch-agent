@@ -44,10 +44,14 @@ Dockerfiles), skipping hidden and generated folders, and sends only their text t
 `POST /repo/scan`, which lists every dependency and version found. Confluent Platform's
 `cp-kafka` x.y.0 images count as the Apache Kafka release they ship.
 You tick the ones to watch; every dependency is shown, but only Apache Kafka can be watched for
-now. A version can also be added by hand. Every page then answers for the watched dependency
-chosen in the sidebar: new bugs as a triage list (affects you / can't tell / doesn't affect you) with
-each issue's version ruler and quoted evidence, checking one issue, browsing synced issues, and
-JIRA sync, models and eval runs.
+now. A version can also be added by hand, and changing the repository can be abandoned (Keep
+watching, Cancel, or Esc) without losing what is watched.
+
+Pages: **New bugs** (a scan as a triage list: affects you / can't tell / doesn't affect you,
+each with its version ruler and quoted evidence), **Issues** (every synced issue with counts;
+the selected one shows its answer for your version when that needs no model call, from the fix
+versions or stored facts via `GET /issues/{key}/answer`, and otherwise offers to read it), and
+**Data and models** (JIRA sync, models, eval runs, jobs).
 
 ```bash
 cd frontend

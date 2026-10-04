@@ -977,6 +977,82 @@ main {
   margin-top: 4px;
 }
 
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.current-watch {
+  color: var(--ink);
+}
+
+/* Issues: the counts under the intro, and the answer for the watched version. */
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 36px;
+  margin: 8px 0 0;
+}
+
+.stats dt {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.stats dd {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+}
+
+.answer {
+  margin: 28px 0 8px;
+  padding: 24px 0 8px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.answer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.answer-head h3 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.answer-head input {
+  height: 36px;
+  font-size: 18px;
+  width: 7.5em;
+}
+
+.answer-head button {
+  height: 36px;
+}
+
+.unread {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  padding-bottom: 16px;
+}
+
+.unread p,
+.hint-line {
+  margin: 0;
+  color: var(--ink-2);
+  max-width: 56ch;
+}
+
 /* Reading a repository: an indeterminate bar along the section's top edge, and the steps. */
 .progress {
   position: relative;

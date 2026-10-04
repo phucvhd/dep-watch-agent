@@ -1,46 +1,90 @@
 import { useState, type FormEvent } from 'react'
-import { api, type Dependency } from '../api/client'
+import { api, type CheckResponse, type Dependency } from '../api/client'
+import { AnswerBody } from '../components/IssueResult'
+import { RulerKey } from '../components/VersionRuler'
 import { ErrorNote, PageIntro } from '../components/common'
-import { formatDay } from '../format'
-import { useLoad } from '../hooks'
+import { ANSWER_TEXT, formatAgo, formatDay } from '../format'
+import { message, useLoad } from '../hooks'
 
 const PAGE = 30
 
 interface Props {
   dependency: Dependency
-  version: string
-  onCheck: (key: string) => void
+  version: string // the watched version, or '' when nothing is watched
+  systems: string[]
+  issueKey?: string // from the URL: #/issues/KAFKA-123
 }
 
-export function Issues({ dependency, version, onCheck }: Props) {
-  const [draft, setDraft] = useState('')
-  const [filters, setFilters] = useState({ q: '', issue_type: 'Bug', status: '', fix_version: '' })
+/** Every synced issue, and for the selected one, whether it affects the version you run. */
+export function Issues({ dependency, version, systems, issueKey }: Props) {
+  const [draft, setDraft] = useState(issueKey ?? '')
+  const [filters, setFilters] = useState({
+    q: issueKey ?? '',
+    issue_type: issueKey ? '' : 'Bug',
+    status: '',
+    fix_version: '',
+  })
   const [offset, setOffset] = useState(0)
-  const [selected, setSelected] = useState<string>()
+  const [selected, setSelected] = useState<string | undefined>(issueKey)
   const page = useLoad(
     () => api.issues({ project: dependency.project, ...filters, limit: PAGE, offset }),
     [dependency.project, filters, offset],
   )
+  const stats = useLoad(() => api.issueStats(dependency.project), [dependency.project])
 
   function search(event: FormEvent) {
     event.preventDefault()
     setOffset(0)
+    setSelected(undefined)
     setFilters((f) => ({ ...f, q: draft.trim() }))
   }
 
   const set = (field: keyof typeof filters) => (value: string) => {
     setOffset(0)
+    setSelected(undefined)
     setFilters((f) => ({ ...f, [field]: value }))
   }
 
   const total = page.data?.total ?? 0
   const items = page.data?.items ?? []
   const current = selected ?? items[0]?.key
+  const s = stats.data
   return (
     <div className="page">
       <PageIntro title="Issues">
-        <p>Every {dependency.name} issue synced from JIRA, newest first.</p>
+        <p>
+          Every {dependency.name} issue synced from JIRA. Pick one to see whether it affects{' '}
+          {version ? `${dependency.name} ${version}` : 'the version you run'}, and the sentences
+          that show it.
+        </p>
+        {s && (
+          <dl className="stats">
+            <div>
+              <dt>Issues</dt>
+              <dd>{s.total.toLocaleString()}</dd>
+            </div>
+            <div>
+              <dt>Bugs</dt>
+              <dd>{s.bugs.toLocaleString()}</dd>
+            </div>
+            <div>
+              <dt>Open bugs</dt>
+              <dd>{s.open_bugs.toLocaleString()}</dd>
+            </div>
+            <div>
+              <dt>Fixed bugs</dt>
+              <dd>{s.fixed_bugs.toLocaleString()}</dd>
+            </div>
+            {s.newest && (
+              <div>
+                <dt>Newest update</dt>
+                <dd>{formatAgo(s.newest)}</dd>
+              </div>
+            )}
+          </dl>
+        )}
       </PageIntro>
+
       <form className="toolbar toolbar-wide" onSubmit={search} role="search">
         <label className="grow">
           <span>Search</span>
@@ -48,7 +92,7 @@ export function Issues({ dependency, version, onCheck }: Props) {
             type="search"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Key or words in the title"
+            placeholder={`A key such as ${dependency.project}-19785, or words in the title`}
           />
         </label>
         <label>
@@ -88,7 +132,7 @@ export function Issues({ dependency, version, onCheck }: Props) {
       <div className="split split-wide">
         <div className="list-pane">
           <p className="list-count" aria-live="polite">
-            {page.loading ? 'Loading…' : `${total.toLocaleString()} issues`}
+            {page.loading ? 'Loading…' : `${total.toLocaleString()} matching`}
           </p>
           <ul className="rows">
             {items.map((issue) => (
@@ -96,7 +140,10 @@ export function Issues({ dependency, version, onCheck }: Props) {
                 <button
                   className="row"
                   aria-current={issue.key === current ? 'true' : undefined}
-                  onClick={() => setSelected(issue.key)}
+                  onClick={() => {
+                    setSelected(issue.key)
+                    window.history.replaceState(null, '', `#/issues/${issue.key}`)
+                  }}
                 >
                   <span className="row-key">{issue.key}</span>
                   <span className="row-state">
@@ -124,7 +171,13 @@ export function Issues({ dependency, version, onCheck }: Props) {
         </div>
         <div className="detail-pane">
           {current && (
-            <IssuePanel key={current} issueKey={current} version={version} onCheck={onCheck} />
+            <IssuePanel
+              key={`${current}@${version}`}
+              issueKey={current}
+              dependency={dependency}
+              version={version}
+              systems={systems}
+            />
           )}
         </div>
       </div>
@@ -134,12 +187,14 @@ export function Issues({ dependency, version, onCheck }: Props) {
 
 function IssuePanel({
   issueKey,
+  dependency,
   version,
-  onCheck,
+  systems,
 }: {
   issueKey: string
+  dependency: Dependency
   version: string
-  onCheck: (key: string) => void
+  systems: string[]
 }) {
   const issue = useLoad(() => api.issue(issueKey), [issueKey])
   const data = issue.data
@@ -153,10 +208,18 @@ function IssuePanel({
           <a href={data.url} target="_blank" rel="noreferrer">
             {data.key}
           </a>
-          <span>{[data.status, data.resolution].filter(Boolean).join(', ')}</span>
+          <span>{[data.status, data.resolution].filter(Boolean).join(', ') || 'Open'}</span>
           <span>{formatDay(data.created_at)}</span>
         </p>
       </header>
+
+      <VersionAnswer
+        issueKey={issueKey}
+        dependency={dependency}
+        version={version}
+        systems={systems}
+      />
+
       <dl className="facts-grid">
         <div>
           <dt>Reported on</dt>
@@ -171,11 +234,6 @@ function IssuePanel({
           <dd>{data.components.join(', ') || 'none listed'}</dd>
         </div>
       </dl>
-      <div className="detail-actions">
-        <button className="primary" onClick={() => onCheck(issueKey)} disabled={!version}>
-          Check against {version || 'your version'}
-        </button>
-      </div>
       <h3>Description</h3>
       <div className="issue-text">{data.description || 'No description.'}</div>
       {data.comments.length > 0 && (
@@ -192,5 +250,93 @@ function IssuePanel({
         </details>
       )}
     </article>
+  )
+}
+
+/** The answer for the watched version: shown at once when it needs no model call, else read
+ * on request (the first read of an issue takes the model 30 to 90 seconds). */
+function VersionAnswer({
+  issueKey,
+  dependency,
+  version: watched,
+  systems,
+}: {
+  issueKey: string
+  dependency: Dependency
+  version: string
+  systems: string[]
+}) {
+  const [version, setVersion] = useState(watched)
+  const [asked, setAsked] = useState(watched)
+  const stored = useLoad(
+    () => (asked ? api.storedAnswer(issueKey, asked) : Promise.resolve(undefined)),
+    [issueKey, asked],
+  )
+  const [read, setRead] = useState<CheckResponse>()
+  const [reading, setReading] = useState(false)
+  const [error, setError] = useState<string>()
+
+  async function readIssue() {
+    setReading(true)
+    setError(undefined)
+    try {
+      setRead(await api.check({ issue_key: issueKey, kafka_version: asked }))
+    } catch (e) {
+      setError(message(e))
+    } finally {
+      setReading(false)
+    }
+  }
+
+  const result = read ?? stored.data?.result ?? undefined
+  return (
+    <section className="answer" aria-labelledby="answer-title">
+      <form
+        className="answer-head"
+        onSubmit={(e) => {
+          e.preventDefault()
+          setRead(undefined)
+          setAsked(version.trim())
+        }}
+      >
+        <h3 id="answer-title">For {dependency.name}</h3>
+        <input
+          aria-label="Version"
+          value={version}
+          onChange={(e) => setVersion(e.target.value)}
+          placeholder="3.9.1"
+          size={8}
+        />
+        {version.trim() !== asked && <button type="submit">Answer</button>}
+      </form>
+
+      {!asked ? (
+        <p className="hint-line">Enter the version you run to see whether this issue affects it.</p>
+      ) : result ? (
+        <>
+          <p className={`verdict verdict-${result.answer}`}>{ANSWER_TEXT[result.answer]}</p>
+          <AnswerBody item={result} pinned={asked} />
+          <RulerKey />
+        </>
+      ) : stored.loading || reading ? (
+        <p className="job-line" aria-live="polite">
+          <span className="spinner" aria-hidden="true" />
+          {reading ? 'Reading the issue; the model takes 30 to 90 seconds.' : 'Looking it up…'}
+        </p>
+      ) : stored.error ? (
+        <ErrorNote>{stored.error}</ErrorNote>
+      ) : (
+        <div className="unread">
+          <p>
+            Not read yet for {asked}. The fix versions don't settle it, so the issue text has to
+            be read.
+          </p>
+          <button className="primary" onClick={readIssue} disabled={systems.length === 0}>
+            {systems.length ? `Read with ${systems[0]}` : 'No model configured'}
+          </button>
+        </div>
+      )}
+      <ErrorNote>{error}</ErrorNote>
+    </section>
   )
 }

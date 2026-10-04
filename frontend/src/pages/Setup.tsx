@@ -7,8 +7,12 @@ import { readRepo } from '../repo'
 
 interface Props {
   dependencies: Dependency[]
+  repo: string | null // what is watched now
   current: WatchItem[]
+  nameOf: (dependency: string) => string
   onWatch: (repo: string | null, items: WatchItem[]) => void
+  /** Leave Setup with nothing changed. Absent when nothing is watched yet. */
+  onCancel?: () => void
 }
 
 type Stage =
@@ -33,7 +37,7 @@ const ECOSYSTEM_TAG: Record<DetectedDependency['ecosystem'], string> = {
 
 const rowKey = (d: { key: string; version?: string | null }) => `${d.key}@${d.version ?? ''}`
 
-export function Setup({ dependencies, current, onWatch }: Props) {
+export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatch, onCancel }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [stage, setStage] = useState<Stage>({ step: 'idle' })
   const [repo, setRepo] = useState<string>()
@@ -41,6 +45,17 @@ export function Setup({ dependencies, current, onWatch }: Props) {
   const [leftOut, setLeftOut] = useState(0)
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string>()
+
+  // Escape leaves Setup with nothing changed, as the Keep button does.
+  useEffect(() => {
+    if (!onCancel) return
+    const onKey = (e: KeyboardEvent) => {
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement
+      if (e.key === 'Escape' && !typing) onCancel()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onCancel])
 
   // React has no prop for folder picking, nor for the dialog being dismissed.
   useEffect(() => {
@@ -120,16 +135,30 @@ export function Setup({ dependencies, current, onWatch }: Props) {
           hidden
           onChange={(e) => void pick(e.target.files)}
         />
-        <button
-          className="primary"
-          disabled={busy}
-          onClick={() => {
-            setStage({ step: 'picking' })
-            inputRef.current?.click()
-          }}
-        >
-          {busy ? 'Reading…' : scan ? 'Choose another folder' : 'Choose repository folder'}
-        </button>
+        {onCancel && (
+          <p className="current-watch">
+            Watching {watchedRepo ? `${watchedRepo}: ` : ''}
+            {current.map((w) => `${nameOf(w.dependency)} ${w.version}`).join(', ')}. Nothing
+            changes until you choose Watch.
+          </p>
+        )}
+        <div className="button-row">
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={() => {
+              setStage({ step: 'picking' })
+              inputRef.current?.click()
+            }}
+          >
+            {busy ? 'Reading…' : scan ? 'Choose another folder' : 'Choose repository folder'}
+          </button>
+          {onCancel && (
+            <button onClick={onCancel} title="Esc">
+              Keep watching {current.length === 1 ? `${nameOf(current[0].dependency)} ${current[0].version}` : 'these'}
+            </button>
+          )}
+        </div>
         <ErrorNote>{error}</ErrorNote>
       </PageIntro>
 
@@ -189,12 +218,13 @@ export function Setup({ dependencies, current, onWatch }: Props) {
             </>
           )}
 
-          <div className="detected-actions">
+          <div className="detected-actions button-row">
             <button className="primary" onClick={watch} disabled={selected.length === 0}>
               {selected.length === 0
                 ? 'Choose a dependency to watch'
                 : `Watch ${selected.map((d) => `${d.name} ${d.version}`).join(', ')}`}
             </button>
+            {onCancel && <button onClick={onCancel}>Cancel, keep what I watch</button>}
           </div>
         </section>
       )}

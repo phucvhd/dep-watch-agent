@@ -1,26 +1,29 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, type ScanResponse } from './api/client'
 import { PageIntro } from './components/common'
 import { VersionOrder } from './components/versionOrder'
 import { formatAgo } from './format'
 import { useLoad, useWatch } from './hooks'
 import { Alerts } from './pages/Alerts'
-import { Check } from './pages/Check'
 import { Issues } from './pages/Issues'
 import { Operations } from './pages/Operations'
 import { Setup } from './pages/Setup'
 
 const PAGES = {
   alerts: 'New bugs',
-  check: 'Check an issue',
   issues: 'Issues',
   operations: 'Data and models',
 } as const
 type Page = keyof typeof PAGES | 'setup'
 
-/** The page in the URL, or none (a first visit opens Setup when nothing is watched yet). */
+/** The page in the URL, or none (a first visit opens Setup when nothing is watched yet).
+ * `#/check/KEY` from before Check was merged into Issues opens that issue. */
 function routeFromHash(): { page?: Page; key?: string } {
   const [page, key] = window.location.hash.replace(/^#\/?/, '').split('/')
+  if (page === 'check') {
+    window.history.replaceState(null, '', `#/issues${key ? `/${key}` : ''}`)
+    return { page: 'issues', key }
+  }
   return page in PAGES || page === 'setup' ? { page: page as Page, key } : {}
 }
 
@@ -34,10 +37,15 @@ export function App() {
 
   const watch = useWatch()
   const route = { ...hashRoute, page: hashRoute.page ?? (watch.items.length ? 'alerts' : 'setup') }
+  // Where Setup returns to when the change is abandoned.
+  const lastPage = useRef<Page>('alerts')
+  useEffect(() => {
+    if (route.page !== 'setup') lastPage.current = route.page
+  }, [route.page])
   const dependencies = useLoad(() => api.dependencies(), [])
   const nameOf = (id: string) => dependencies.data?.find((d) => d.id === id)?.name ?? id
   // The dependency every page answers for: the active watched one, else the first the API
-  // supports, so Issues, Check and Data and models work before anything is watched.
+  // supports, so Issues and Data and models work before anything is watched.
   const watched = dependencies.data?.find((d) => d.id === watch.active?.dependency)
   const dependency = watched ?? dependencies.data?.[0]
   const version = watched ? watch.active!.version : ''
@@ -150,8 +158,15 @@ export function App() {
           ) : !dependencies.data || !dependency ? null : route.page === 'setup' ? (
             <Setup
               dependencies={dependencies.data}
+              repo={watch.repo}
               current={watch.items}
+              nameOf={nameOf}
               onWatch={watch.replace}
+              onCancel={
+                watch.items.length
+                  ? () => window.location.assign(`#/${lastPage.current}`)
+                  : undefined
+              }
             />
           ) : route.page === 'operations' ? (
             <Operations dependency={dependency} systems={systems.data ?? []} onSynced={sync.reload} />
@@ -176,18 +191,13 @@ export function App() {
               latestScanId={latestScan?.id}
               onScanned={scans.reload}
             />
-          ) : route.page === 'check' ? (
-            <Check
-              key={`${version}/${route.key ?? ''}`}
-              dependency={dependency}
-              version={version}
-              initialKey={route.key}
-            />
           ) : (
             <Issues
+              key={`${project}/${route.key ?? ''}`}
               dependency={dependency}
               version={version}
-              onCheck={(key) => window.location.assign(`#/check/${key}`)}
+              systems={systems.data ?? []}
+              issueKey={route.key}
             />
           )}
         </main>

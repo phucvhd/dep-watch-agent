@@ -149,6 +149,20 @@ class CheckResponse(BaseModel):
     dropped: list[DroppedEvidenceOut] = Field(description="Facts rejected, with the reason")
 
 
+class StoredAnswer(BaseModel):
+    answered: bool = Field(description="False when only a model call (POST /check) can answer")
+    system: str | None
+    result: CheckResponse | None = None
+
+
+class IssueStats(BaseModel):
+    total: int
+    bugs: int
+    open_bugs: int
+    fixed_bugs: int
+    newest: datetime | None = Field(description="The most recent update among synced issues")
+
+
 # --- scan --------------------------------------------------------------------------------
 
 

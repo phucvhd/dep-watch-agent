@@ -90,27 +90,43 @@ def answer_issue(
     kafka_version: str,
     system: str,
     extractor: Extractor,
-) -> Answered:
+    *,
+    read: bool = True,
+) -> Answered | None:
     """The decision and what decided it: the fix versions alone, or ``system``'s facts (stored
-    ones when the text, system and extractor version are unchanged)."""
+    ones when the text, system and extractor version are unchanged). With ``read=False`` the
+    system is never called: None when neither settles it."""
     by_fixes = decide(text, kafka_version, Extraction([]))
     if by_fixes.answer == NOT_AFFECTED:
         return Answered(by_fixes, FIX_VERSIONS)
+    if not read:
+        known = extractions.stored(session, issue_id, text, system, extractor)
+        if known is None:
+            return None
+        return Answered(decide(text, kafka_version, known), system, cached=True)
     extracted = extractions.extract(session, issue_id, text, system, extractor)
     return Answered(decide(text, kafka_version, extracted.extraction), system, extracted.cached)
 
 
 def check_issue(
-    session: Session, key: str, kafka_version: str, system: str, extractor: Extractor
-) -> CheckResult:
+    session: Session,
+    key: str,
+    kafka_version: str,
+    system: str,
+    extractor: Extractor,
+    *,
+    read: bool = True,
+) -> CheckResult | None:
     """Decide whether ``kafka_version`` is affected by issue ``key``, with ``extractor``
-    (registered as ``system``).
+    (registered as ``system``). With ``read=False``, None if that would take a model call.
 
     ``kafka_version`` must already be validated as a release (``verdict.is_release``).
     """
     issue = load_issue(session, key)
     text = issue_text(issue)
-    answered = answer_issue(session, issue.id, text, kafka_version, system, extractor)
+    answered = answer_issue(session, issue.id, text, kafka_version, system, extractor, read=read)
+    if answered is None:
+        return None
     return CheckResult(
         issue, text, kafka_version, system, answered.decision, answered.decided_by, answered.cached
     )
