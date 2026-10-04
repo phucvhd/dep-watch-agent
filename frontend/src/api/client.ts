@@ -5,6 +5,7 @@ import type { components } from './schema'
 
 type Schemas = components['schemas']
 export type Health = Schemas['Health']
+export type Dependency = Schemas['DependencyOut']
 export type KafkaVersion = Schemas['KafkaVersion']
 export type IssuePage = Schemas['IssuePage']
 export type IssueSummary = Schemas['IssueSummary']
@@ -81,9 +82,11 @@ function query(params: Record<string, string | number | undefined | null>): stri
 
 export const api = {
   health: () => request<Health>('/health'),
+  dependencies: () => request<Dependency[]>('/dependencies'),
   systems: () => request<string[]>('/systems'),
-  versions: () => request<KafkaVersion[]>('/versions'),
+  versions: (project: string) => request<KafkaVersion[]>(`/versions${query({ project })}`),
   issues: (params: {
+    project: string
     q?: string
     status?: string
     resolution?: string
@@ -98,7 +101,7 @@ export const api = {
   jobs: (kind?: string) => request<Job[]>(`/jobs${query({ kind })}`),
   job: (id: string) => request<Job>(`/jobs/${id}`),
   syncState: () => request<SyncState[]>('/sync/state'),
-  startSync: () => post<Job>('/sync/jira', {}),
+  startSync: (project: string) => post<Job>('/sync/jira', { project }),
   datasets: () => request<DatasetSummary[]>('/eval/datasets'),
   runs: () => request<EvalRunSummary[]>('/eval/runs'),
   startRun: (body: EvalRunRequest) => post<Job>('/eval/runs', body),

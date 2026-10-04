@@ -11,7 +11,8 @@ from dep_watch_agent.api.deps import (
     SessionsDep,
     SystemsDep,
 )
-from dep_watch_agent.api.schemas import Health, JobOut, SyncRequest, SyncState
+from dep_watch_agent.api.schemas import DependencyOut, Health, JobOut, SyncRequest, SyncState
+from dep_watch_agent.dependencies import DEPENDENCIES
 from dep_watch_agent.orm import SyncStateRow
 
 router = APIRouter()
@@ -23,6 +24,12 @@ def health(session: SessionDep) -> Health:
 
     revision = MigrationContext.configure(session.connection()).get_current_revision()
     return Health(status="ok", version=__version__, db_revision=revision)
+
+
+@router.get("/dependencies", response_model=list[DependencyOut], tags=["ops"])
+def list_dependencies():
+    """The dependencies that can be watched."""
+    return DEPENDENCIES
 
 
 @router.get("/systems", response_model=list[str], tags=["ops"])

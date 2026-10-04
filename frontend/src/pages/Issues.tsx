@@ -1,24 +1,25 @@
 import { useState, type FormEvent } from 'react'
-import { api } from '../api/client'
+import { api, type Dependency } from '../api/client'
 import { ErrorNote } from '../components/common'
 import { formatDay } from '../format'
 import { useLoad } from '../hooks'
 
-const PAGE = 25
+const PAGE = 30
 
 interface Props {
-  pinned: string
+  dependency: Dependency
+  version: string
   onCheck: (key: string) => void
 }
 
-export function Issues({ pinned, onCheck }: Props) {
+export function Issues({ dependency, version, onCheck }: Props) {
   const [draft, setDraft] = useState('')
   const [filters, setFilters] = useState({ q: '', issue_type: 'Bug', status: '', fix_version: '' })
   const [offset, setOffset] = useState(0)
   const [selected, setSelected] = useState<string>()
   const page = useLoad(
-    () => api.issues({ ...filters, limit: PAGE, offset }),
-    [filters, offset],
+    () => api.issues({ project: dependency.project, ...filters, limit: PAGE, offset }),
+    [dependency.project, filters, offset],
   )
 
   function search(event: FormEvent) {
@@ -33,18 +34,28 @@ export function Issues({ pinned, onCheck }: Props) {
   }
 
   const total = page.data?.total ?? 0
+  const items = page.data?.items ?? []
+  const current = selected ?? items[0]?.key
   return (
-    <section aria-labelledby="issues-title">
-      <h1 id="issues-title" className="headline">
-        Synced Kafka issues
-      </h1>
-      <form className="scan-form" onSubmit={search} role="search">
+    <div className="page">
+      <header className="page-head">
+        <div>
+          <h1>Issues</h1>
+          <p className="page-sub">Every {dependency.name} issue synced from JIRA, newest first.</p>
+        </div>
+      </header>
+      <form className="toolbar toolbar-wide" onSubmit={search} role="search">
         <label className="grow">
-          Key or words in the title
-          <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="rebalance" />
+          <span>Search</span>
+          <input
+            type="search"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Key or words in the title"
+          />
         </label>
         <label>
-          Type
+          <span>Type</span>
           <select value={filters.issue_type} onChange={(e) => set('issue_type')(e.target.value)}>
             <option value="">Any</option>
             <option>Bug</option>
@@ -54,7 +65,7 @@ export function Issues({ pinned, onCheck }: Props) {
           </select>
         </label>
         <label>
-          Status
+          <span>Status</span>
           <select value={filters.status} onChange={(e) => set('status')(e.target.value)}>
             <option value="">Any</option>
             <option>Open</option>
@@ -65,134 +76,124 @@ export function Issues({ pinned, onCheck }: Props) {
           </select>
         </label>
         <label>
-          Fixed in
+          <span>Fixed in</span>
           <input
             value={filters.fix_version}
             onChange={(e) => set('fix_version')(e.target.value)}
             placeholder="4.1.1"
-            size={8}
+            size={7}
           />
         </label>
         <button type="submit">Search</button>
       </form>
       <ErrorNote>{page.error}</ErrorNote>
 
-      <p className="lede" aria-live="polite">
-        {page.loading ? 'Loading.' : `${total.toLocaleString()} issues, newest first.`}
-      </p>
-      <div className="table-wrap">
-        <table className="issues">
-          <thead>
-            <tr>
-              <th scope="col">Issue</th>
-              <th scope="col">Title</th>
-              <th scope="col">State</th>
-              <th scope="col">Reported</th>
-            </tr>
-          </thead>
-          <tbody>
-            {page.data?.items.map((issue) => (
-              <tr key={issue.key} className={issue.key === selected ? 'selected' : undefined}>
-                <td>
-                  <button className="link" onClick={() => setSelected(issue.key)}>
-                    {issue.key}
-                  </button>
-                </td>
-                <td>{issue.summary}</td>
-                <td>{[issue.status, issue.resolution].filter(Boolean).join(', ')}</td>
-                <td className="nowrap">{formatDay(issue.created_at)}</td>
-              </tr>
+      <div className="split split-wide">
+        <div className="list-pane">
+          <p className="list-count" aria-live="polite">
+            {page.loading ? 'Loading…' : `${total.toLocaleString()} issues`}
+          </p>
+          <ul className="rows">
+            {items.map((issue) => (
+              <li key={issue.key}>
+                <button
+                  className="row"
+                  aria-current={issue.key === current ? 'true' : undefined}
+                  onClick={() => setSelected(issue.key)}
+                >
+                  <span className="row-key">{issue.key}</span>
+                  <span className="row-state">
+                    {[issue.status, issue.resolution].filter(Boolean).join(', ')}
+                  </span>
+                  <span className="row-title">{issue.summary}</span>
+                  <span className="row-date">{formatDay(issue.created_at)}</span>
+                </button>
+              </li>
             ))}
-          </tbody>
-        </table>
+          </ul>
+          <nav className="pager" aria-label="Pages">
+            <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>
+              Newer
+            </button>
+            <span>
+              {total
+                ? `${offset + 1}–${Math.min(offset + PAGE, total)} of ${total.toLocaleString()}`
+                : ''}
+            </span>
+            <button disabled={offset + PAGE >= total} onClick={() => setOffset(offset + PAGE)}>
+              Older
+            </button>
+          </nav>
+        </div>
+        <div className="detail-pane">
+          {current && (
+            <IssuePanel key={current} issueKey={current} version={version} onCheck={onCheck} />
+          )}
+        </div>
       </div>
-      <nav className="pager" aria-label="Pages">
-        <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE))}>
-          Newer
-        </button>
-        <span>
-          {total ? `${offset + 1} to ${Math.min(offset + PAGE, total)} of ${total.toLocaleString()}` : ''}
-        </span>
-        <button disabled={offset + PAGE >= total} onClick={() => setOffset(offset + PAGE)}>
-          Older
-        </button>
-      </nav>
-
-      {selected && (
-        <IssuePanel issueKey={selected} pinned={pinned} onCheck={onCheck} onClose={() => setSelected(undefined)} />
-      )}
-    </section>
+    </div>
   )
 }
 
 function IssuePanel({
   issueKey,
-  pinned,
+  version,
   onCheck,
-  onClose,
 }: {
   issueKey: string
-  pinned: string
+  version: string
   onCheck: (key: string) => void
-  onClose: () => void
 }) {
   const issue = useLoad(() => api.issue(issueKey), [issueKey])
   const data = issue.data
+  if (issue.error) return <ErrorNote>{issue.error}</ErrorNote>
+  if (!data) return <p className="list-empty">Loading {issueKey}…</p>
   return (
-    <aside className="panel" aria-label={`Issue ${issueKey}`}>
-      <div className="panel-head">
-        <h2>
-          {issueKey} {data && <span className="panel-title">{data.summary}</span>}
-        </h2>
-        <button className="quiet" onClick={onClose}>
-          Close
+    <article className="detail" aria-labelledby="issue-title">
+      <header className="detail-head">
+        <h2 id="issue-title">{data.summary}</h2>
+        <p className="detail-meta">
+          <a href={data.url} target="_blank" rel="noreferrer">
+            {data.key}
+          </a>
+          <span>{[data.status, data.resolution].filter(Boolean).join(', ')}</span>
+          <span>{formatDay(data.created_at)}</span>
+        </p>
+      </header>
+      <dl className="facts-grid">
+        <div>
+          <dt>Reported on</dt>
+          <dd>{data.affects_versions.join(', ') || 'none listed'}</dd>
+        </div>
+        <div>
+          <dt>Fixed in</dt>
+          <dd>{data.fix_versions.join(', ') || 'not fixed'}</dd>
+        </div>
+        <div>
+          <dt>Components</dt>
+          <dd>{data.components.join(', ') || 'none listed'}</dd>
+        </div>
+      </dl>
+      <div className="detail-actions">
+        <button className="primary" onClick={() => onCheck(issueKey)} disabled={!version}>
+          Check against {version || 'your version'}
         </button>
       </div>
-      <ErrorNote>{issue.error}</ErrorNote>
-      {data && (
-        <>
-          <dl className="facts-grid">
-            <div>
-              <dt>Reported on</dt>
-              <dd>{data.affects_versions.join(', ') || 'none listed'}</dd>
+      <h3>Description</h3>
+      <div className="issue-text">{data.description || 'No description.'}</div>
+      {data.comments.length > 0 && (
+        <details className="comments">
+          <summary>{data.comments.length} comments</summary>
+          {data.comments.map((c, i) => (
+            <div key={i} className="comment">
+              <p className="comment-meta">
+                {c.author ?? 'Unknown'}, {formatDay(c.created_at)}
+              </p>
+              <div className="issue-text">{c.body}</div>
             </div>
-            <div>
-              <dt>Fixed in</dt>
-              <dd>{data.fix_versions.join(', ') || 'not fixed'}</dd>
-            </div>
-            <div>
-              <dt>Components</dt>
-              <dd>{data.components.join(', ') || 'none listed'}</dd>
-            </div>
-            <div>
-              <dt>State</dt>
-              <dd>{[data.status, data.resolution].filter(Boolean).join(', ')}</dd>
-            </div>
-          </dl>
-          <div className="panel-actions">
-            <button onClick={() => onCheck(issueKey)} disabled={!pinned}>
-              Check against Kafka {pinned || '(choose a version)'}
-            </button>
-            <a href={data.url} target="_blank" rel="noreferrer">
-              Open in JIRA
-            </a>
-          </div>
-          <div className="issue-text">{data.description || 'No description.'}</div>
-          {data.comments.length > 0 && (
-            <details className="comments">
-              <summary>{data.comments.length} comments</summary>
-              {data.comments.map((c, i) => (
-                <div key={i} className="comment">
-                  <p className="comment-meta">
-                    {c.author ?? 'Unknown'}, {formatDay(c.created_at)}
-                  </p>
-                  <div className="issue-text">{c.body}</div>
-                </div>
-              ))}
-            </details>
-          )}
-        </>
+          ))}
+        </details>
       )}
-    </aside>
+    </article>
   )
 }

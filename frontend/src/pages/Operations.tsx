@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { api, type EvalRunSummary, type Job } from '../api/client'
+import { api, type Dependency, type EvalRunSummary, type Job } from '../api/client'
 import { ErrorNote, JobLine } from '../components/common'
-import { formatDate, plural } from '../format'
+import { formatAgo, formatDate, plural } from '../format'
 import { message, useJob, useLoad } from '../hooks'
 
 const METRICS: [string, string][] = [
@@ -13,45 +13,65 @@ const METRICS: [string, string][] = [
   ['citation_validity', 'Valid quotes'],
 ]
 
-export function Operations({ systems }: { systems: string[] }) {
+interface Props {
+  dependency: Dependency
+  systems: string[]
+  onSynced: () => void
+}
+
+export function Operations({ dependency, systems, onSynced }: Props) {
   return (
-    <section aria-labelledby="ops-title">
-      <h1 id="ops-title" className="headline">
-        Data and models
-      </h1>
-      <Sync />
+    <div className="page">
+      <header className="page-head">
+        <div>
+          <h1>Data and models</h1>
+          <p className="page-sub">Where the issues come from, and how well each model reads them.</p>
+        </div>
+      </header>
+      <div className="panes">
+        <Sync dependency={dependency} onSynced={onSynced} />
+        <Models systems={systems} />
+      </div>
       <Evaluation systems={systems} />
       <Jobs />
-    </section>
+    </div>
   )
 }
 
-function Sync() {
+function Sync({ dependency, onSynced }: { dependency: Dependency; onSynced: () => void }) {
   const state = useLoad(() => api.syncState(), [])
   const [jobId, setJobId] = useState<string>()
   const [error, setError] = useState<string>()
-  const { job } = useJob(jobId, () => state.reload())
-  const watermark = state.data?.find((s) => s.source === 'jira:KAFKA')
+  const { job } = useJob(jobId, () => {
+    state.reload()
+    onSynced()
+  })
+  const watermark = state.data?.find((s) => s.source === `jira:${dependency.project}`)
 
   async function start() {
     setError(undefined)
     try {
-      setJobId((await api.startSync()).id)
+      setJobId((await api.startSync(dependency.project)).id)
     } catch (e) {
       setError(message(e))
     }
   }
 
   return (
-    <section className="block" aria-labelledby="sync-title">
-      <h2 id="sync-title">Kafka JIRA</h2>
-      <p>
+    <section className="pane" aria-labelledby="sync-title">
+      <h2 id="sync-title">Issue tracker</h2>
+      <p className="pane-lead">
+        {dependency.name} issues from{' '}
+        <a href={dependency.tracker_url} target="_blank" rel="noreferrer">
+          JIRA
+        </a>
+        .{' '}
         {watermark
-          ? `Synced up to ${formatDate(watermark.watermark)}. A sync fetches only issues updated since then.`
-          : 'Not synced yet. The first sync fetches about 20,000 issues and takes a few minutes.'}
+          ? `Synced ${formatAgo(watermark.watermark)}; a sync fetches only what changed since.`
+          : 'Not synced yet; the first sync takes a few minutes.'}
       </p>
       <button onClick={start} disabled={job?.status === 'running'}>
-        Sync JIRA now
+        Sync now
       </button>
       <ErrorNote>{error ?? state.error}</ErrorNote>
       {job && (
@@ -63,6 +83,36 @@ function Sync() {
               : `${plural(j.progress, 'issue')} synced so far.`
           }
         />
+      )}
+    </section>
+  )
+}
+
+function Models({ systems }: { systems: string[] }) {
+  return (
+    <section className="pane" aria-labelledby="models-title">
+      <h2 id="models-title">Models</h2>
+      {systems.length === 0 ? (
+        <p className="pane-lead">
+          None configured. Set DEP_WATCH_LLM_MODEL to a model on an OpenAI-compatible server and
+          restart the API.
+        </p>
+      ) : (
+        <>
+          <p className="pane-lead">
+            The model reads issue text and quotes what it says about versions; code makes every
+            decision. Scans and checks use the first one.
+          </p>
+          <ul className="model-list">
+            {systems.map((s, i) => (
+              <li key={s}>
+                <span className="status-dot" aria-hidden="true" />
+                {s}
+                {i === 0 && <span className="muted">default</span>}
+              </li>
+            ))}
+          </ul>
+        </>
       )}
     </section>
   )
@@ -87,34 +137,42 @@ function Evaluation({ systems }: { systems: string[] }) {
   }
 
   return (
-    <section className="block" aria-labelledby="eval-title">
-      <h2 id="eval-title">Evaluation</h2>
-      <p>
-        Scores a model on the labeled issues, through the same decision code as scans. Each
-        issue is read again, so a run of the 100-issue set takes about an hour.
-      </p>
-      <div className="scan-form">
-        <label>
-          Dataset
-          <select value={dataset} onChange={(e) => setDataset(e.target.value)}>
-            {datasets.data?.map((d) => (
-              <option key={d.name} value={d.name}>
-                {d.name} ({d.labeled} of {d.total} labeled)
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Model
-          <select value={system} onChange={(e) => setSystem(e.target.value)}>
-            {systems.map((s) => (
-              <option key={s}>{s}</option>
-            ))}
-          </select>
-        </label>
-        <button onClick={start} disabled={systems.length === 0 || job?.status === 'running'}>
-          Run evaluation
-        </button>
+    <section className="pane" aria-labelledby="eval-title">
+      <div className="pane-head">
+        <div>
+          <h2 id="eval-title">Evaluation</h2>
+          <p className="pane-lead">
+            Scores a model on labeled issues through the same decision code as scans. Every issue
+            is read again, so a 100-issue run takes about an hour.
+          </p>
+        </div>
+        <div className="toolbar">
+          <label>
+            <span>Dataset</span>
+            <select value={dataset} onChange={(e) => setDataset(e.target.value)}>
+              {datasets.data?.map((d) => (
+                <option key={d.name} value={d.name}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Model</span>
+            <select value={system} onChange={(e) => setSystem(e.target.value)}>
+              {systems.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            className="primary"
+            onClick={start}
+            disabled={systems.length === 0 || job?.status === 'running'}
+          >
+            Run
+          </button>
+        </div>
       </div>
       <ErrorNote>{error ?? runs.error ?? datasets.error}</ErrorNote>
       {job && (
@@ -128,7 +186,7 @@ function Evaluation({ systems }: { systems: string[] }) {
       {runs.data && runs.data.length > 0 ? (
         <RunsTable runs={runs.data} />
       ) : (
-        <p className="hint">No runs yet. Run an evaluation to compare models here.</p>
+        <p className="list-empty">No runs yet. Run one to compare models here.</p>
       )}
     </section>
   )
@@ -141,7 +199,7 @@ function RunsTable({ runs }: { runs: EvalRunSummary[] }) {
   }
   return (
     <div className="table-wrap">
-      <table className="runs">
+      <table>
         <thead>
           <tr>
             <th scope="col">Run</th>
@@ -177,16 +235,16 @@ function RunsTable({ runs }: { runs: EvalRunSummary[] }) {
 function Jobs() {
   const jobs = useLoad(() => api.jobs(), [])
   return (
-    <section className="block" aria-labelledby="jobs-title">
-      <h2 id="jobs-title">
-        Background jobs{' '}
-        <button className="quiet" onClick={jobs.reload}>
-          Refresh
-        </button>
-      </h2>
-      <p>Jobs since the API last started; a restart forgets them.</p>
+    <section className="pane" aria-labelledby="jobs-title">
+      <div className="pane-head">
+        <div>
+          <h2 id="jobs-title">Background jobs</h2>
+          <p className="pane-lead">Since the API last started; a restart forgets them.</p>
+        </div>
+        <button onClick={jobs.reload}>Refresh</button>
+      </div>
       <ErrorNote>{jobs.error}</ErrorNote>
-      {jobs.data && jobs.data.length > 0 && (
+      {jobs.data && jobs.data.length > 0 ? (
         <div className="table-wrap">
           <table>
             <thead>
@@ -204,9 +262,12 @@ function Jobs() {
                 <tr key={j.id}>
                   <td>
                     {j.kind}
-                    {typeof j.params.kafka_version === 'string' && ` for ${j.params.kafka_version}`}
+                    {typeof j.params.kafka_version === 'string' && ` ${j.params.kafka_version}`}
                   </td>
-                  <td>{j.status === 'failed' ? `failed: ${j.error}` : j.status}</td>
+                  <td>
+                    <span className={`job-status job-${j.status}`}>{j.status}</span>
+                    {j.error && <span className="muted"> {j.error}</span>}
+                  </td>
                   <td className="num">{j.progress}</td>
                   <td className="nowrap">{formatDate(j.started_at)}</td>
                 </tr>
@@ -214,6 +275,8 @@ function Jobs() {
             </tbody>
           </table>
         </div>
+      ) : (
+        <p className="list-empty">No jobs since the API started.</p>
       )}
     </section>
   )

@@ -69,29 +69,57 @@ export function useJob(id: string | undefined, onDone?: (job: Job) => void) {
   return { job: job?.id === id ? job : undefined, error }
 }
 
-const VERSION_KEY = 'dep-watch.kafka-version'
+const WATCH_KEY = 'dep-watch.watch'
 
-/** The Kafka version this team runs. Kept in the browser; every page reads it. A link with
- * `?kafka=3.9.1` opens on that version, so a page can be shared with a teammate. */
-export function usePinnedVersion(): [string, (version: string) => void] {
-  const [version, setVersion] = useState(() => {
-    const fromLink = new URLSearchParams(window.location.search).get('kafka')
-    if (fromLink) return fromLink
+export interface Watch {
+  dependency: string // a dependency id from GET /dependencies
+  versions: Record<string, string> // the version run, per dependency
+}
+
+function readWatch(): Watch {
+  const fallback: Watch = { dependency: 'kafka', versions: {} }
+  let stored = fallback
+  try {
+    stored = { ...fallback, ...JSON.parse(localStorage.getItem(WATCH_KEY) ?? '{}') }
+  } catch {
+    // unreadable or blocked storage: start fresh
+  }
+  // A shared link (?dependency=kafka&version=3.9.1) wins over what this browser remembers.
+  const link = new URLSearchParams(window.location.search)
+  const dependency = link.get('dependency') ?? stored.dependency
+  const version = link.get('version')
+  return {
+    dependency,
+    versions: version ? { ...stored.versions, [dependency]: version } : stored.versions,
+  }
+}
+
+/** What this team watches: a dependency and the version of it they run. Kept in the browser. */
+export function useWatch() {
+  const [watch, setWatch] = useState(readWatch)
+  const save = useCallback((next: Watch) => {
+    setWatch(next)
     try {
-      return localStorage.getItem(VERSION_KEY) ?? ''
-    } catch {
-      return ''
-    }
-  })
-  const update = useCallback((next: string) => {
-    setVersion(next)
-    try {
-      localStorage.setItem(VERSION_KEY, next)
+      localStorage.setItem(WATCH_KEY, JSON.stringify(next))
     } catch {
       // private mode: the choice lasts for this visit only
     }
   }, [])
-  return [version, update]
+  const setDependency = useCallback(
+    (dependency: string) => save({ ...watch, dependency }),
+    [save, watch],
+  )
+  const setVersion = useCallback(
+    (version: string) =>
+      save({ ...watch, versions: { ...watch.versions, [watch.dependency]: version } }),
+    [save, watch],
+  )
+  return {
+    dependency: watch.dependency,
+    version: watch.versions[watch.dependency] ?? '',
+    setDependency,
+    setVersion,
+  }
 }
 
 export function message(error: unknown): string {

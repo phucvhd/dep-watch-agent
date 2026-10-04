@@ -16,6 +16,15 @@ Answer = Literal["affected", "not_affected", "insufficient_information"]
 EvidenceKind = Literal["introduced", "affects", "unaffected", "fix"]
 
 
+class DependencyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    project: str = Field(description="Pass as `project` to /versions, /issues, /scan, /sync/jira")
+    tracker_url: str
+
+
 class Health(BaseModel):
     status: Literal["ok"]
     version: str

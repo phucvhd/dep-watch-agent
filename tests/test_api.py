@@ -136,6 +136,11 @@ def test_cors_allows_the_frontend(client):
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
 
 
+def test_dependencies_are_listed(client):
+    [kafka] = client.get("/dependencies").json()
+    assert (kafka["id"], kafka["name"], kafka["project"]) == ("kafka", "Apache Kafka", "KAFKA")
+
+
 def test_systems_lists_the_default_first(client, make_client):
     assert client.get("/systems").json() == ["phrases", "phrases-2"]
     assert make_client(systems={}).get("/systems").json() == []

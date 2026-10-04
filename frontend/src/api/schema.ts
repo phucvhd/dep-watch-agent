@@ -21,6 +21,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dependencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Dependencies
+         * @description The dependencies that can be watched.
+         */
+        get: operations["list_dependencies_dependencies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/systems": {
         parameters: {
             query?: never;
@@ -428,6 +448,20 @@ export interface components {
             labeled: number;
             /** Total */
             total: number;
+        };
+        /** DependencyOut */
+        DependencyOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Project
+             * @description Pass as `project` to /versions, /issues, /scan, /sync/jira
+             */
+            project: string;
+            /** Tracker Url */
+            tracker_url: string;
         };
         /** DroppedEvidenceOut */
         DroppedEvidenceOut: {
@@ -889,6 +923,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    list_dependencies_dependencies_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DependencyOut"][];
                 };
             };
         };

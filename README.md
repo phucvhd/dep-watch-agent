@@ -36,9 +36,11 @@ origin (see `.env.example`). Tests use
 
 ### Web UI
 
-`frontend/` is a React + TypeScript app (Vite) over the API: new bugs for your Kafka version
-(scan results grouped by answer, each with a version ruler and the quoted sentences), checking
-one issue, browsing synced issues, and JIRA sync and eval runs.
+`frontend/` is a React + TypeScript app (Vite) over the API. In the sidebar you pick a
+dependency (from `GET /dependencies`; Apache Kafka for now) and the version you run; every page
+answers for it: new bugs as a triage list (affects you / can't tell / doesn't affect you) with
+each issue's version ruler and quoted evidence, checking one issue, browsing synced issues, and
+JIRA sync, models and eval runs.
 
 ```bash
 cd frontend
@@ -48,7 +50,7 @@ npm run gen:api    # regenerate src/api/schema.ts from /openapi.json after chang
 npm run build      # type-check and build to dist/
 ```
 
-The version you run is kept in the browser; a link with `?kafka=3.9.1` opens on that version.
+The choice is kept in the browser; a link with `?dependency=kafka&version=3.9.1` opens on it.
 
 ### Schema migrations
 
