@@ -159,6 +159,7 @@ def test_repo_scan_reads_manifests_only(client):
     assert body["files_read"] == ["gradle.lockfile", "build.sbt"]
     kafka, spark = body["dependencies"]
     assert (kafka["key"], kafka["version"], kafka["watchable"]) == ("kafka", "3.9.1", True)
+    assert (kafka["ecosystem"], kafka["notes"]) == ("maven", [])
     assert (spark["name"], spark["watchable"], spark["reason"]) == (
         "Apache Spark",
         False,

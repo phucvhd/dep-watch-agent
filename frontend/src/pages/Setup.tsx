@@ -11,31 +11,62 @@ interface Props {
   onWatch: (repo: string | null, items: WatchItem[]) => void
 }
 
+type Stage =
+  | { step: 'idle' }
+  | { step: 'picking' } // the browser's folder dialog (and its confirmation) is open
+  | { step: 'reading'; found?: number; total?: number }
+  | { step: 'finding'; files: number }
+
+const ECOSYSTEMS: [DetectedDependency['ecosystem'], string][] = [
+  ['maven', 'Java and Scala libraries'],
+  ['pypi', 'Python packages'],
+  ['npm', 'npm packages'],
+  ['image', 'Container images'],
+]
+
+const ECOSYSTEM_TAG: Record<DetectedDependency['ecosystem'], string> = {
+  maven: 'Maven',
+  pypi: 'PyPI',
+  npm: 'npm',
+  image: 'image',
+}
+
 const rowKey = (d: { key: string; version?: string | null }) => `${d.key}@${d.version ?? ''}`
 
 export function Setup({ dependencies, current, onWatch }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [stage, setStage] = useState<Stage>({ step: 'idle' })
   const [repo, setRepo] = useState<string>()
   const [scan, setScan] = useState<RepoScan>()
-  const [skipped, setSkipped] = useState(0)
+  const [leftOut, setLeftOut] = useState(0)
   const [checked, setChecked] = useState<Set<string>>(new Set())
-  const [reading, setReading] = useState(false)
   const [error, setError] = useState<string>()
 
-  // React has no prop for folder picking; the attribute is set directly.
+  // React has no prop for folder picking, nor for the dialog being dismissed.
   useEffect(() => {
-    inputRef.current?.setAttribute('webkitdirectory', '')
+    const input = inputRef.current
+    if (!input) return
+    input.setAttribute('webkitdirectory', '')
+    const cancelled = () => setStage({ step: 'idle' })
+    input.addEventListener('cancel', cancelled)
+    return () => input.removeEventListener('cancel', cancelled)
   }, [])
 
   async function pick(list: FileList | null) {
-    if (!list || list.length === 0) return
-    setReading(true)
+    if (!list || list.length === 0) {
+      setStage({ step: 'idle' })
+      return
+    }
+    setStage({ step: 'reading' })
     setError(undefined)
     setScan(undefined)
     try {
-      const picked = await readRepo(list)
+      const picked = await readRepo(list, (found, total) =>
+        setStage({ step: 'reading', found, total }),
+      )
       setRepo(picked.name)
-      setSkipped(picked.skipped)
+      setLeftOut(picked.leftOut)
+      setStage({ step: 'finding', files: picked.files.length })
       const result = await api.scanRepo(picked.files)
       setScan(result)
       // Start from what is already watched, else every dependency that can be.
@@ -47,7 +78,7 @@ export function Setup({ dependencies, current, onWatch }: Props) {
     } catch (e) {
       setError(message(e))
     } finally {
-      setReading(false)
+      setStage({ step: 'idle' })
       if (inputRef.current) inputRef.current.value = ''
     }
   }
@@ -55,6 +86,7 @@ export function Setup({ dependencies, current, onWatch }: Props) {
   const known = useMemo(() => scan?.dependencies.filter((d) => d.family) ?? [], [scan])
   const others = useMemo(() => scan?.dependencies.filter((d) => !d.family) ?? [], [scan])
   const selected = scan?.dependencies.filter((d) => checked.has(rowKey(d))) ?? []
+  const busy = stage.step !== 'idle'
 
   function toggle(d: DetectedDependency) {
     setChecked((prev) => {
@@ -77,9 +109,9 @@ export function Setup({ dependencies, current, onWatch }: Props) {
     <div className="page">
       <PageIntro title="Your repository">
         <p>
-          Choose the folder of the project you run. Its build files (Maven, Gradle, sbt, SBOM,
-          Compose) are read in this browser; only those files are sent to find the dependencies
-          and the versions you use. Your browser asks you to confirm the folder.
+          Choose the folder of the project you run. Its build files (Maven, Gradle, sbt, Python,
+          npm, SBOM, Compose and Dockerfiles) are read in this browser; only those files are sent
+          to find the dependencies and the versions you use.
         </p>
         <input
           ref={inputRef}
@@ -88,13 +120,22 @@ export function Setup({ dependencies, current, onWatch }: Props) {
           hidden
           onChange={(e) => void pick(e.target.files)}
         />
-        <button className="primary" onClick={() => inputRef.current?.click()} disabled={reading}>
-          {reading ? 'Reading…' : scan ? 'Choose another folder' : 'Choose repository folder'}
+        <button
+          className="primary"
+          disabled={busy}
+          onClick={() => {
+            setStage({ step: 'picking' })
+            inputRef.current?.click()
+          }}
+        >
+          {busy ? 'Reading…' : scan ? 'Choose another folder' : 'Choose repository folder'}
         </button>
         <ErrorNote>{error}</ErrorNote>
       </PageIntro>
 
-      {scan && (
+      {busy && <Progress stage={stage} />}
+
+      {scan && !busy && (
         <section className="detected" aria-labelledby="detected-title">
           <div className="detected-head">
             <h2 id="detected-title">
@@ -103,41 +144,48 @@ export function Setup({ dependencies, current, onWatch }: Props) {
             </h2>
             <p>
               Read {plural(scan.files_read.length, 'build file')}
-              {skipped > 0 && `; ${plural(skipped, 'file')} left out for size`}. Choose the
-              dependencies to watch. Only Apache Kafka can be watched for now; the others are
+              {leftOut > 0 && `; ${plural(leftOut, 'file')} left out for size`}. Choose the
+              dependencies to watch. Only Apache Kafka can be watched for now; everything else is
               listed so you can see what the repository uses.
             </p>
           </div>
 
           {scan.dependencies.length === 0 ? (
             <p className="list-empty">
-              No dependencies found. The folder has no Maven, Gradle, sbt, SBOM or Compose build
-              files, or they declare no versions.
+              No dependencies found in {plural(scan.files_read.length, 'build file')}. Is this the
+              project's root folder?
             </p>
           ) : (
             <>
-              <ul className="dep-list">
-                {known.map((d) => (
-                  <DependencyRow
-                    key={rowKey(d)}
-                    d={d}
-                    checked={checked.has(rowKey(d))}
-                    onToggle={() => toggle(d)}
-                  />
-                ))}
-              </ul>
-              {others.length > 0 && (
-                <details className="dep-others">
-                  <summary>
-                    Other dependencies<sup>{others.length}</sup>
-                  </summary>
-                  <ul className="dep-list dep-list-compact">
-                    {others.map((d) => (
-                      <DependencyRow key={rowKey(d)} d={d} checked={false} onToggle={() => {}} />
-                    ))}
-                  </ul>
-                </details>
+              {known.length > 0 && (
+                <ul className="dep-list">
+                  {known.map((d) => (
+                    <DependencyRow
+                      key={rowKey(d)}
+                      d={d}
+                      checked={checked.has(rowKey(d))}
+                      onToggle={() => toggle(d)}
+                    />
+                  ))}
+                </ul>
               )}
+              {ECOSYSTEMS.map(([ecosystem, label]) => {
+                const rows = others.filter((d) => d.ecosystem === ecosystem)
+                if (rows.length === 0) return null
+                return (
+                  <details key={ecosystem} className="dep-others">
+                    <summary>
+                      {label}
+                      <sup>{rows.length}</sup>
+                    </summary>
+                    <ul className="dep-list dep-list-compact">
+                      {rows.map((d) => (
+                        <DependencyRow key={rowKey(d)} d={d} checked={false} onToggle={() => {}} />
+                      ))}
+                    </ul>
+                  </details>
+                )
+              })}
             </>
           )}
 
@@ -153,6 +201,38 @@ export function Setup({ dependencies, current, onWatch }: Props) {
 
       <ManualAdd dependencies={dependencies} onWatch={onWatch} />
     </div>
+  )
+}
+
+function Progress({ stage }: { stage: Stage }) {
+  const text =
+    stage.step === 'picking'
+      ? 'Waiting for the folder. Your browser lists every file in it and asks you to confirm; a large folder takes a moment.'
+      : stage.step === 'reading'
+        ? stage.found === undefined
+          ? 'Reading the folder…'
+          : `Found ${plural(stage.found, 'build file')} among ${stage.total?.toLocaleString()} files. Reading them…`
+        : stage.step === 'finding'
+          ? `Finding dependencies and versions in ${plural(stage.files, 'build file')}…`
+          : ''
+  const steps = ['picking', 'reading', 'finding']
+  const current = steps.indexOf(stage.step)
+  return (
+    <section className="progress" aria-live="polite" aria-busy="true">
+      <div className="progress-bar" aria-hidden="true" />
+      <ol className="progress-steps">
+        {['Choose the folder', 'Read build files', 'Find dependencies'].map((label, i) => (
+          <li
+            key={label}
+            className={i < current ? 'done' : i === current ? 'current' : undefined}
+            aria-current={i === current ? 'step' : undefined}
+          >
+            {label}
+          </li>
+        ))}
+      </ol>
+      <p className="progress-text">{text}</p>
+    </section>
   )
 }
 
@@ -178,9 +258,10 @@ function DependencyRow({
       <label htmlFor={id}>
         <span className="dep-name">{d.name}</span>
         <span className="dep-version">{d.version ?? 'version unknown'}</span>
+        <span className="dep-tag">{ECOSYSTEM_TAG[d.ecosystem]}</span>
       </label>
       <span className="dep-meta">
-        {d.reason ?? plural(d.artifacts.length, 'artifact')}
+        {d.notes.length > 0 ? d.notes.join('; ') : (d.reason ?? plural(d.artifacts.length, 'artifact'))}
         <span className="dep-files">{d.files.join(', ')}</span>
       </span>
     </li>

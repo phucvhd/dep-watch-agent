@@ -161,9 +161,10 @@ services:
         "org.apache.spark:spark-sql": "3.5.1",
         "org.apache.kafka:kafka-clients": "3.9.1",
         "org.apache.kafka:kafka-streams": "3.9.1",
-        "image:apache/kafka:apache/kafka": "3.9.1",
-        "image:bitnami/kafka:bitnami/kafka": "3.7.0",  # the release, not the image build tag
-    }  # postgres isn't a known dependency's image
+        "image:apache/kafka": "3.9.1",
+        "image:bitnami/kafka": "3.7.0",  # the release, not the image build tag
+        "image:postgres": "16",
+    }
 
 
 def test_detect_groups_by_family_and_version():
@@ -180,7 +181,7 @@ def test_detect_groups_by_family_and_version():
     assert kafka.artifacts == [
         "org.apache.kafka:kafka-streams",
         "org.apache.kafka:kafka-clients",
-        "image:apache/kafka:apache/kafka",
+        "image:apache/kafka",
     ]
     assert kafka.files == ["pom.xml", "app/pom.xml", "docker-compose.yml"]
 
@@ -217,7 +218,151 @@ def test_is_manifest():
         "deploy/docker-compose.prod.yml",
         "compose.yaml",
         "target/app.cdx.json",
+        "requirements-dev.txt",
+        "pyproject.toml",
+        "uv.lock",
+        "web/package.json",
+        "Dockerfile",
+        "docker/api.Dockerfile",
     ]:
         assert is_manifest(path), path
-    for path in ["README.md", "src/Main.java", "config.yml", "package.json"]:
+    for path in ["README.md", "src/Main.java", "config.yml", "tsconfig.json", "setup.py"]:
         assert not is_manifest(path), path
+
+
+def test_python_requirements_pyproject_and_locks():
+    requirements = """# pinned
+confluent-kafka==2.13.0
+langchain_core==1.2.17  # inline comment
+PySpark[sql]==3.5.1
+requests>=2.31
+-r other.txt
+--hash=sha256:abc
+git+https://github.com/x/y.git
+"""
+    pyproject = """
+[project]
+dependencies = ["fastapi>=0.110", "sqlalchemy==2.0.46"]
+[project.optional-dependencies]
+spark = ["apache-flink==1.19.1"]
+[dependency-groups]
+dev = ["pytest>=8"]
+[tool.poetry.dependencies]
+python = "^3.12"
+httpx = "0.28.1"
+pydantic = "^2.0"
+"""
+    uv_lock = """
+[[package]]
+name = "dep-watch-agent"
+version = "0.1.0"
+source = { editable = "." }
+
+[[package]]
+name = "FastAPI"
+version = "0.141.1"
+"""
+    found = declared(
+        [
+            f("requirements.txt", requirements),
+            f("pyproject.toml", pyproject),
+            f("uv.lock", uv_lock),
+        ]
+    )
+    assert versions(found) == {
+        "pypi:confluent-kafka": "2.13.0",
+        "pypi:langchain-core": "1.2.17",  # names normalized per PEP 503
+        "pypi:pyspark": "3.5.1",
+        "pypi:requests": None,  # a range is not a version
+        "pypi:fastapi": "0.141.1",  # pyproject's range, then the lock's exact version
+        "pypi:sqlalchemy": "2.0.46",
+        "pypi:apache-flink": "1.19.1",
+        "pypi:pytest": None,
+        "pypi:httpx": "0.28.1",  # Poetry reads a bare version as exact
+        "pypi:pydantic": None,
+    }  # the project itself (editable) is not a dependency
+
+
+def test_lockfile_versions_replace_ranges_and_families_cover_python():
+    detected = {
+        (d.key, d.version): d
+        for d in detect(
+            [
+                f(
+                    "pyproject.toml",
+                    '[project]\ndependencies = ["fastapi>=0.110", "pyspark==3.5.1"]',
+                ),
+                f("uv.lock", '[[package]]\nname = "fastapi"\nversion = "0.141.1"\n'),
+            ]
+        )
+    }
+    assert ("pypi:fastapi", None) not in detected  # the lock gives the version
+    fastapi = detected[("pypi:fastapi", "0.141.1")]
+    assert (fastapi.name, fastapi.ecosystem, fastapi.files) == ("fastapi", "pypi", ["uv.lock"])
+    spark = detected[("spark", "3.5.1")]
+    assert (spark.name, spark.ecosystem) == ("Apache Spark", "pypi")
+
+
+def test_npm_package_json_with_lock():
+    package = json.dumps(
+        {
+            "dependencies": {"react": "^18.3.1", "left-pad": "1.3.0"},
+            "devDependencies": {"vite": "^5.4.11"},
+        }
+    )
+    lock = json.dumps(
+        {
+            "packages": {
+                "": {"dependencies": {"react": "^18.3.1"}, "devDependencies": {"vite": "^5.4.11"}},
+                "node_modules/react": {"version": "18.3.1"},
+                "node_modules/vite": {"version": "5.4.11"},
+                "node_modules/rollup": {"version": "4.0.0"},  # transitive: left out
+            }
+        }
+    )
+    found = declared([f("web/package.json", package), f("web/package-lock.json", lock)])
+    by_file = {(d.coordinate, d.version, d.file) for d in found}
+    assert ("npm:left-pad", "1.3.0", "web/package.json") in by_file
+    assert ("npm:react", None, "web/package.json") in by_file
+    assert ("npm:react", "18.3.1", "web/package-lock.json") in by_file
+    assert not any(d.artifact == "rollup" for d in found)
+
+
+def test_images_from_compose_and_dockerfiles():
+    compose = """
+services:
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+  later:
+    image: confluentinc/cp-server:7.4.3
+  db:
+    image: ankane/pgvector:latest   # comment
+  ui:
+    image: ${REGISTRY}/ui:1.0
+  pinned:
+    image: redis@sha256:abc
+"""
+    dockerfile = """
+FROM --platform=linux/amd64 python:3.12-slim AS build
+FROM build AS test
+FROM node:20-alpine
+FROM scratch
+"""
+    detected = {
+        (d.key, d.version): d
+        for d in detect([f("docker-compose.yaml", compose), f("Dockerfile", dockerfile)])
+    }
+    kafka = detected[("kafka", "3.4.0")]
+    assert kafka.watchable
+    assert kafka.notes == ["Confluent Platform 7.4.0 ships Apache Kafka 3.4.0"]
+    # A later CP patch doesn't map one to one: no version is guessed.
+    later = detected[("kafka", None)]
+    assert not later.watchable
+    assert later.notes == [
+        "Confluent Platform 7.4.3 (Apache Kafka 3.4): add the exact Kafka version by hand"
+    ]
+    assert ("image:ankane/pgvector", "latest") in detected
+    assert ("image:python", "3.12-slim") in detected
+    assert ("image:node", "20-alpine") in detected
+    assert ("image:redis", "latest") in detected  # a digest is not a version
+    assert not any(k.startswith("image:${") or k == "image:build" for k, _ in detected)

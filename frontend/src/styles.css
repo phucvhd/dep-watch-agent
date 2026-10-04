@@ -150,12 +150,25 @@ button:hover:not(:disabled) {
   border-color: var(--ink);
 }
 
-button.primary {
+a.button {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 20px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+button.primary,
+a.button.primary {
   background: var(--ink);
   border-color: var(--ink);
   color: var(--bg);
 }
 
+a.button.primary:hover,
 button.primary:hover:not(:disabled) {
   opacity: 0.85;
 }
@@ -964,6 +977,95 @@ main {
   margin-top: 4px;
 }
 
+/* Reading a repository: an indeterminate bar along the section's top edge, and the steps. */
+.progress {
+  position: relative;
+  padding: 36px var(--gutter) 40px;
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.progress-bar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--hit), var(--unknown), transparent);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  animation: sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes sweep {
+  from {
+    background-position: -50% 0;
+  }
+  to {
+    background-position: 150% 0;
+  }
+}
+
+.progress-steps {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin: 0 0 14px;
+  padding: 0;
+  font-size: 22px;
+  letter-spacing: -0.025em;
+  color: var(--ink-3);
+}
+
+.progress-steps li.done {
+  color: var(--ink-2);
+}
+
+.progress-steps li.done::after {
+  content: ' ✓';
+  color: var(--clear-text);
+}
+
+.progress-steps li.current {
+  color: var(--ink);
+}
+
+.progress-steps li.current::before {
+  content: '';
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 10px;
+  border-radius: 50%;
+  background: var(--hit);
+  vertical-align: 0.12em;
+  animation: pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes pulse {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.25;
+  }
+}
+
+.progress-text {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 16px;
+  max-width: 70ch;
+}
+
+.dep-tag {
+  font-size: 12px;
+  color: var(--ink-3);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+  align-self: center;
+}
+
 .detected {
   border-bottom: 1px solid var(--line);
 }
@@ -1308,5 +1410,12 @@ th {
   .spinner {
     animation: none;
     border-top-color: var(--line);
+  }
+  .progress-bar {
+    animation: none;
+    background-position: 50% 0;
+  }
+  .progress-steps li.current::before {
+    animation: none;
   }
 }

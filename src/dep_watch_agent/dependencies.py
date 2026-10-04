@@ -35,6 +35,7 @@ class Family:
     name: str
     groups: tuple[str, ...]  # Maven group ids (exact, or a prefix ending in ".")
     images: tuple[str, ...] = field(default=())  # container images whose tag is the version
+    packages: tuple[str, ...] = field(default=())  # "pypi:name" / "npm:name" at the same version
 
     @property
     def watchable(self) -> bool:
@@ -49,10 +50,17 @@ FAMILIES = (
         "kafka",
         "Apache Kafka",
         ("org.apache.kafka",),
-        images=("apache/kafka", "apache/kafka-native", "bitnami/kafka"),
+        # Confluent's cp-kafka / cp-server are read as the Kafka release they ship (manifests.py).
+        images=(
+            "apache/kafka",
+            "apache/kafka-native",
+            "bitnami/kafka",
+            "confluentinc/cp-kafka",
+            "confluentinc/cp-server",
+        ),
     ),
-    Family("spark", "Apache Spark", ("org.apache.spark",)),
-    Family("flink", "Apache Flink", ("org.apache.flink",)),
+    Family("spark", "Apache Spark", ("org.apache.spark",), packages=("pypi:pyspark",)),
+    Family("flink", "Apache Flink", ("org.apache.flink",), packages=("pypi:apache-flink",)),
     Family("hadoop", "Apache Hadoop", ("org.apache.hadoop",)),
     Family("zookeeper", "Apache ZooKeeper", ("org.apache.zookeeper",)),
     Family("cassandra", "Apache Cassandra", ("org.apache.cassandra",)),
@@ -69,6 +77,15 @@ FAMILIES = (
 
 def family_for_group(group: str) -> Family | None:
     return next((f for f in FAMILIES if f.matches_group(group)), None)
+
+
+def family_for(group: str, artifact: str) -> Family | None:
+    """The family of a declared dependency: by image, by package, or by Maven group."""
+    if group == "image":
+        return family_for_image(artifact)
+    if group in ("pypi", "npm"):
+        return next((f for f in FAMILIES if f"{group}:{artifact}" in f.packages), None)
+    return family_for_group(group)
 
 
 def family_for_image(image: str) -> Family | None:

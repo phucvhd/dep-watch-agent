@@ -38,8 +38,11 @@ origin (see `.env.example`). Tests use
 
 `frontend/` is a React + TypeScript app (Vite) over the API. It starts by asking for your
 repository folder: the browser reads its build files (Maven `pom.xml` with properties, Gradle
-build files, lockfile and version catalog, sbt, CycloneDX SBOMs, Kafka images in Compose files)
-and sends only their text to `POST /repo/scan`, which lists every dependency and version found.
+build files, lockfile and version catalog, sbt, Python requirements, `pyproject.toml` and
+locks, npm `package.json` with its lock, CycloneDX SBOMs, images in Compose files and
+Dockerfiles), skipping hidden and generated folders, and sends only their text to
+`POST /repo/scan`, which lists every dependency and version found. Confluent Platform's
+`cp-kafka` x.y.0 images count as the Apache Kafka release they ship.
 You tick the ones to watch; every dependency is shown, but only Apache Kafka can be watched for
 now. A version can also be added by hand. Every page then answers for the watched dependency
 chosen in the sidebar: new bugs as a triage list (affects you / can't tell / doesn't affect you) with

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, type ScanResponse } from './api/client'
+import { PageIntro } from './components/common'
 import { VersionOrder } from './components/versionOrder'
 import { formatAgo } from './format'
 import { useLoad, useWatch } from './hooks'
@@ -17,13 +18,14 @@ const PAGES = {
 } as const
 type Page = keyof typeof PAGES | 'setup'
 
-function routeFromHash(): { page: Page; key?: string } {
+/** The page in the URL, or none (a first visit opens Setup when nothing is watched yet). */
+function routeFromHash(): { page?: Page; key?: string } {
   const [page, key] = window.location.hash.replace(/^#\/?/, '').split('/')
-  return page in PAGES || page === 'setup' ? { page: page as Page, key } : { page: 'alerts' }
+  return page in PAGES || page === 'setup' ? { page: page as Page, key } : {}
 }
 
 export function App() {
-  const [route, setRoute] = useState(routeFromHash)
+  const [hashRoute, setRoute] = useState(routeFromHash)
   useEffect(() => {
     const onHash = () => setRoute(routeFromHash())
     window.addEventListener('hashchange', onHash)
@@ -31,11 +33,14 @@ export function App() {
   }, [])
 
   const watch = useWatch()
+  const route = { ...hashRoute, page: hashRoute.page ?? (watch.items.length ? 'alerts' : 'setup') }
   const dependencies = useLoad(() => api.dependencies(), [])
   const nameOf = (id: string) => dependencies.data?.find((d) => d.id === id)?.name ?? id
-  // The dependency every page answers for: the active watched one, if the API supports it.
-  const dependency = dependencies.data?.find((d) => d.id === watch.active?.dependency)
-  const version = watch.active?.version ?? ''
+  // The dependency every page answers for: the active watched one, else the first the API
+  // supports, so Issues, Check and Data and models work before anything is watched.
+  const watched = dependencies.data?.find((d) => d.id === watch.active?.dependency)
+  const dependency = watched ?? dependencies.data?.[0]
+  const version = watched ? watch.active!.version : ''
   const project = dependency?.project ?? ''
 
   const versions = useLoad(() => (project ? api.versions(project) : Promise.resolve([])), [project])
@@ -60,7 +65,6 @@ export function App() {
   const model = systems.data?.[0]
 
   const apiDown = dependencies.error && !dependencies.data
-  const needsSetup = !dependency && route.page !== 'operations'
   return (
     <VersionOrder.Provider value={order}>
       <a className="skip" href="#main">
@@ -143,18 +147,26 @@ export function App() {
                 <p>{dependencies.error}</p>
               </div>
             </div>
-          ) : !dependencies.data ? null : route.page === 'setup' || needsSetup ? (
+          ) : !dependencies.data || !dependency ? null : route.page === 'setup' ? (
             <Setup
               dependencies={dependencies.data}
               current={watch.items}
               onWatch={watch.replace}
             />
-          ) : route.page === 'operations' || !dependency ? (
-            <Operations
-              dependency={dependency ?? dependencies.data[0]}
-              systems={systems.data ?? []}
-              onSynced={sync.reload}
-            />
+          ) : route.page === 'operations' ? (
+            <Operations dependency={dependency} systems={systems.data ?? []} onSynced={sync.reload} />
+          ) : route.page === 'alerts' && !version ? (
+            <div className="page">
+              <PageIntro title="New bugs">
+                <p>
+                  New bugs are answered for the dependency versions you run. Choose your
+                  repository to find them, or add a version by hand.
+                </p>
+                <a className="button primary" href="#/setup">
+                  Choose your repository
+                </a>
+              </PageIntro>
+            </div>
           ) : route.page === 'alerts' ? (
             <Alerts
               key={`${project}/${version}`}

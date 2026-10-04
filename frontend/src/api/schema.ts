@@ -501,6 +501,11 @@ export interface components {
              */
             family: string | null;
             /**
+             * Ecosystem
+             * @enum {string}
+             */
+            ecosystem: "maven" | "pypi" | "npm" | "image";
+            /**
              * Watchable
              * @description Supported and at a known release: can be watched
              */
@@ -514,6 +519,11 @@ export interface components {
             artifacts: string[];
             /** Files */
             files: string[];
+            /**
+             * Notes
+             * @description How a version was read, e.g. from a Confluent image
+             */
+            notes: string[];
         };
         /** DroppedEvidenceOut */
         DroppedEvidenceOut: {
