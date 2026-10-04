@@ -3,6 +3,11 @@
 - accuracy: answer == expected, over all cases.
 - precision: of the cases answered ``affected``, how many were expected ``affected``.
 - recall: of the cases expected ``affected``, how many were answered ``affected``.
+- f1: harmonic mean of precision and recall for ``affected``.
+- macro_f1: the mean of the per-answer F1 (``f1_by_answer``) over the three answers, so each
+  answer counts equally however many cases expect it. Per answer, F1 is
+  ``2TP / (2TP + FP + FN)``: 0 when the answer is never right, None when no case expects or
+  gives it (left out of the mean).
 - false_alarm_rate: of the cases not expected ``affected`` (``not_affected`` or
   ``insufficient_information``), how many were answered ``affected``. An alert the text doesn't
   support counts as a false alarm.
@@ -26,6 +31,8 @@ from dep_watch_agent.verdict import AFFECTED, ANSWERS, INSUFFICIENT_INFORMATION
 
 RATE_METRICS = (
     "accuracy",
+    "macro_f1",
+    "f1",
     "precision",
     "recall",
     "false_alarm_rate",
@@ -65,9 +72,14 @@ def compute_metrics(results: list[CaseResult]) -> dict[str, Any]:
         confusion[r.expected][r.answer] += 1
         by_basis[r.basis].append(r)
 
+    f1_by_answer = {a: _f1(confusion, a) for a in ANSWERS}
+    defined_f1 = [f for f in f1_by_answer.values() if f is not None]
+
     return {
         "n": n,
         "accuracy": _ratio(sum(r.correct for r in results), n),
+        "macro_f1": _ratio(sum(defined_f1), len(defined_f1)),
+        "f1": f1_by_answer[AFFECTED],
         "precision": _ratio(
             sum(r.expected == AFFECTED for r in answered_affected), len(answered_affected)
         ),
@@ -87,6 +99,7 @@ def compute_metrics(results: list[CaseResult]) -> dict[str, Any]:
         ),
         "always_abstain_accuracy": _ratio(len(expected_insufficient), n),
         "confusion": {e: {a: confusion[e][a] for a in ANSWERS} for e in ANSWERS},
+        "f1_by_answer": f1_by_answer,
         "accuracy_by_basis": {
             basis: _ratio(sum(r.correct for r in rs), len(rs))
             for basis, rs in sorted(by_basis.items())
@@ -108,11 +121,21 @@ def format_metrics(metrics: dict[str, Any]) -> str:
     lines.append(f"    {'':<26}" + "".join(f"{a:>26}" for a in ANSWERS))
     for expected, row in metrics["confusion"].items():
         lines.append(f"    {expected:<26}" + "".join(f"{row[a]:>26}" for a in ANSWERS))
+    lines.append("  f1 by answer:")
+    for answer, value in metrics["f1_by_answer"].items():
+        lines.append(f"    {answer:<26} {'n/a' if value is None else f'{value:.3f}'}")
     lines.append("  accuracy by case basis:")
     for basis, value in metrics["accuracy_by_basis"].items():
         lines.append(f"    {basis:<20} {'n/a' if value is None else f'{value:.3f}'}")
     return "\n".join(lines)
 
 
-def _ratio(numerator: int, denominator: int) -> float | None:
+def _f1(confusion: dict[str, Counter], answer: str) -> float | None:
+    tp = confusion[answer][answer]
+    fp = sum(confusion[e][answer] for e in ANSWERS if e != answer)
+    fn = sum(confusion[answer][a] for a in ANSWERS if a != answer)
+    return _ratio(2 * tp, 2 * tp + fp + fn)
+
+
+def _ratio(numerator: float, denominator: int) -> float | None:
     return numerator / denominator if denominator else None
