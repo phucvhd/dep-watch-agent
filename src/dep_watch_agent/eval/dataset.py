@@ -107,7 +107,7 @@ def sample_dataset(
     strata = STRATA_V2 if design == "v2" else STRATA_V1
     releases = released_versions(session, project)
     if not releases:
-        raise DatasetError(f"no released {project} versions in the database; run sync-jira")
+        raise DatasetError(f"no released {project} versions in the database; sync JIRA first")
 
     candidates = load_candidates(session, project, max_text_chars=max_text_chars)
     built = {c.key: make_cases(c, releases, seed=seed, design=design) for c in candidates}

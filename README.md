@@ -7,7 +7,9 @@ never get a CVE.
 ## Status
 
 - Version parsing and affected-range checks (`dep_watch_agent.versions`)
-- Incremental JIRA sync into Postgres (`dep-watch-agent sync-jira`)
+- Incremental JIRA sync into Postgres (`POST /sync/jira`)
+- Web API for the frontend: issues, versions, "does this issue affect my version?" (`POST /check`),
+  sync and eval jobs
 
 ## Development
 
@@ -16,14 +18,18 @@ Requires [uv](https://docs.astral.sh/uv/) and Docker.
 ```bash
 uv sync                          # create .venv and install deps
 docker compose up -d --wait      # start Postgres (pgvector) on localhost:5433
-uv run dep-watch-agent migrate   # apply database migrations
-uv run dep-watch-agent sync-jira # sync KAFKA issues (incremental after the first run)
+uv run dep-watch-agent           # serve the API on 127.0.0.1:8000; migrates on startup
 uv run pytest                    # run tests (DB tests skip if Postgres is down)
 uv run ruff check .              # lint
 uv run ruff format .             # format
 ```
 
-Set `DATABASE_URL` to use a different Postgres (see `.env.example`). Tests use
+Interactive API docs are at http://127.0.0.1:8000/docs and the OpenAPI schema at `/openapi.json`
+(generate a typed frontend client from it). During development, run
+`uv run uvicorn dep_watch_agent.api.app:create_app --factory --reload`.
+
+Set `DATABASE_URL` to use a different Postgres, and `DEP_WATCH_CORS_ORIGINS` to the frontend's
+origin (see `.env.example`). Tests use
 `TEST_DATABASE_URL` if set, and each test runs in its own throwaway schema.
 
 ### Schema migrations
@@ -36,7 +42,7 @@ schema, edit the models, then generate and review a revision:
 ```bash
 uv run alembic revision --autogenerate -m "add foo table"  # always read the generated file
 uv run alembic check                         # models and database agree?
-uv run alembic upgrade head                  # same as `dep-watch-agent migrate`
+uv run alembic upgrade head                  # the API also runs this on startup
 uv run alembic downgrade -1                  # undo the latest revision
 uv run alembic history                       # list revisions
 ```
@@ -49,10 +55,26 @@ before landing; a test fails when there is more than one head.
 
 ### JIRA sync
 
-`sync-jira` pulls issues with their affected versions, fix versions, components and comments
+`POST /sync/jira` starts a background job that pulls issues with their affected versions, fix versions, components and comments
 from `issues.apache.org` anonymously. The first run fetches all ~20k KAFKA issues (about
 7 minutes with the default 1 s delay between requests); later runs fetch only issues updated
-since the previous run. Use `--full` to re-sync everything.
+since the previous run. Send `{"full": true}` to re-sync everything. Poll `GET /jobs/{id}` for
+progress (issues synced so far) and the result; `GET /sync/state` shows the watermark.
+
+```bash
+curl -XPOST localhost:8000/sync/jira -H 'content-type: application/json' -d '{}'
+```
+
+### Checking an issue
+
+```bash
+curl -XPOST localhost:8000/check -H 'content-type: application/json' \
+  -d '{"issue_key": "KAFKA-15417", "kafka_version": "3.5.1"}'
+```
+
+The answer is `affected`, `not_affected` or `insufficient_information`, with the cited facts it
+used, the facts it rejected (and why), and a link to the issue. The system sees what it sees in
+the eval: issue text without bot comments, plus JIRA's fix versions.
 
 ## Evaluation
 
@@ -75,14 +97,15 @@ the text or not; if not, the expected answer is `insufficient_information`. Desi
 (`kafka-ground-truth-v1`, fix versions masked) is kept for reference: the text named the fix
 release in only ~4% of not-affected cases, so it couldn't tell systems apart.
 
-```bash
-uv run dep-watch-agent eval sample    # sample 100 issues -> 200 cases (--design v2 default)
-uv run dep-watch-agent eval status    # labeling progress
-uv run dep-watch-agent eval upload    # push to the Langfuse dataset (needs .env keys)
-uv run dep-watch-agent eval run --system baseline             # score locally (needs labels)
-uv run dep-watch-agent eval run --system baseline --langfuse  # record a Langfuse experiment
-uv run dep-watch-agent eval run --provisional                 # before labeling; not a result
-```
+| Endpoint | Does |
+|---|---|
+| `POST /eval/datasets` `{"name": ...}` | sample 100 issues -> 200 cases (`design` v2 default) |
+| `GET /eval/datasets/{name}/status` | labeling progress and problems |
+| `POST /eval/datasets/{name}/upload` | push to the Langfuse dataset (needs `.env` keys) |
+| `POST /eval/runs` `{}` | score the baseline locally (needs labels); a job |
+| `POST /eval/runs` `{"langfuse": true}` | record a Langfuse experiment |
+| `POST /eval/runs` `{"provisional": true}` | before labeling; not a result |
+| `GET /eval/runs`, `GET /eval/runs/{dataset}/{run}` | saved local runs and their results |
 
 Every system extracts cited version facts from the issue text; `verdict.decide` drops facts
 whose quote isn't in the text, then decides with the version module and the given fix
@@ -90,5 +113,5 @@ versions. The **baseline**
 (`baseline.py`) extracts with regex and cue words, no LLM, and is the number every LLM change
 is reported against. Metric definitions are in `eval/metrics.py`.
 
-- `eval sample` refuses to overwrite an existing dataset, so labels aren't lost. To change the
+- `POST /eval/datasets` refuses (409) to overwrite an existing dataset, so labels aren't lost. To change the
   sample, create a new dataset name (e.g. `-v3`).

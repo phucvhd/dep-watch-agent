@@ -1,9 +1,7 @@
-import json
 from types import SimpleNamespace
 
 import pytest
 
-import dep_watch_agent.cli as cli
 from dep_watch_agent.eval.dataset import DatasetError, langfuse_items, load_dataset
 from dep_watch_agent.eval.metrics import CaseResult, compute_metrics, format_metrics
 from dep_watch_agent.eval.runner import run_langfuse, run_local
@@ -87,7 +85,7 @@ class CountingExtractor:
 
 
 def test_local_run_requires_labels(written):
-    with pytest.raises(DatasetError, match="--provisional"):
+    with pytest.raises(DatasetError, match="provisional"):
         run_local(load_dataset(written), CountingExtractor())
 
 
@@ -192,44 +190,3 @@ def test_langfuse_run_skips_undefined_metrics(written):
     fake = FakeDataset(items)
     run_langfuse(FakeLangfuse(fake), "test-set", CountingExtractor(), run_name="r1")
     assert "abstention_recall" not in fake.runs[0]["run_scores"]
-
-
-# --- CLI ------------------------------------------------------------------------------
-
-
-def test_cli_provisional_run_writes_results(written, tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(cli, "RUNS_DIR", tmp_path / "runs")
-    monkeypatch.setattr(
-        "dep_watch_agent.eval.sampling.known_versions", lambda session, project: set()
-    )
-    monkeypatch.setattr("dep_watch_agent.db.session_factory", lambda: lambda: _NullSession())
-
-    args = ["eval", "run", "--provisional", "--run-name", "t1"]
-    code = cli.main([*args, "--name", "test-set", "--dir", str(written.parent)])
-
-    assert code == 0
-    out = capsys.readouterr().out
-    assert "PROVISIONAL" in out
-    payload = json.loads((tmp_path / "runs" / "test-set" / "t1.json").read_text())
-    assert payload["provisional"] is True
-    assert payload["metrics"]["n"] == 4
-    # No known versions, so the baseline extracts nothing and abstains everywhere.
-    assert payload["metrics"]["abstention_rate"] == 1.0
-
-
-def test_cli_refuses_provisional_langfuse_run(written, monkeypatch, capsys):
-    monkeypatch.setattr(
-        "dep_watch_agent.eval.sampling.known_versions", lambda session, project: set()
-    )
-    monkeypatch.setattr("dep_watch_agent.db.session_factory", lambda: lambda: _NullSession())
-    args = ["eval", "run", "--provisional", "--langfuse", "--dir", str(written.parent)]
-    assert cli.main([*args, "--name", "test-set"]) == 1
-    assert "local only" in capsys.readouterr().err
-
-
-class _NullSession:
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc):
-        return False
