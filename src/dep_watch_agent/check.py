@@ -5,7 +5,8 @@ comments from bots, plus the fix versions JIRA lists. JIRA's affected versions a
 where the bug starts has to come from the text. The decision is made by ``verdict.decide``.
 
 Code goes first: if the given fix versions already put the version past the fix, the answer is
-``not_affected`` and the system is not called.
+``not_affected`` and the system is not called. Otherwise the system's facts are stored
+(``extractions.py``), so asking again, or about another version, reuses them.
 """
 
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from dep_watch_agent import extractions
 from dep_watch_agent.eval.runner import Extractor
 from dep_watch_agent.eval.sampling import EXCLUDED_COMMENT_AUTHORS, JIRA_BROWSE_URL
 from dep_watch_agent.orm import JiraIssueRow
@@ -31,6 +33,7 @@ class CheckResult:
     system: str
     decision: Decision
     decided_by: str  # FIX_VERSIONS, or the system's name
+    cached: bool  # the system's facts were stored from an earlier run
 
     @property
     def url(self) -> str:
@@ -73,14 +76,28 @@ def issue_text(issue: JiraIssueRow) -> IssueText:
 FIX_VERSIONS = "fix_versions"
 
 
+@dataclass(frozen=True)
+class Answered:
+    decision: Decision
+    decided_by: str  # FIX_VERSIONS, or the system's name
+    cached: bool = False
+
+
 def answer_issue(
-    text: IssueText, kafka_version: str, system: str, extractor: Extractor
-) -> tuple[Decision, str]:
-    """The decision and what decided it: the fix versions alone, or ``system``'s facts."""
+    session: Session,
+    issue_id: int,
+    text: IssueText,
+    kafka_version: str,
+    system: str,
+    extractor: Extractor,
+) -> Answered:
+    """The decision and what decided it: the fix versions alone, or ``system``'s facts (stored
+    ones when the text, system and extractor version are unchanged)."""
     by_fixes = decide(text, kafka_version, Extraction([]))
     if by_fixes.answer == NOT_AFFECTED:
-        return by_fixes, FIX_VERSIONS
-    return decide(text, kafka_version, extractor.extract(text)), system
+        return Answered(by_fixes, FIX_VERSIONS)
+    extracted = extractions.extract(session, issue_id, text, system, extractor)
+    return Answered(decide(text, kafka_version, extracted.extraction), system, extracted.cached)
 
 
 def check_issue(
@@ -93,5 +110,7 @@ def check_issue(
     """
     issue = load_issue(session, key)
     text = issue_text(issue)
-    decision, decided_by = answer_issue(text, kafka_version, system, extractor)
-    return CheckResult(issue, text, kafka_version, system, decision, decided_by)
+    answered = answer_issue(session, issue.id, text, kafka_version, system, extractor)
+    return CheckResult(
+        issue, text, kafka_version, system, answered.decision, answered.decided_by, answered.cached
+    )

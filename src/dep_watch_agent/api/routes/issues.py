@@ -132,6 +132,7 @@ def check(body: CheckRequest, session: SessionDep, systems: SystemsDep) -> Check
         answer=decision.answer,
         system=result.system,
         decided_by=result.decided_by,
+        cached=result.cached,
         fix_versions=sorted_versions(result.issue_text.fix_versions),
         evidence=evidence_out(decision.used),
         dropped=dropped_out(decision.dropped),

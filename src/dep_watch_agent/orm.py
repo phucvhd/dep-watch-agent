@@ -133,3 +133,27 @@ class SyncStateRow(Base):
     source: Mapped[str] = mapped_column(Text, primary_key=True)
     watermark: Mapped[datetime] = mapped_column(Timestamp)
     updated_at: Mapped[datetime] = mapped_column(Timestamp, server_default=func.now())
+
+
+class ExtractionRow(Base):
+    """Cited version facts a system extracted from an issue's text (``verdict.Extraction``).
+
+    Facts don't depend on the Kafka version asked about, so one extraction answers every
+    version, and model calls are only repeated when something they depend on changes: the
+    text the system sees (``text_hash``), the system, or its configuration
+    (``extractor_version``: model, prompt, chunking). Older rows stay as history.
+    """
+
+    __tablename__ = "extractions"
+    __table_args__ = (UniqueConstraint("issue_id", "system", "extractor_version", "text_hash"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    issue_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("jira_issues.id", ondelete="CASCADE")
+    )
+    system: Mapped[str] = mapped_column(Text)
+    extractor_version: Mapped[str] = mapped_column(Text)
+    text_hash: Mapped[str] = mapped_column(Text)
+    evidence: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
+    duration_ms: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(Timestamp, server_default=func.now())

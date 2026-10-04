@@ -102,6 +102,7 @@ class CheckResponse(BaseModel):
         description="fix_versions when JIRA's fix versions settle it (the system isn't called); "
         "otherwise the system"
     )
+    cached: bool = Field(description="The system's facts were stored from an earlier run")
     fix_versions: list[str] = Field(description="Given as structured input, from JIRA")
     evidence: list[EvidenceOut] = Field(description="Cited facts the decision used")
     dropped: list[DroppedEvidenceOut] = Field(description="Facts rejected, with the reason")
@@ -135,6 +136,7 @@ class ScanItemOut(BaseModel):
     updated_at: datetime
     answer: Answer
     decided_by: str
+    cached: bool
     fix_versions: list[str]
     evidence: list[EvidenceOut]
     dropped: list[DroppedEvidenceOut]
@@ -152,6 +154,7 @@ class ScanResponse(BaseModel):
     scanned: int
     counts: dict[str, int]
     errors: int
+    cached: int = Field(description="Issues answered from stored facts, without a model call")
     items: list[ScanItemOut]
 
 

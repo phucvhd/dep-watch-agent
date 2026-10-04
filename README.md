@@ -110,7 +110,15 @@ or not-a-bug), updated since `since`, newest first, at most `limit`. Poll `GET /
 result lists affected issues first, then `insufficient_information`, then `not_affected`, each
 with cited facts and a link. An issue that fails (e.g. the model server is down) is reported
 with its `error`, not dropped. Each issue the fix versions don't settle costs one model call
-(5–30 s on a laptop), so scan this week's issues with `since`; a whole version is ~3k issues.
+(30–90 s on a laptop with a reasoning model), so scan this week's issues with `since`; a whole
+version is ~3k issues.
+
+The facts a system extracts don't depend on the version asked about, so they are stored in
+Postgres (`extractions`, keyed by issue, system, extractor version and a hash of the text the
+system sees) and committed per issue. Scanning again, scanning another version, or `/check`
+reuse them without a model call (`cached: true`); a new comment, a new fix version, another
+model or an edited prompt extracts again. Eval runs don't use stored facts, so they always
+measure the system as it is.
 
 ## Evaluation
 

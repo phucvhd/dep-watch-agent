@@ -111,3 +111,27 @@ def test_a_failed_issue_is_reported_not_dropped(session):
     assert failed.error == "ConnectionError: model server down"
     assert result.errors == 1
     assert len(result.items) == 4  # the others are still answered
+
+
+class VersionedPhraseExtractor(PhraseExtractor):
+    version = "v1"
+
+
+def test_rescans_and_other_versions_reuse_stored_facts(session):
+    first = scan_version(session, "3.9.1", "phrases", VersionedPhraseExtractor())
+    assert first.cached == 0
+
+    extractor = VersionedPhraseExtractor()
+    again = scan_version(session, "3.9.1", "phrases", extractor)
+    assert extractor.seen == []  # no model call
+    assert again.cached == 3  # every issue the fix versions don't settle
+    assert [(i.issue_key, i.answer) for i in again.items] == [
+        (i.issue_key, i.answer) for i in first.items
+    ]
+
+    # Another version is answered from the same facts.
+    upgrade = scan_version(session, "3.8.0", "phrases", extractor)
+    assert extractor.seen == []
+    regression = next(i for i in upgrade.items if i.issue_key == "KAFKA-2")
+    assert regression.answer == "not_affected"  # 3.8.0 is before "Regression in 3.9.0"
+    assert regression.cached is True

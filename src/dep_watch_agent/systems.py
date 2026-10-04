@@ -42,7 +42,11 @@ def configured_systems() -> SystemRegistry:
         from dep_watch_agent.llm.extractor import LLMExtractor, load_prompt
 
         prompt = load_prompt()
-        return LLMExtractor(ChatFactModel(config, prompt=prompt), prompt=prompt)
+        return LLMExtractor(
+            ChatFactModel(config, prompt=prompt),
+            prompt=prompt,
+            model_id=f"{config.model};output={config.output}",
+        )
 
     return {name: factory}
 

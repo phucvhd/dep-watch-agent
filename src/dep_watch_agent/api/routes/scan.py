@@ -49,6 +49,7 @@ def start_scan(body: ScanRequest, jobs: JobsDep, sessions: SessionsDep, systems:
             scanned=len(result.items),
             counts=result.counts,
             errors=result.errors,
+            cached=result.cached,
             items=[
                 ScanItemOut(
                     issue_key=item.issue_key,
@@ -59,6 +60,7 @@ def start_scan(body: ScanRequest, jobs: JobsDep, sessions: SessionsDep, systems:
                     updated_at=item.updated_at,
                     answer=item.answer,
                     decided_by=item.decided_by,
+                    cached=item.cached,
                     fix_versions=sorted_versions(item.fix_versions),
                     evidence=evidence_out(item.evidence),
                     dropped=dropped_out(item.dropped),

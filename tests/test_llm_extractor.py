@@ -5,6 +5,7 @@ from dep_watch_agent.llm.chat import ChatFactModel, LLMConfig
 from dep_watch_agent.llm.extractor import (
     InvalidOutput,
     LLMExtractor,
+    Prompt,
     issue_chunks,
     load_prompt,
     parse_facts,
@@ -209,3 +210,18 @@ def test_system_name_override_must_be_a_file_name(monkeypatch):
     monkeypatch.setenv("DEP_WATCH_LLM_SYSTEM", "../x")
     with pytest.raises(ValueError, match="DEP_WATCH_LLM_SYSTEM"):
         configured_systems()
+
+
+def test_extractor_version_changes_with_what_changes_its_output():
+    prompt = load_prompt()
+    base = LLMExtractor(FakeModel(), prompt=prompt, model_id="m")
+    assert prompt.version in base.version
+    other_prompt = Prompt(prompt.name, prompt.text + "\nOne more rule.")
+    versions = {
+        base.version,
+        LLMExtractor(FakeModel(), prompt=other_prompt, model_id="m").version,
+        LLMExtractor(FakeModel(), prompt=prompt, model_id="other").version,
+        LLMExtractor(FakeModel(), prompt=prompt, model_id="m", chunk_chars=10_000).version,
+    }
+    assert len(versions) == 4
+    assert LLMExtractor(FakeModel(), prompt=prompt, model_id="m", retries=3).version == base.version

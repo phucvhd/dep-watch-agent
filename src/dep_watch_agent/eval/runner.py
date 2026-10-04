@@ -14,6 +14,10 @@ from dep_watch_agent.verdict import Decision, Extraction, IssueText, decide
 
 
 class Extractor(Protocol):
+    """Turns issue text into cited facts. May also have a ``version`` string (everything that
+    changes its output besides the text); only then are its extractions stored and reused
+    (``extractions.py``)."""
+
     """Turns issue text into cited facts. Its name is the key it is registered under in
     ``systems.SYSTEMS``, so one class can back several systems (e.g. one per model)."""
 

@@ -212,6 +212,17 @@ def test_check_affected_cites_the_issue(client):
     assert {"version": "3.6.0", "kind": "introduced", "quote": DEADLOCK_QUOTE} in body["evidence"]
 
 
+class VersionedPhraseExtractor(PhraseExtractor):
+    version = "v1"
+
+
+def test_check_reuses_stored_facts(make_client):
+    client = make_client(systems={"phrases": VersionedPhraseExtractor})
+    assert check(client, "3.6.0").json()["cached"] is False
+    body = check(client, "3.6.1").json()  # another version, same facts
+    assert (body["cached"], body["answer"]) == (True, "affected")
+
+
 def test_check_past_the_fix_is_decided_by_code(client):
     body = check(client, "3.9.0").json()
     assert (body["answer"], body["decided_by"]) == ("not_affected", "fix_versions")

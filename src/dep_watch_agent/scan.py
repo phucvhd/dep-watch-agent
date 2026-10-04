@@ -16,7 +16,7 @@ from datetime import datetime
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from dep_watch_agent.check import answer_issue, issue_text, issue_url
+from dep_watch_agent.check import Answered, answer_issue, issue_text, issue_url
 from dep_watch_agent.eval.runner import Extractor
 from dep_watch_agent.orm import JiraIssueRow
 from dep_watch_agent.verdict import (
@@ -58,6 +58,7 @@ class ScanItem:
     decided_by: str
     evidence: list[Evidence] = field(default_factory=list)
     dropped: list[DroppedEvidence] = field(default_factory=list)
+    cached: bool = False
     error: str | None = None
 
 
@@ -77,6 +78,10 @@ class ScanResult:
     @property
     def errors(self) -> int:
         return sum(item.error is not None for item in self.items)
+
+    @property
+    def cached(self) -> int:
+        return sum(item.cached for item in self.items)
 
 
 def candidates_query(project: str, since: datetime | None):
@@ -117,25 +122,32 @@ def scan_version(
     items = []
     for done, issue in enumerate(issues, 1):
         text = issue_text(issue)
+        # Read before answering: storing a new extraction commits, which expires the rows.
+        fields = {
+            "issue_key": issue.key,
+            "url": issue_url(issue.key),
+            "summary": issue.summary,
+            "status": issue.status,
+            "resolution": issue.resolution,
+            "updated_at": issue.updated_at,
+            "fix_versions": text.fix_versions,
+        }
         try:
-            decision, decided_by = answer_issue(text, kafka_version, system, extractor)
+            answered = answer_issue(session, issue.id, text, kafka_version, system, extractor)
             error = None
         except Exception as exc:  # one failed issue must not lose the others
-            decision, decided_by = Decision(INSUFFICIENT_INFORMATION, [], []), system
+            session.rollback()
+            answered = Answered(Decision(INSUFFICIENT_INFORMATION, [], []), system)
             error = f"{type(exc).__name__}: {exc}"
+        decision = answered.decision
         items.append(
             ScanItem(
-                issue_key=issue.key,
-                url=issue_url(issue.key),
-                summary=issue.summary,
-                status=issue.status,
-                resolution=issue.resolution,
-                updated_at=issue.updated_at,
-                fix_versions=text.fix_versions,
+                **fields,
                 answer=decision.answer,
-                decided_by=decided_by,
+                decided_by=answered.decided_by,
                 evidence=decision.used,
                 dropped=decision.dropped,
+                cached=answered.cached,
                 error=error,
             )
         )

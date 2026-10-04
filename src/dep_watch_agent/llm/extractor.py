@@ -81,12 +81,23 @@ class LLMExtractor:
         chunk_chars: int = 30_000,
         max_chunks: int = 6,
         retries: int = 1,
+        model_id: str = "unknown",
     ):
         self.model = model
         self.prompt = prompt or load_prompt()
         self.chunk_chars = chunk_chars
         self.max_chunks = max_chunks
         self.retries = retries
+        self.model_id = model_id
+
+    @property
+    def version(self) -> str:
+        """Everything besides the issue text that changes what this extractor returns. Stored
+        extractions are reused only while it stays the same."""
+        return (
+            f"model={self.model_id};prompt={self.prompt.name}@{self.prompt.version};"
+            f"chunks={self.chunk_chars}x{self.max_chunks}"
+        )
 
     def extract(self, issue: IssueText) -> Extraction:
         chunks = issue_chunks(issue, self.chunk_chars)
