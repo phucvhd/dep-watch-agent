@@ -67,13 +67,14 @@ def issue_text(issue: JiraIssueRow) -> IssueText:
 
 
 def check_issue(
-    session: Session, key: str, kafka_version: str, extractor: Extractor
+    session: Session, key: str, kafka_version: str, system: str, extractor: Extractor
 ) -> CheckResult:
-    """Decide whether ``kafka_version`` is affected by issue ``key``, with ``extractor``.
+    """Decide whether ``kafka_version`` is affected by issue ``key``, with ``extractor``
+    (registered as ``system``).
 
     ``kafka_version`` must already be validated as a release (``verdict.is_release``).
     """
     issue = load_issue(session, key)
     text = issue_text(issue)
     decision = decide(text, kafka_version, extractor.extract(text))
-    return CheckResult(issue, text, kafka_version, extractor.name, decision)
+    return CheckResult(issue, text, kafka_version, system, decision)

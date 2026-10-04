@@ -123,7 +123,7 @@ def check(body: CheckRequest, session: SessionDep, systems: SystemsDep) -> Check
     if name not in systems:
         raise HTTPException(422, f"unknown system {name!r}; registered: {sorted(systems)}")
     try:
-        result = check_issue(session, body.issue_key, body.kafka_version, systems[name]())
+        result = check_issue(session, body.issue_key, body.kafka_version, name, systems[name]())
     except IssueNotFound:
         raise HTTPException(404, f"issue {body.issue_key} not synced") from None
 

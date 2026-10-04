@@ -138,14 +138,16 @@ def start_run(
 
         if dataset is None:
             client = langfuse()
-            _, metrics = run_langfuse(client, body.dataset, extractor, run_name=run_name)
+            _, metrics = run_langfuse(
+                client, body.dataset, extractor, system=body.system, run_name=run_name
+            )
             client.flush()
-            return {"run_name": run_name, "system": extractor.name, "metrics": metrics}
+            return {"run_name": run_name, "system": body.system, "metrics": metrics}
 
         results = run_local(dataset, extractor, provisional=body.provisional)
         payload = {
             "run_name": run_name,
-            "system": extractor.name,
+            "system": body.system,
             "dataset": body.dataset,
             "provisional": body.provisional,
             "metrics": compute_metrics(results),

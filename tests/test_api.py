@@ -61,7 +61,6 @@ CPU = raw_issue(
 class PhraseExtractor:
     """Cites a fact for each known phrase in the issue text, quoting the field it is in."""
 
-    name = "phrases"
     PHRASES = {
         "Regression in 3.6.0": ("3.6.0", "introduced"),
         "Works fine on 3.5.2": ("3.5.2", "unaffected"),
@@ -79,7 +78,8 @@ class PhraseExtractor:
         )
 
 
-SYSTEMS = {"phrases": PhraseExtractor}
+# Registered under two names: the name in results is the key, not anything on the class.
+SYSTEMS = {"phrases": PhraseExtractor, "phrases-2": PhraseExtractor}
 
 
 @pytest.fixture
@@ -240,6 +240,10 @@ def test_check_needs_a_specific_release(client, version):
 def test_check_missing_issue(client):
     assert check(client, "3.6.0", key="KAFKA-999").status_code == 404
     assert check(client, "3.6.0", key="not-a-key").status_code == 422
+
+
+def test_check_reports_the_registered_name(client):
+    assert check(client, "3.6.0", system="phrases-2").json()["system"] == "phrases-2"
 
 
 def test_check_unknown_system(client):
@@ -407,6 +411,17 @@ def test_provisional_run_saves_results(eval_client):
     run = eval_client.get("/eval/runs/test-set/t1").json()
     assert len(run["results"]) == 4
     assert eval_client.get("/eval/runs/test-set/t2").status_code == 404
+
+
+def test_run_is_named_after_the_registered_system(eval_client):
+    response = eval_client.post("/eval/runs", json=run_body(system="phrases-2", provisional=True))
+    job = wait(eval_client, response.json())
+
+    assert job["status"] == "succeeded", job["error"]
+    assert job["result"]["system"] == "phrases-2"
+    assert job["result"]["run_name"].startswith("phrases-2-")
+    run = eval_client.get(f"/eval/runs/test-set/{job['result']['run_name']}").json()
+    assert run["system"] == "phrases-2"
 
 
 class FakeLangfuse:
