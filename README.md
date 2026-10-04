@@ -34,6 +34,22 @@ Set `DATABASE_URL` to use a different Postgres, and `DEP_WATCH_CORS_ORIGINS` to 
 origin (see `.env.example`). Tests use
 `TEST_DATABASE_URL` if set, and each test runs in its own throwaway schema.
 
+### Web UI
+
+`frontend/` is a React + TypeScript app (Vite) over the API: new bugs for your Kafka version
+(scan results grouped by answer, each with a version ruler and the quoted sentences), checking
+one issue, browsing synced issues, and JIRA sync and eval runs.
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:5173, proxies /api to the API on :8000
+npm run gen:api    # regenerate src/api/schema.ts from /openapi.json after changing schemas.py
+npm run build      # type-check and build to dist/
+```
+
+The version you run is kept in the browser; a link with `?kafka=3.9.1` opens on that version.
+
 ### Schema migrations
 
 The schema is defined once, as SQLAlchemy models in `src/dep_watch_agent/orm.py`. Migrations

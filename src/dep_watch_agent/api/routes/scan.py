@@ -14,7 +14,15 @@ router = APIRouter(tags=["scan"])
     "/scan",
     response_model=JobOut,
     status_code=status.HTTP_202_ACCEPTED,
-    responses={409: {}, 422: {}, 503: {}},
+    responses={
+        200: {
+            "model": ScanResponse,
+            "description": "Not returned here: the ``result`` of the job once it succeeds",
+        },
+        409: {},
+        422: {},
+        503: {},
+    },
 )
 def start_scan(body: ScanRequest, jobs: JobsDep, sessions: SessionsDep, systems: SystemsDep):
     """Answer each candidate issue for ``kafka_version``: affected, not_affected or

@@ -4,7 +4,13 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
 from dep_watch_agent import __version__
-from dep_watch_agent.api.deps import JiraClientFactoryDep, JobsDep, SessionDep, SessionsDep
+from dep_watch_agent.api.deps import (
+    JiraClientFactoryDep,
+    JobsDep,
+    SessionDep,
+    SessionsDep,
+    SystemsDep,
+)
 from dep_watch_agent.api.schemas import Health, JobOut, SyncRequest, SyncState
 from dep_watch_agent.orm import SyncStateRow
 
@@ -17,6 +23,13 @@ def health(session: SessionDep) -> Health:
 
     revision = MigrationContext.configure(session.connection()).get_current_revision()
     return Health(status="ok", version=__version__, db_revision=revision)
+
+
+@router.get("/systems", response_model=list[str], tags=["ops"])
+def list_systems(systems: SystemsDep) -> list[str]:
+    """Registered systems, the default (used when a request names none) first. Empty when no
+    model is configured; ``/check`` and ``/scan`` then return 503."""
+    return list(systems)
 
 
 @router.get("/jobs", response_model=list[JobOut], tags=["jobs"])
