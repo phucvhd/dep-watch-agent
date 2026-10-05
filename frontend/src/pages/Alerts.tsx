@@ -149,16 +149,22 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
           <Triage key={tab} result={result} tab={tab} version={version} />
         </>
       ) : (
-        !running && (
-          <section className="widget w-12 empty-tile">
-            <h2>No scan of {version} yet</h2>
-            <p>
-              Scan reads the bugs updated since the day you pick and answers each for {target}.
-              The answers show up here, split into what affects you, what can't be told, and what
-              doesn't.
-            </p>
+        // Where issues come from doesn't depend on a scan: shown before one too.
+        <>
+          <section className="widget w-4">
+            <IssueSources />
           </section>
-        )
+          {!running && (
+            <section className="widget w-8 empty-tile">
+              <h2>No scan of {version} yet</h2>
+              <p>
+                Scan reads the bugs updated since the day you pick and answers each for {target}.
+                The answers show up here, split into what affects you, what can't be told, and
+                what doesn't.
+              </p>
+            </section>
+          )}
+        </>
       )}
     </div>
   )
