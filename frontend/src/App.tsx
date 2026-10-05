@@ -109,6 +109,16 @@ export function App() {
             ))}
           </nav>
 
+          <div className="sb-section watch" aria-label="Your repository">
+            <p className="watch-label">
+              {watch.repo ? 'Repository' : watch.items.length ? 'Added by hand' : 'No repository yet'}
+            </p>
+            {watch.repo && <p className="watch-repo">{watch.repo}</p>}
+            <a className="watch-change" href="#/scan/edit">
+              {watch.items.length ? 'Change' : 'Choose a repository'}
+            </a>
+          </div>
+
           <div className="sb-section status">
             <p
               title={[

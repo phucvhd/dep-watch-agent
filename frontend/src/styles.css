@@ -308,6 +308,32 @@ button:disabled {
   font-weight: 600;
 }
 
+/* The repository in the sidebar: its name and Change. Versions show in Scan's step 1. */
+.watch {
+  display: grid;
+  gap: 4px;
+}
+
+.watch-label {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.watch-repo {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+
+.watch-change {
+  margin-top: 6px;
+  font-size: 15px;
+  color: var(--ink-2);
+  width: fit-content;
+}
+
 /* A watched dependency's name and version, set large (step 1 of Scan). */
 
 
