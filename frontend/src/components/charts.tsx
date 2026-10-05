@@ -399,3 +399,118 @@ export function LineChart({
     </ChartFrame>
   )
 }
+
+export interface Segment {
+  key: string
+  label: string
+  value: number
+  color: string
+  detail?: string // shown after the count, e.g. "sync incomplete"
+}
+
+const pct = (value: number, total: number) =>
+  total ? `${Math.round((value / total) * 1000) / 10}%` : '0%'
+
+/** A donut for part-to-whole at a glance (a handful of segments, values not close), the total
+ * in the middle, each segment's share in the legend beside it. */
+export function DonutChart({
+  title,
+  segments,
+  centerLabel,
+}: {
+  title: string
+  segments: Segment[]
+  centerLabel: string
+}) {
+  const [active, setActive] = useState<number>()
+  const total = segments.reduce((sum, s) => sum + s.value, 0)
+  const size = 148
+  const r = size / 2
+  const inner = r * 0.62
+  const gapDeg = segments.filter((s) => s.value > 0).length > 1 ? 1.2 : 0 // the surface gap
+
+  const point = (deg: number, radius: number) => {
+    const rad = ((deg - 90) * Math.PI) / 180
+    return [r + radius * Math.cos(rad), r + radius * Math.sin(rad)]
+  }
+  const arc = (start: number, end: number) => {
+    const [x1, y1] = point(start, r)
+    const [x2, y2] = point(end, r)
+    const [x3, y3] = point(end, inner)
+    const [x4, y4] = point(start, inner)
+    const large = end - start > 180 ? 1 : 0
+    return `M${x1},${y1}A${r},${r} 0 ${large} 1 ${x2},${y2}L${x3},${y3}A${inner},${inner} 0 ${large} 0 ${x4},${y4}Z`
+  }
+
+  const sweeps = segments.map((s) => (total ? (s.value / total) * 360 : 0))
+  const starts = sweeps.map((_, i) => sweeps.slice(0, i).reduce((a, b) => a + b, 0))
+  const arcs = segments.map((s, i) => {
+    const sweep = sweeps[i]
+    const start = starts[i] + gapDeg / 2
+    const end = starts[i] + Math.max(sweep - gapDeg / 2, gapDeg / 2)
+    // A single full segment can't be drawn as one arc: split it in two halves.
+    const d = sweep >= 359.99 ? `${arc(0, 180)}${arc(180, 359.999)}` : arc(start, end)
+    return { s, d, sweep }
+  })
+  const shown = active === undefined ? undefined : segments[active]
+
+  return (
+    <ChartFrame
+      title={title}
+      series={[{ key: 'value', label: 'Issues', color: '', values: segments.map((s) => s.value) }]}
+      categories={segments.map((s) => s.label)}
+      categoryLabel="Source"
+    >
+      <div className="donut">
+        <svg
+          width={size}
+          height={size}
+          viewBox={`0 0 ${size} ${size}`}
+          role="img"
+          aria-label={`${title}: ${segments.map((s) => `${s.label} ${fmt(s.value)} (${pct(s.value, total)})`).join(', ')}`}
+          onPointerLeave={() => setActive(undefined)}
+        >
+          {arcs.map(({ s, d, sweep }, i) =>
+            sweep > 0 ? (
+              <path
+                key={s.key}
+                d={d}
+                style={{ fill: s.color }}
+                className={active === i ? 'donut-arc is-active' : 'donut-arc'}
+                tabIndex={0}
+                aria-label={`${s.label}: ${fmt(s.value)}, ${pct(s.value, total)}`}
+                onPointerMove={() => setActive(i)}
+                onFocus={() => setActive(i)}
+                onBlur={() => setActive(undefined)}
+              />
+            ) : null,
+          )}
+          <text className="donut-total" x={r} y={r + 2} textAnchor="middle">
+            {fmt(shown ? shown.value : total)}
+          </text>
+          <text className="donut-sub" x={r} y={r + 20} textAnchor="middle">
+            {shown ? pct(shown.value, total) : centerLabel}
+          </text>
+        </svg>
+        <ul className="donut-legend">
+          {segments.map((s, i) => (
+            <li
+              key={s.key}
+              className={active === i ? 'is-active' : undefined}
+              onPointerEnter={() => setActive(i)}
+              onPointerLeave={() => setActive(undefined)}
+            >
+              <span className="legend-swatch" style={{ background: s.color }} aria-hidden="true" />
+              <span className="donut-name">{s.label}</span>
+              <strong>{pct(s.value, total)}</strong>
+              <span className="donut-count">
+                {fmt(s.value)}
+                {s.detail ? `, ${s.detail}` : ''}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </ChartFrame>
+  )
+}

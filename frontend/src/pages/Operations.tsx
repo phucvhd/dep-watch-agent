@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, type Dependency, type EvalRunSummary, type Job } from '../api/client'
 import { ColumnChart } from '../components/charts'
 import { ErrorNote, JobLine, PageIntro } from '../components/common'
 import { formatAgo, formatDate, plural } from '../format'
-import { message, useJob, useLoad } from '../hooks'
+import { isActive, message, useJob, useLoad } from '../hooks'
 
 const METRICS: [string, string][] = [
   ['macro_f1', 'Macro F1'],
@@ -24,7 +24,7 @@ export function Operations({ dependency, systems, onSynced }: Props) {
   return (
     <div className="dash">
       <PageIntro title="Data and models" />
-      <Sync dependency={dependency} onSynced={onSynced} />
+      <Sync onSynced={onSynced} />
       <Models systems={systems} />
       <Facts dependency={dependency} />
       <ReadingTimeChart dependency={dependency} />
@@ -34,20 +34,43 @@ export function Operations({ dependency, systems, onSynced }: Props) {
   )
 }
 
-function Sync({ dependency, onSynced }: { dependency: Dependency; onSynced: () => void }) {
-  const state = useLoad(() => api.syncState(), [])
-  const [jobId, setJobId] = useState<string>()
-  const [error, setError] = useState<string>()
-  const { job } = useJob(jobId, () => {
-    state.reload()
-    onSynced()
-  })
-  const watermark = state.data?.find((s) => s.source === `jira:${dependency.project}`)
+const SOURCE_COLOR: Record<string, string> = {
+  kafka: 'var(--src-kafka)',
+  spark: 'var(--src-spark)',
+  hadoop: 'var(--src-hadoop)',
+}
 
-  async function start() {
+/** Every synced source: its issues, when it was last synced, and a sync of its own. */
+function Sync({ onSynced }: { onSynced: () => void }) {
+  const sources = useLoad(() => api.sources(), [])
+  const jobs = useLoad(() => api.jobs('sync-jira'), [])
+  const [error, setError] = useState<string>()
+  const running = (project: string) =>
+    jobs.data?.find((j) => j.params.project === project && isActive(j))
+
+  // While a sync runs, follow it; when it ends, refresh the counts.
+  const anyRunning = jobs.data?.some(isActive) ?? false
+  const reloadJobs = jobs.reload
+  const reloadSources = sources.reload
+  useEffect(() => {
+    if (!anyRunning) return
+    const timer = window.setInterval(() => {
+      reloadJobs()
+      reloadSources()
+    }, 4000)
+    return () => window.clearInterval(timer)
+  }, [anyRunning, reloadJobs, reloadSources])
+  const wasRunning = useRef(false)
+  useEffect(() => {
+    if (wasRunning.current && !anyRunning) onSynced()
+    wasRunning.current = anyRunning
+  }, [anyRunning, onSynced])
+
+  async function start(project: string) {
     setError(undefined)
     try {
-      setJobId((await api.startSync(dependency.project)).id)
+      await api.startSync(project)
+      jobs.reload()
     } catch (e) {
       setError(message(e))
     }
@@ -56,28 +79,35 @@ function Sync({ dependency, onSynced }: { dependency: Dependency; onSynced: () =
   return (
     <section className="widget w-4" aria-labelledby="sync-title">
       <h2 id="sync-title" className="widget-title">
-        Issue tracker
+        Issue trackers
       </h2>
-      <p className="pane-lead">
-        <a href={dependency.tracker_url} target="_blank" rel="noreferrer">
-          {dependency.name} JIRA
-        </a>
-        {watermark ? `, synced ${formatAgo(watermark.watermark)}` : ', not synced yet'}
-      </p>
-      <button onClick={start} disabled={job?.status === 'running'}>
-        Sync now
-      </button>
-      <ErrorNote>{error ?? state.error}</ErrorNote>
-      {job && (
-        <JobLine
-          job={job}
-          describe={(j: Job) =>
-            j.status === 'succeeded'
-              ? `Synced ${plural(j.progress, 'issue')}.`
-              : `${plural(j.progress, 'issue')} synced so far.`
-          }
-        />
-      )}
+      <ul className="source-list">
+        {sources.data?.map((src) => {
+          const job = running(src.project)
+          return (
+            <li key={src.dependency}>
+              <span
+                className="legend-swatch"
+                style={{ background: SOURCE_COLOR[src.dependency] ?? 'var(--ink-3)' }}
+                aria-hidden="true"
+              />
+              <span className="source-name">{src.name}</span>
+              <button onClick={() => start(src.project)} disabled={Boolean(job)}>
+                {job ? 'Syncing…' : 'Sync'}
+              </button>
+              <span className="source-meta">
+                {src.issues.toLocaleString()} issues
+                {job
+                  ? `, ${plural(job.progress, 'issue')} synced so far`
+                  : src.synced_at
+                    ? `, synced ${formatAgo(src.synced_at)}`
+                    : ', not synced yet'}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+      <ErrorNote>{error ?? sources.error}</ErrorNote>
     </section>
   )
 }
@@ -108,7 +138,7 @@ function ReadingTimeChart({ dependency }: { dependency: Dependency }) {
         categories={r.bins.map((b) => (b.to_s == null ? `${b.from_s} s+` : `${b.from_s}–${b.to_s} s`))}
         categoryLabel="Reading time"
         series={[
-          { key: 'issues', label: 'Issues', color: 'var(--series-a)', values: r.bins.map((b) => b.count) },
+          { key: 'issues', label: 'Issues', color: 'var(--ink-2)', values: r.bins.map((b) => b.count) },
         ]}
         height={170}
       />

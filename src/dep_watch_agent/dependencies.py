@@ -1,7 +1,8 @@
 """The dependencies the system knows about.
 
-``DEPENDENCIES`` are the ones that can be watched: their issues are synced and answered. Only
-Apache Kafka for now (see CLAUDE.md, out of scope: other dependencies).
+``DEPENDENCIES`` are the ones whose issues are synced. Only ``watchable`` ones are answered
+(scans, checks, the eval): the prompt, the version scheme and the ground truth are Kafka's.
+Spark and Hadoop are synced for the overview only, a scope decision of 2026-10-04.
 
 ``FAMILIES`` names the artifacts a repository scan recognizes, so a scan can say "Apache Spark
 3.5.1" instead of listing ``org.apache.spark:spark-core_2.12`` and its siblings. A family is
@@ -17,6 +18,7 @@ class Dependency:
     name: str
     project: str  # the JIRA project its issues are synced from
     tracker_url: str
+    watchable: bool = True  # answered for a version, not only synced
 
 
 DEPENDENCIES = (
@@ -25,6 +27,20 @@ DEPENDENCIES = (
         name="Apache Kafka",
         project="KAFKA",
         tracker_url="https://issues.apache.org/jira/projects/KAFKA",
+    ),
+    Dependency(
+        id="spark",
+        name="Apache Spark",
+        project="SPARK",
+        tracker_url="https://issues.apache.org/jira/projects/SPARK",
+        watchable=False,
+    ),
+    Dependency(
+        id="hadoop",
+        name="Apache Hadoop",
+        project="HADOOP",  # Hadoop Common; HDFS, YARN and MapReduce are projects of their own
+        tracker_url="https://issues.apache.org/jira/projects/HADOOP",
+        watchable=False,
     ),
 )
 
@@ -39,7 +55,7 @@ class Family:
 
     @property
     def watchable(self) -> bool:
-        return any(d.id == self.id for d in DEPENDENCIES)
+        return any(d.id == self.id and d.watchable for d in DEPENDENCIES)
 
     def matches_group(self, group: str) -> bool:
         return any(group == g or (g.endswith(".") and group.startswith(g)) for g in self.groups)

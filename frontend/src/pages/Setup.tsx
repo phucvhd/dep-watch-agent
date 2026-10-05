@@ -223,7 +223,7 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
         </section>
       )}
 
-      <ManualAdd dependencies={dependencies} onWatch={onWatch} />
+      <ManualAdd dependencies={dependencies.filter((d) => d.watchable)} onWatch={onWatch} />
     </div>
   )
 }

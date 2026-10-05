@@ -305,6 +305,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/stats/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sources
+         * @description Synced issues per dependency, in DEPENDENCIES order: where the issues come from.
+         */
+        get: operations["sources_stats_sources_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/stats/issues/monthly": {
         parameters: {
             query?: never;
@@ -566,6 +586,11 @@ export interface components {
             project: string;
             /** Tracker Url */
             tracker_url: string;
+            /**
+             * Watchable
+             * @description Answered for a version; the others are only synced
+             */
+            watchable: boolean;
         };
         /** DetectedDependencyOut */
         DetectedDependencyOut: {
@@ -1077,6 +1102,26 @@ export interface components {
             cached: number;
             /** Items */
             items: components["schemas"]["ScanItemOut"][];
+        };
+        /** SourceCount */
+        SourceCount: {
+            /** Dependency */
+            dependency: string;
+            /** Name */
+            name: string;
+            /** Project */
+            project: string;
+            /** Issues */
+            issues: number;
+            /** Bugs */
+            bugs: number;
+            /** Open Bugs */
+            open_bugs: number;
+            /**
+             * Synced At
+             * @description The sync watermark; None if never synced
+             */
+            synced_at: string | null;
         };
         /** StoredAnswer */
         StoredAnswer: {
@@ -1651,6 +1696,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sources_stats_sources_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceCount"][];
                 };
             };
         };

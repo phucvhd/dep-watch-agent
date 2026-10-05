@@ -51,7 +51,9 @@ Pages: **New bugs** (a scan as a triage list: affects you / can't tell / doesn't
 each with its version ruler and quoted evidence), **Issues** (every synced issue with counts;
 the selected one shows its answer for your version when that needs no model call, from the fix
 versions or stored facts via `GET /issues/{key}/answer`, and otherwise offers to read it), and
-**Data and models** (JIRA sync, models, eval runs, jobs).
+**Data and models** (a sync per issue tracker, models, eval runs, jobs). Besides Kafka, Spark
+and Hadoop Common issues are synced for the overview (the dashboard's issues-by-source donut);
+only Kafka is answered for a version.
 
 ```bash
 cd frontend

@@ -137,8 +137,18 @@ def test_cors_allows_the_frontend(client):
 
 
 def test_dependencies_are_listed(client):
-    [kafka] = client.get("/dependencies").json()
+    kafka, spark, hadoop = client.get("/dependencies").json()
     assert (kafka["id"], kafka["name"], kafka["project"]) == ("kafka", "Apache Kafka", "KAFKA")
+    assert kafka["watchable"]
+    assert (spark["project"], spark["watchable"]) == ("SPARK", False)  # synced, not answered
+    assert (hadoop["project"], hadoop["watchable"]) == ("HADOOP", False)
+
+
+def test_sources_count_issues_per_dependency(client):
+    kafka, spark, hadoop = client.get("/stats/sources").json()
+    assert (kafka["issues"], kafka["bugs"], kafka["open_bugs"]) == (2, 2, 1)
+    assert (spark["name"], spark["issues"], spark["synced_at"]) == ("Apache Spark", 0, None)
+    assert hadoop["dependency"] == "hadoop"
 
 
 def test_repo_scan_reads_manifests_only(client):

@@ -23,6 +23,7 @@ class DependencyOut(BaseModel):
     name: str
     project: str = Field(description="Pass as `project` to /versions, /issues, /scan, /sync/jira")
     tracker_url: str
+    watchable: bool = Field(description="Answered for a version; the others are only synced")
 
 
 # --- repository scan -----------------------------------------------------------------------
@@ -162,6 +163,16 @@ class IssueStats(BaseModel):
     fixed_bugs: int
     read: int = Field(description="Issues whose text a model has read (facts stored)")
     newest: datetime | None = Field(description="The most recent update among synced issues")
+
+
+class SourceCount(BaseModel):
+    dependency: str
+    name: str
+    project: str
+    issues: int
+    bugs: int
+    open_bugs: int
+    synced_at: datetime | None = Field(description="The sync watermark; None if never synced")
 
 
 class MonthCount(BaseModel):

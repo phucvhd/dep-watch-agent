@@ -89,8 +89,8 @@ export function Issues({ dependency, version, systems, issueKey }: Props) {
               })
             }
             series={[
-              { key: 'filed', label: 'Filed', color: 'var(--series-a)', values: monthly.data.map((m) => m.filed) },
-              { key: 'fixed', label: 'Fixed', color: 'var(--series-b)', values: monthly.data.map((m) => m.fixed) },
+              { key: 'filed', label: 'Filed', color: 'var(--ink)', values: monthly.data.map((m) => m.filed) },
+              { key: 'fixed', label: 'Fixed', color: 'var(--ink-3)', values: monthly.data.map((m) => m.fixed) },
             ]}
           />
         </section>

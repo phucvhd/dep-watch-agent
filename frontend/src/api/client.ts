@@ -18,6 +18,7 @@ export type CheckResponse = Schemas['CheckResponse']
 export type StoredAnswer = Schemas['StoredAnswer']
 export type IssueStats = Schemas['IssueStats']
 export type MonthCount = Schemas['MonthCount']
+export type SourceCount = Schemas['SourceCount']
 export type ReadingTime = Schemas['ReadingTime']
 export type ScanRequest = Schemas['ScanRequest']
 export type ScanResponse = Schemas['ScanResponse']
@@ -112,6 +113,7 @@ export const api = {
   issueStats: (project: string) => request<IssueStats>(`/stats/issues${query({ project })}`),
   monthly: (project: string, months = 24) =>
     request<MonthCount[]>(`/stats/issues/monthly${query({ project, months })}`),
+  sources: () => request<SourceCount[]>('/stats/sources'),
   readingTime: (project: string) => request<ReadingTime>(`/stats/reading${query({ project })}`),
   startScan: (body: ScanRequest) => post<Job>('/scan', body),
   jobs: (kind?: string) => request<Job[]>(`/jobs${query({ kind })}`),

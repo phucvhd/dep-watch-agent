@@ -7,13 +7,51 @@ from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
 from dep_watch_agent.api.deps import SessionDep
-from dep_watch_agent.api.schemas import MonthCount, ProjectKey, ReadingTime, ReadingTimeBin
-from dep_watch_agent.orm import ExtractionRow, JiraIssueRow
+from dep_watch_agent.api.schemas import (
+    MonthCount,
+    ProjectKey,
+    ReadingTime,
+    ReadingTimeBin,
+    SourceCount,
+)
+from dep_watch_agent.dependencies import DEPENDENCIES
+from dep_watch_agent.orm import ExtractionRow, JiraIssueRow, SyncStateRow
 
 router = APIRouter(tags=["stats"])
 
 READING_BIN_SECONDS = 15
 READING_BINS = 8  # 0-15 s ... 105-120 s, and the last bin holds everything slower
+
+
+@router.get("/stats/sources", response_model=list[SourceCount])
+def sources(session: SessionDep) -> list[SourceCount]:
+    """Synced issues per dependency, in DEPENDENCIES order: where the issues come from."""
+    projects = [d.project for d in DEPENDENCIES]
+    is_bug = JiraIssueRow.issue_type == "Bug"
+    rows = session.execute(
+        select(
+            JiraIssueRow.project,
+            func.count(),
+            func.count().filter(is_bug),
+            func.count().filter(is_bug, JiraIssueRow.resolution.is_(None)),
+        )
+        .where(JiraIssueRow.project.in_(projects))
+        .group_by(JiraIssueRow.project)
+    )
+    counts = {project: (issues, bugs, open_bugs) for project, issues, bugs, open_bugs in rows}
+    watermarks = dict(session.execute(select(SyncStateRow.source, SyncStateRow.watermark)).all())
+    return [
+        SourceCount(
+            dependency=d.id,
+            name=d.name,
+            project=d.project,
+            issues=counts.get(d.project, (0, 0, 0))[0],
+            bugs=counts.get(d.project, (0, 0, 0))[1],
+            open_bugs=counts.get(d.project, (0, 0, 0))[2],
+            synced_at=watermarks.get(f"jira:{d.project}"),
+        )
+        for d in DEPENDENCIES
+    ]
 
 
 @router.get("/stats/issues/monthly", response_model=list[MonthCount])

@@ -1,7 +1,9 @@
 import { useContext } from 'react'
 import type { ScanResponse } from '../api/client'
 import { ANSWER_TEXT } from '../format'
-import { ColumnChart, type Series } from './charts'
+import { api } from '../api/client'
+import { useLoad } from '../hooks'
+import { ColumnChart, DonutChart, type Series } from './charts'
 import { VersionOrder } from './versionOrder'
 
 // Stacked bottom to top in this order: orange and amber are never adjacent (the validated
@@ -89,6 +91,34 @@ export function EvidenceByLine({ result, version }: { result: ScanResponse; vers
       colorOf={(i) => (i === yourIndex ? 'var(--ink)' : 'var(--ink-3)')}
       marker={{ index: yourIndex, label: 'yours' }}
       labelSpacing={30}
+      height={170}
+    />
+  )
+}
+
+/** Each source's identity color (validated all-pairs; see styles.css). */
+const SOURCE_COLOR: Record<string, string> = {
+  kafka: 'var(--src-kafka)',
+  spark: 'var(--src-spark)',
+  hadoop: 'var(--src-hadoop)',
+}
+
+/** Where the synced issues come from. */
+export function IssueSources() {
+  const sources = useLoad(() => api.sources(), [])
+  if (!sources.data) return null
+  return (
+    <DonutChart
+      title="Synced issues by source"
+      centerLabel="issues"
+      segments={sources.data.map((s) => ({
+        key: s.dependency,
+        label: s.name,
+        value: s.issues,
+        color: SOURCE_COLOR[s.dependency] ?? 'var(--ink-3)',
+        // The watermark is saved when a sync completes: until then the share is a floor.
+        detail: s.synced_at ? undefined : 'sync incomplete',
+      }))}
     />
   )
 }
