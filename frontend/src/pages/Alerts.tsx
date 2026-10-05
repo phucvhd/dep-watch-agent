@@ -52,33 +52,12 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
   const tab: Answer = chosenTab ?? (affected > 0 ? 'affected' : 'insufficient_information')
   const target = `${dependency.name} ${version}`
 
-  // The status tile's color is the answer: warm when something affects you, cool when nothing
-  // does, neutral before a scan.
-  const tone = !result ? 'idle' : affected > 0 ? 'hit' : 'calm'
-  const headline = running
-    ? `Reading new bugs against ${target}.`
-    : !result
-      ? `Which new bugs affect ${target}?`
-      : affected === 0
-        ? `Nothing new is shown to affect ${target}.`
-        : `${plural(affected, 'bug')} ${affected === 1 ? 'affects' : 'affect'} ${target}.`
-
   return (
     <>
       <StepHead n={2} title="Scan" />
-      <section className={`widget w-8 status-tile hero-${tone}`} aria-live="polite">
-        <h1 className="hero-line">{headline}</h1>
-        {result && (
-          <p className="status-sub">
-            {plural(result.scanned, 'bug')}
-            {result.since ? ` updated since ${formatDay(result.since)}` : ''}, read with{' '}
-            {result.system}.
-          </p>
-        )}
-      </section>
-      <section className="widget w-4" aria-labelledby="scan-title">
+      <section className="widget w-12 scan-widget" aria-labelledby="scan-title">
         <h2 id="scan-title" className="widget-title">
-          Scan upstream
+          Scan upstream for {target}
         </h2>
         <form className="toolbar" onSubmit={startScan}>
           <label>
@@ -113,7 +92,10 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
         )}
         {result && (
           <p className="widget-foot">
-            {result.cached > 0 && `${result.cached} answered from stored facts. `}
+            Last scan: {plural(result.scanned, 'bug')}
+            {result.since ? ` updated since ${formatDay(result.since)}` : ''}, read with{' '}
+            {result.system}
+            {result.cached > 0 ? `, ${result.cached} from stored facts` : ''}.{' '}
             {result.candidates_total > result.scanned &&
               `${plural(result.candidates_total - result.scanned, 'more bug')} matched; raise the limit. `}
             {result.errors > 0 && `${plural(result.errors, 'issue')} couldn't be read.`}

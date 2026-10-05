@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Dependency } from '../api/client'
-import { PageIntro, StepHead } from '../components/common'
+import { PageIntro, StepHead, type Tone } from '../components/common'
 import type { WatchItem } from '../hooks'
 import { Alerts } from './Alerts'
 import { Setup } from './Setup'
@@ -18,6 +18,7 @@ interface Props {
   onScanned: () => void
   /** Open step 1 for editing (the sidebar's Change, or an old #/setup link). */
   editing?: boolean
+  tone: Tone
 }
 
 /** The flow, top to bottom: 1 choose the repository, 2 scan, 3 the results. */
@@ -29,7 +30,7 @@ export function ScanFlow(props: Props) {
 
   return (
     <div className="dash">
-      <PageIntro title="Scan" />
+      <PageIntro title="Scan" tone={props.tone} />
 
       <StepHead n={1} title="Repository" />
       {editing ? (

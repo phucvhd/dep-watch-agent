@@ -374,12 +374,17 @@ button:disabled {
   margin-top: auto;
   border-bottom: 0;
   border-top: 1px solid var(--line);
+  padding-top: 14px;
+  padding-bottom: 14px;
   color: var(--ink-2);
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .status p {
-  margin: 4px 0;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1494,20 +1499,41 @@ main {
   height: 38px;
 }
 
-/* The page title, compact so the widgets lead. */
+/* Each page's header: the title on the gradient band (the status, on Scan). Text on it stays
+   dark in both themes, for contrast. */
 .dash > .intro {
   grid-column: 1 / -1;
   display: flex;
-  align-items: baseline;
+  align-items: flex-end;
+  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 6px 20px;
-  padding: 0 4px;
+  gap: 12px 24px;
+  min-height: 128px;
+  padding: 24px 28px;
   border: 0;
+  border-radius: 18px;
+  color: #0e0e0e;
 }
 
 .dash > .intro h1 {
-  font-size: 32px;
-  letter-spacing: -0.035em;
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: #0e0e0e;
+}
+
+.dash > .intro .source-switch {
+  background: rgb(255 255 255 / 0.72);
+  border-color: transparent;
+}
+
+.dash > .intro .source-switch button {
+  color: #3a3a3a;
+}
+
+.dash > .intro .source-switch button[aria-selected='true'] {
+  background: #0e0e0e;
+  color: #ffffff;
 }
 
 .dash > .intro .intro-text {
@@ -1519,29 +1545,6 @@ main {
   margin: 0;
 }
 
-/* The status tile: the answer on the gradient, which is the status itself. */
-.status-tile {
-  min-height: 236px;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 28px 32px;
-  color: #0e0e0e;
-  border-color: transparent;
-  align-self: stretch;
-}
-
-.status-tile .hero-line {
-  font-size: 48px;
-  max-width: 17ch;
-}
-
-.status-sub {
-  margin: 0;
-  font-size: 15px;
-  color: rgb(14 14 14 / 0.7);
-}
 
 /* Counts as tiles; the three answers double as the filter for the list below. */
 .count-tiles {
@@ -2254,13 +2257,6 @@ main {
   .w-4 {
     grid-column: 1 / -1;
   }
-  .status-tile {
-    min-height: 180px;
-    padding: 22px;
-  }
-  .status-tile .hero-line {
-    font-size: 32px;
-  }
   .count-tiles {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
@@ -2309,4 +2305,25 @@ main {
   .progress-steps li.current::before {
     animation: none;
   }
+}
+
+/* Step 2: one tile, the form on one row with the title. */
+.scan-widget {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 32px;
+}
+
+.scan-widget .widget-title {
+  flex: 1 1 220px;
+  margin: 0 0 10px;
+  font-size: 17px;
+}
+
+.scan-widget .widget-foot,
+.scan-widget .note,
+.scan-widget .job-line {
+  flex-basis: 100%;
+  margin-top: 4px;
 }

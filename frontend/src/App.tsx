@@ -167,6 +167,7 @@ export function App() {
               latestScanId={latestScan?.id}
               onScanned={scans.reload}
               editing={route.key === 'edit'}
+              tone={affected === undefined ? 'idle' : affected > 0 ? 'hit' : 'calm'}
             />
           ) : route.page === 'dashboard' ? (
             <Dashboard

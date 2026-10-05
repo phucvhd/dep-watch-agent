@@ -101,7 +101,9 @@ function Sync({ onSynced }: { onSynced: () => void }) {
                   ? `, ${plural(job.progress, 'issue')} synced so far`
                   : src.synced_at
                     ? `, synced ${formatAgo(src.synced_at)}`
-                    : ', not synced yet'}
+                    : src.issues > 0
+                      ? ', sync incomplete'
+                      : ', not synced yet'}
               </span>
             </li>
           )
