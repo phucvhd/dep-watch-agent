@@ -9,8 +9,11 @@
   --canvas: #f3f3f0; /* behind widgets */
   --line: #e6e6e3;
   --ink: #0e0e0e;
-  --ink-2: #6b6b6b;
-  --ink-3: #9a9a9a;
+  /* Supporting text. Both clear WCAG AA (4.5:1) on every surface they sit on: white tiles,
+     --bg-soft rows and the --canvas behind tiles. The old #9a9a9a was 2.5-2.8:1. */
+  --ink-2: #545454; /* 6.6-7.4:1 */
+  --ink-3: #6b6b6b; /* 4.8-5.3:1 */
+  --mark-muted: #c2c2c2; /* de-emphasized chart marks: not text, so it stays light */
 
   /* Answer colors, validated as a categorical set (dataviz validate_palette.js) in the order
      affected, not_affected, insufficient: orange and amber are never adjacent in a chart. */
@@ -43,8 +46,9 @@
     --canvas: #080808;
     --line: #262626;
     --ink: #f2f2f2;
-    --ink-2: #a3a3a3;
-    --ink-3: #737373;
+    --ink-2: #b8b8b8; /* 9-10:1 */
+    --ink-3: #9c9c9c; /* 6.7-7.3:1; the old #737373 was 3.9-4.2:1 */
+    --mark-muted: #4a4a4a;
     --hit: #d95926;
     --hit-text: #ff8a50;
     --unknown: #c98500;

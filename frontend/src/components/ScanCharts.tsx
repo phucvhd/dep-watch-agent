@@ -87,9 +87,9 @@ export function EvidenceByLine({ result, version }: { result: ScanResponse; vers
       categories={lines}
       categoryLabel="Release line"
       series={[
-        { key: 'issues', label: 'Issues', color: 'var(--ink-3)', values: lines.map((l) => counts.get(l)!) },
+        { key: 'issues', label: 'Issues', color: 'var(--mark-muted)', values: lines.map((l) => counts.get(l)!) },
       ]}
-      colorOf={(i) => (i === yourIndex ? 'var(--ink)' : 'var(--ink-3)')}
+      colorOf={(i) => (i === yourIndex ? 'var(--ink)' : 'var(--mark-muted)')}
       marker={{ index: yourIndex, label: 'yours' }}
       labelSpacing={30}
       height={170}

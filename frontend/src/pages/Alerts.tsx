@@ -4,7 +4,7 @@ import { IssueDetail, IssueRow } from '../components/IssueResult'
 import { BugsByDay, EvidenceByLine } from '../components/ScanCharts'
 import { RulerKey } from '../components/VersionRuler'
 import { ErrorNote, JobLine, StepHead } from '../components/common'
-import { ANSWER_TEXT, formatDay, plural } from '../format'
+import { ANSWER_TEXT, plural } from '../format'
 import { isActive, message, useJob } from '../hooks'
 
 const TABS: Answer[] = ['affected', 'insufficient_information', 'not_affected']
@@ -90,16 +90,8 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
             }
           />
         )}
-        {result && (
-          <p className="widget-foot">
-            Last scan: {plural(result.scanned, 'bug')}
-            {result.since ? ` updated since ${formatDay(result.since)}` : ''}, read with{' '}
-            {result.system}
-            {result.cached > 0 ? `, ${result.cached} from stored facts` : ''}.{' '}
-            {result.candidates_total > result.scanned &&
-              `${plural(result.candidates_total - result.scanned, 'more bug')} matched; raise the limit. `}
-            {result.errors > 0 && `${plural(result.errors, 'issue')} couldn't be read.`}
-          </p>
+        {result && result.errors > 0 && (
+          <ErrorNote>{plural(result.errors, 'issue')} couldn't be read.</ErrorNote>
         )}
       </section>
 
