@@ -15,7 +15,7 @@ opened here). Supported:
 A version that can't be resolved is reported as ``None`` rather than guessed (a range such as
 ``>=2.0`` or ``^18.3.1`` is not a version); the dependency is still listed, and a lockfile's
 exact version replaces it when one is sent. Versions are strings as declared; whether one is a
-release is decided by ``verdict.is_release``, and nothing here compares versions.
+release is decided by the family's version scheme, and nothing here compares versions.
 """
 
 import json
@@ -27,7 +27,6 @@ from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
 from dep_watch_agent.dependencies import Family, family_for, family_for_image
-from dep_watch_agent.verdict import is_release
 
 
 @dataclass(frozen=True)
@@ -153,7 +152,7 @@ def _watchability(family: Family | None, version: str | None) -> tuple[bool, str
         return False, "Not watched yet"
     if version is None:
         return False, "Version not found in the manifests"
-    if not is_release(version):
+    if not family.scheme.is_release(version):
         return False, f"{version} isn't a release this system knows"
     return True, None
 

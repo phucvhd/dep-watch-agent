@@ -100,11 +100,11 @@ before landing; a test fails when there is more than one head.
 `POST /sync/jira` starts a background job that pulls issues with their affected versions, fix versions, components and comments
 from `issues.apache.org` anonymously. The first run fetches all ~20k KAFKA issues (about
 7 minutes with the default 1 s delay between requests); later runs fetch only issues updated
-since the previous run. Send `{"full": true}` to re-sync everything. Poll `GET /jobs/{id}` for
+since the previous run. Send `{"project": "KAFKA", "full": true}` to re-sync everything. Poll `GET /jobs/{id}` for
 progress (issues synced so far) and the result; `GET /sync/state` shows the watermark.
 
 ```bash
-curl -XPOST localhost:8000/sync/jira -H 'content-type: application/json' -d '{}'
+curl -XPOST localhost:8000/sync/jira -H 'content-type: application/json' -d '{"project": "KAFKA"}'
 ```
 
 ### The LLM system
@@ -129,7 +129,7 @@ Langfuse when its keys are set.
 
 ```bash
 curl -XPOST localhost:8000/check -H 'content-type: application/json' \
-  -d '{"issue_key": "KAFKA-15417", "kafka_version": "3.5.1"}'
+  -d '{"issue_key": "KAFKA-15417", "version": "3.5.1"}'
 ```
 
 The answer is `affected`, `not_affected` or `insufficient_information`, with the cited facts it
@@ -142,7 +142,7 @@ put the version past the fix, the answer is `not_affected` without a model call
 
 ```bash
 curl -XPOST localhost:8000/scan -H 'content-type: application/json' \
-  -d '{"kafka_version": "3.9.1", "since": "2026-09-27T00:00:00Z", "limit": 200}'
+  -d '{"project": "KAFKA", "version": "3.9.1", "since": "2026-09-27T00:00:00Z", "limit": 200}'
 ```
 
 A background job answers every candidate issue for the version: bugs (not duplicates, invalid

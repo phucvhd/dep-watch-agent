@@ -352,7 +352,7 @@ function VersionAnswer({
     setReading(true)
     setError(undefined)
     try {
-      setRead(await api.check({ issue_key: issueKey, kafka_version: asked }))
+      setRead(await api.check({ issue_key: issueKey, version: asked }))
     } catch (e) {
       setError(message(e))
     } finally {

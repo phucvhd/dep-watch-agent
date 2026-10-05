@@ -186,8 +186,8 @@ export interface paths {
         };
         /**
          * List Versions
-         * @description Oldest first, ordered by the version module (3.9.0 before 3.10.0). Names that don't
-         *     parse as versions come last.
+         * @description Oldest first, ordered by the version module in the project's scheme (3.9.0 before
+         *     3.10.0). Names that don't parse as versions come last.
          */
         get: operations["list_versions_versions_get"];
         put?: never;
@@ -209,8 +209,9 @@ export interface paths {
         put?: never;
         /**
          * Check
-         * @description Is ``kafka_version`` affected by the issue? Decided by code from cited facts; the answer
-         *     may be ``insufficient_information``. 503 until a system is registered.
+         * @description Is ``version`` affected by the issue? Decided by code from cited facts; the answer may be
+         *     ``insufficient_information``. 422 when the issue's dependency isn't answered or the version
+         *     isn't one of its releases; 503 until a system is registered.
          */
         post: operations["check_check_post"];
         delete?: never;
@@ -228,9 +229,9 @@ export interface paths {
         };
         /**
          * Stored Answer
-         * @description The answer for ``kafka_version`` if it needs no model call: the fix versions settle it,
-         *     or the system's facts for this issue are stored. Otherwise ``answered`` is false and
-         *     ``POST /check`` reads the issue.
+         * @description The answer for ``version`` if it needs no model call: the fix versions settle it, or the
+         *     system's facts for this issue are stored. Otherwise ``answered`` is false and ``POST /check``
+         *     reads the issue.
          */
         get: operations["stored_answer_issues__key__answer_get"];
         put?: never;
@@ -272,10 +273,11 @@ export interface paths {
         put?: never;
         /**
          * Start Scan
-         * @description Answer each candidate issue for ``kafka_version``: affected, not_affected or
+         * @description Answer each candidate issue of ``project`` for ``version``: affected, not_affected or
          *     insufficient_information, with cited facts and a link. Poll ``/jobs/{id}``; ``progress``
          *     counts issues answered, and ``result`` is a ``ScanResponse``. One scan per system at a
-         *     time, since they share the model server.
+         *     time, since they share the model server. 422 when the project's dependency isn't answered
+         *     or the version isn't one of its releases.
          */
         post: operations["start_scan_scan_post"];
         delete?: never;
@@ -478,10 +480,11 @@ export interface components {
             /** Issue Key */
             issue_key: string;
             /**
-             * Kafka Version
+             * Version
+             * @description A release, in the scheme of the issue's dependency
              * @example 3.6.1
              */
-            kafka_version: string;
+            version: string;
             /**
              * System
              * @description Default: the first registered system
@@ -496,8 +499,8 @@ export interface components {
             url: string;
             /** Summary */
             summary: string;
-            /** Kafka Version */
-            kafka_version: string;
+            /** Version */
+            version: string;
             /**
              * Answer
              * @enum {string}
@@ -1044,15 +1047,17 @@ export interface components {
         /** ScanRequest */
         ScanRequest: {
             /**
-             * Kafka Version
+             * Project
+             * @description The dependency's project
+             * @example KAFKA
+             */
+            project: string;
+            /**
+             * Version
+             * @description A release, in the dependency's scheme
              * @example 3.9.1
              */
-            kafka_version: string;
-            /**
-             * Project
-             * @default KAFKA
-             */
-            project?: string;
+            version: string;
             /**
              * Since
              * @description Only issues updated since then, e.g. the last scan (alerting)
@@ -1076,8 +1081,8 @@ export interface components {
          *     insufficient_information, then not_affected; newest first within each.
          */
         ScanResponse: {
-            /** Kafka Version */
-            kafka_version: string;
+            /** Version */
+            version: string;
             /** System */
             system: string;
             /** Since */
@@ -1138,9 +1143,9 @@ export interface components {
         SyncRequest: {
             /**
              * Project
-             * @default KAFKA
+             * @example KAFKA
              */
-            project?: string;
+            project: string;
             /**
              * Full
              * @description Ignore the watermark and re-sync every issue
@@ -1389,8 +1394,8 @@ export interface operations {
     };
     list_issues_issues_get: {
         parameters: {
-            query?: {
-                project?: string;
+            query: {
+                project: string;
                 /** @description Issue key, or text in the summary */
                 q?: string | null;
                 issue_type?: string | null;
@@ -1468,8 +1473,8 @@ export interface operations {
     };
     list_versions_versions_get: {
         parameters: {
-            query?: {
-                project?: string;
+            query: {
+                project: string;
                 released?: boolean | null;
             };
             header?: never;
@@ -1546,7 +1551,7 @@ export interface operations {
     stored_answer_issues__key__answer_get: {
         parameters: {
             query: {
-                kafka_version: string;
+                version: string;
                 system?: string | null;
             };
             header?: never;
@@ -1584,8 +1589,8 @@ export interface operations {
     };
     issue_stats_stats_issues_get: {
         parameters: {
-            query?: {
-                project?: string;
+            query: {
+                project: string;
             };
             header?: never;
             path?: never;
@@ -1722,8 +1727,8 @@ export interface operations {
     };
     monthly_stats_issues_monthly_get: {
         parameters: {
-            query?: {
-                project?: string;
+            query: {
+                project: string;
                 months?: number;
             };
             header?: never;
@@ -1754,8 +1759,8 @@ export interface operations {
     };
     reading_time_stats_reading_get: {
         parameters: {
-            query?: {
-                project?: string;
+            query: {
+                project: string;
             };
             header?: never;
             path?: never;

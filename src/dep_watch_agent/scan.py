@@ -1,4 +1,4 @@
-"""Which synced issues affect one pinned Kafka version? The alerting flow, end to end.
+"""Which synced issues affect one pinned version? The alerting flow, end to end.
 
 Tier 1 (SQL, no LLM): bugs whose resolution doesn't say they weren't real, optionally only
 those updated since a date (this week's issues), newest first. Then each issue is answered by
@@ -17,6 +17,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from dep_watch_agent.check import Answered, answer_issue, issue_text, issue_url
+from dep_watch_agent.dependencies import Dependency
 from dep_watch_agent.eval.runner import Extractor
 from dep_watch_agent.orm import JiraIssueRow
 from dep_watch_agent.verdict import (
@@ -64,7 +65,7 @@ class ScanItem:
 
 @dataclass(frozen=True)
 class ScanResult:
-    kafka_version: str
+    version: str
     system: str
     since: datetime | None
     candidates_total: int
@@ -100,18 +101,18 @@ def candidates_query(project: str, since: datetime | None):
 
 def scan_version(
     session: Session,
-    kafka_version: str,
+    dependency: Dependency,
+    version: str,
     system: str,
     extractor: Extractor,
     *,
-    project: str = "KAFKA",
     since: datetime | None = None,
     limit: int | None = None,
     on_issue: Callable[[int], None] | None = None,
 ) -> ScanResult:
-    """Answer every candidate issue (newest first, at most ``limit``) for ``kafka_version``,
-    which must already be validated as a release."""
-    stmt = candidates_query(project, since)
+    """Answer every candidate issue of ``dependency`` (newest first, at most ``limit``) for
+    ``version``, which must already be validated (``check.answerable``)."""
+    stmt = candidates_query(dependency.project, since)
     total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     issues = session.scalars(
         stmt.order_by(JiraIssueRow.updated_at.desc(), JiraIssueRow.id.desc())
@@ -133,7 +134,9 @@ def scan_version(
             "fix_versions": text.fix_versions,
         }
         try:
-            answered = answer_issue(session, issue.id, text, kafka_version, system, extractor)
+            answered = answer_issue(
+                session, issue.id, text, version, dependency.scheme, system, extractor
+            )
             assert answered is not None  # read=True always answers
             error = None
         except Exception as exc:  # one failed issue must not lose the others
@@ -156,4 +159,4 @@ def scan_version(
             on_issue(done)
 
     items.sort(key=lambda i: REPORT_ORDER.get(i.answer, 2))  # stable: newest first within
-    return ScanResult(kafka_version, system, since, total, items)
+    return ScanResult(version, system, since, total, items)

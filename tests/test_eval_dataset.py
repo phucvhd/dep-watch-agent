@@ -143,8 +143,8 @@ def test_item_input_is_only_text_and_config(written):
     items = {i["id"]: i for i in langfuse_items(load_dataset(written))}
 
     item = items["KAFKA-2@3.7.1"]
-    assert sorted(item["input"]) == ["comments", "description", "kafka_version", "summary"]
-    assert item["input"]["kafka_version"] == "3.7.1"
+    assert sorted(item["input"]) == ["comments", "description", "summary", "version"]
+    assert item["input"]["version"] == "3.7.1"
     assert item["expected_output"] == {"answer": INSUFFICIENT_INFORMATION}
     assert item["metadata"]["metadata_answer"] == "not_affected"
     assert item["metadata"]["fix_versions"] == ["3.7.1", "3.8.0"]

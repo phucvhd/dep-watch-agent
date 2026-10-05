@@ -1,4 +1,4 @@
-"""Turn extracted, cited facts about an issue into a decision for one Kafka version.
+"""Turn extracted, cited facts about an issue into a decision for one pinned version.
 
 This is where "the LLM extracts facts, code decides" is enforced. Every system (see
 ``systems``) produces an ``Extraction``: version facts, each with a quote from the issue
@@ -16,7 +16,8 @@ Evidence kinds, from strongest start-of-bug signal to fix:
 
 1. drops facts whose quote isn't in the issue text (no valid citation, no fact), whose quote
    doesn't contain the fact's version (the model inferred the version rather than read it),
-   and versions that name a release line (``3.7``) rather than a release;
+   and versions that name a release line (``3.7``) rather than a release, in the dependency's
+   version scheme;
 2. **not affected** if the version contains a fix, by the version module's backport rules, or
    the text says this exact version is unaffected;
 3. **affected** if the version is at or after a version where the bug exists (``affects`` or
@@ -38,8 +39,8 @@ from dep_watch_agent.versions import (
     Applicability,
     Version,
     VersionParseError,
+    VersionScheme,
     in_affected_range,
-    parse_version,
 )
 
 AFFECTED = "affected"
@@ -114,21 +115,24 @@ def quote_in_issue(quote: str, issue: IssueText) -> bool:
     return bool(needle) and any(needle in _normalize(text) for text in issue.fields())
 
 
-def decide(issue: IssueText, kafka_version: str, extraction: Extraction) -> Decision:
+def decide(
+    issue: IssueText, version: str, extraction: Extraction, scheme: VersionScheme
+) -> Decision:
+    """The answer for ``version``, a release in ``scheme``, the issue's dependency's scheme."""
     used: list[Evidence] = []
     dropped: list[DroppedEvidence] = []
     for ev in extraction.evidence:
-        reason = _rejection(ev, issue)
+        reason = _rejection(ev, issue, scheme)
         if reason:
             dropped.append(DroppedEvidence(ev, reason))
         else:
             used.append(ev)
 
     def versions(*kinds: str) -> list[Version]:
-        return [parse_version(ev.version) for ev in used if ev.kind in kinds]
+        return [scheme.parse(ev.version) for ev in used if ev.kind in kinds]
 
-    target = parse_version(kafka_version)
-    fixes = versions("fix") + [parse_version(v) for v in issue.fix_versions if is_release(v)]
+    target = scheme.parse(version)
+    fixes = versions("fix") + [scheme.parse(v) for v in issue.fix_versions if scheme.is_release(v)]
     present = versions("affects", "introduced")
     introduced = versions("introduced")
     unaffected = versions("unaffected")
@@ -146,26 +150,16 @@ def decide(issue: IssueText, kafka_version: str, extraction: Extraction) -> Deci
     return Decision(answer, used, dropped)
 
 
-def is_release(version: str) -> bool:
-    """True for a specific release (``3.7.0``, ``0.10.2.1``), false for a line (``3.7``)."""
-    try:
-        parsed = parse_version(version)
-    except VersionParseError:
-        return False
-    given = version.strip().lstrip("vV").split("-")[0].split(".")
-    return len(given) == len(parsed.release)
-
-
-def _rejection(ev: Evidence, issue: IssueText) -> str | None:
+def _rejection(ev: Evidence, issue: IssueText, scheme: VersionScheme) -> str | None:
     if ev.kind not in EVIDENCE_KINDS:
         return f"unknown kind {ev.kind!r}"
     if not quote_in_issue(ev.quote, issue):
         return "citation not found"
     try:
-        parse_version(ev.version)
+        scheme.parse(ev.version)
     except VersionParseError:
         return "not a version"
-    if not is_release(ev.version):
+    if not scheme.is_release(ev.version):
         return "release line, not a release"
     if not version_in_quote(ev.version, ev.quote):
         return "version not in quote"

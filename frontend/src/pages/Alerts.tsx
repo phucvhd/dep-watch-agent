@@ -34,7 +34,7 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
     setError(undefined)
     try {
       const started = await api.startScan({
-        kafka_version: version,
+        version,
         project: dependency.project,
         since: since ? new Date(`${since}T00:00:00Z`).toISOString() : null,
         limit,

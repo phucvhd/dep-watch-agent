@@ -47,7 +47,7 @@ class CaseResult:
     case_id: str
     issue_key: str
     basis: str
-    kafka_version: str
+    version: str
     expected: str
     answer: str
     evidence_total: int

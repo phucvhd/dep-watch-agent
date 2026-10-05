@@ -8,10 +8,10 @@ from dep_watch_agent.verdict import (
     Extraction,
     IssueText,
     decide,
-    is_release,
     quote_in_issue,
     version_in_quote,
 )
+from dep_watch_agent.versions import KAFKA
 
 ISSUE = IssueText(
     summary="Consumer hangs after rebalance",
@@ -25,7 +25,7 @@ FIX_380 = Evidence("3.8.0", "fix", "Fixed in 3.7.1 and 3.8.0.")
 
 
 def run(version, *evidence):
-    return decide(ISSUE, version, Extraction(list(evidence)))
+    return decide(ISSUE, version, Extraction(list(evidence)), KAFKA)
 
 
 @pytest.mark.parametrize(
@@ -107,7 +107,7 @@ def test_quote_matching_ignores_whitespace_but_not_words():
     ],
 )
 def test_is_release(version, expected):
-    assert is_release(version) is expected
+    assert KAFKA.is_release(version) is expected
 
 
 def test_issue_text_from_dict_tolerates_missing_fields():
@@ -129,7 +129,7 @@ AFFECTS_361 = Evidence("3.6.1", "affects", "Reproduced on 3.6.1.")
 
 
 def start_run(version, *evidence, issue=START_ISSUE):
-    return decide(issue, version, Extraction(list(evidence))).answer
+    return decide(issue, version, Extraction(list(evidence)), KAFKA).answer
 
 
 @pytest.mark.parametrize(
@@ -211,6 +211,7 @@ def test_a_fact_whose_quote_does_not_name_its_version_is_dropped():
                 Evidence("4.3.0", "introduced", "the implementations introduced by KIP-1023."),
             ]
         ),
+        KAFKA,
     )
     assert decision.answer == INSUFFICIENT_INFORMATION  # was affected and not_affected
     assert [d.reason for d in decision.dropped] == ["version not in quote"] * 2

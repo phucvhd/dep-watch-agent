@@ -57,7 +57,7 @@ def sources(session: SessionDep) -> list[SourceCount]:
 @router.get("/stats/issues/monthly", response_model=list[MonthCount])
 def monthly(
     session: SessionDep,
-    project: ProjectKey = "KAFKA",
+    project: ProjectKey,
     months: Annotated[int, Query(ge=1, le=120)] = 24,
     now: Annotated[datetime | None, Query(include_in_schema=False)] = None,
 ) -> list[MonthCount]:
@@ -88,7 +88,7 @@ def monthly(
 
 
 @router.get("/stats/reading", response_model=ReadingTime)
-def reading_time(session: SessionDep, project: ProjectKey = "KAFKA") -> ReadingTime:
+def reading_time(session: SessionDep, project: ProjectKey) -> ReadingTime:
     """How long reading one issue took the model, over the stored extractions."""
     durations = sorted(
         session.scalars(

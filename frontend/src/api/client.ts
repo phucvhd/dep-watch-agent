@@ -108,7 +108,7 @@ export const api = {
   check: (body: CheckRequest) => post<CheckResponse>('/check', body),
   storedAnswer: (key: string, version: string) =>
     request<StoredAnswer>(
-      `/issues/${encodeURIComponent(key)}/answer${query({ kafka_version: version })}`,
+      `/issues/${encodeURIComponent(key)}/answer${query({ version })}`,
     ),
   issueStats: (project: string) => request<IssueStats>(`/stats/issues${query({ project })}`),
   monthly: (project: string, months = 24) =>

@@ -1,11 +1,11 @@
-"""Scan synced issues for one pinned Kafka version: the alerting flow, as a background job."""
+"""Scan synced issues for one pinned version: the alerting flow, as a background job."""
 
 from fastapi import APIRouter, HTTPException, status
 
 from dep_watch_agent.api.deps import JobsDep, SessionsDep, SystemsDep, pick_system
 from dep_watch_agent.api.routes.issues import dropped_out, evidence_out, sorted_versions
 from dep_watch_agent.api.schemas import JobOut, ScanItemOut, ScanRequest, ScanResponse
-from dep_watch_agent.verdict import is_release
+from dep_watch_agent.check import NotAnswerable, answerable
 
 router = APIRouter(tags=["scan"])
 
@@ -25,32 +25,33 @@ router = APIRouter(tags=["scan"])
     },
 )
 def start_scan(body: ScanRequest, jobs: JobsDep, sessions: SessionsDep, systems: SystemsDep):
-    """Answer each candidate issue for ``kafka_version``: affected, not_affected or
+    """Answer each candidate issue of ``project`` for ``version``: affected, not_affected or
     insufficient_information, with cited facts and a link. Poll ``/jobs/{id}``; ``progress``
     counts issues answered, and ``result`` is a ``ScanResponse``. One scan per system at a
-    time, since they share the model server."""
+    time, since they share the model server. 422 when the project's dependency isn't answered
+    or the version isn't one of its releases."""
     from dep_watch_agent.scan import scan_version
 
-    if not is_release(body.kafka_version):
-        raise HTTPException(
-            422, f"{body.kafka_version!r} is not a specific Kafka release, e.g. 3.9.1"
-        )
+    try:
+        dependency = answerable(body.project, body.version)
+    except NotAnswerable as exc:
+        raise HTTPException(422, str(exc)) from None
     name = pick_system(systems, body.system)
 
     def run(progress):
         with sessions() as session:
             result = scan_version(
                 session,
-                body.kafka_version,
+                dependency,
+                body.version,
                 name,
                 systems[name](),
-                project=body.project,
                 since=body.since,
                 limit=body.limit,
                 on_issue=progress,
             )
         response = ScanResponse(
-            kafka_version=result.kafka_version,
+            version=result.version,
             system=result.system,
             since=result.since,
             candidates_total=result.candidates_total,
@@ -69,7 +70,7 @@ def start_scan(body: ScanRequest, jobs: JobsDep, sessions: SessionsDep, systems:
                     answer=item.answer,
                     decided_by=item.decided_by,
                     cached=item.cached,
-                    fix_versions=sorted_versions(item.fix_versions),
+                    fix_versions=sorted_versions(item.fix_versions, dependency.scheme),
                     evidence=evidence_out(item.evidence),
                     dropped=dropped_out(item.dropped),
                     error=item.error,

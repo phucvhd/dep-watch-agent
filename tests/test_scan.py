@@ -2,11 +2,14 @@ from datetime import UTC, datetime
 
 import pytest
 
+from dep_watch_agent.dependencies import DEPENDENCIES
 from dep_watch_agent.jira.models import parse_issue
 from dep_watch_agent.jira.store import upsert_issue
 from dep_watch_agent.scan import scan_version
 from dep_watch_agent.verdict import Evidence, Extraction, IssueText
 from tests.jira_factory import raw_issue
+
+KAFKA = DEPENDENCIES[0]
 
 
 class PhraseExtractor:
@@ -72,7 +75,7 @@ def session(db):
 def test_scan_answers_every_candidate_in_report_order(session):
     extractor = PhraseExtractor()
     progress = []
-    result = scan_version(session, "3.9.1", "phrases", extractor, on_issue=progress.append)
+    result = scan_version(session, KAFKA, "3.9.1", "phrases", extractor, on_issue=progress.append)
 
     answers = [(i.issue_key, i.answer, i.decided_by) for i in result.items]
     assert answers == [
@@ -96,16 +99,16 @@ def test_scan_answers_every_candidate_in_report_order(session):
 
 def test_scan_since_and_limit(session):
     since = datetime(2026, 9, 10, tzinfo=UTC)
-    result = scan_version(session, "3.9.1", "phrases", PhraseExtractor(), since=since)
+    result = scan_version(session, KAFKA, "3.9.1", "phrases", PhraseExtractor(), since=since)
     assert {i.issue_key for i in result.items} == {"KAFKA-2", "KAFKA-3"}
 
-    result = scan_version(session, "3.9.1", "phrases", PhraseExtractor(), limit=1)
+    result = scan_version(session, KAFKA, "3.9.1", "phrases", PhraseExtractor(), limit=1)
     assert [i.issue_key for i in result.items] == ["KAFKA-3"]  # the newest
     assert result.candidates_total == 4
 
 
 def test_a_failed_issue_is_reported_not_dropped(session):
-    result = scan_version(session, "3.9.1", "phrases", PhraseExtractor(fail_on="vague"))
+    result = scan_version(session, KAFKA, "3.9.1", "phrases", PhraseExtractor(fail_on="vague"))
     failed = next(i for i in result.items if i.issue_key == "KAFKA-3")
     assert failed.answer == "insufficient_information"
     assert failed.error == "ConnectionError: model server down"
@@ -118,11 +121,11 @@ class VersionedPhraseExtractor(PhraseExtractor):
 
 
 def test_rescans_and_other_versions_reuse_stored_facts(session):
-    first = scan_version(session, "3.9.1", "phrases", VersionedPhraseExtractor())
+    first = scan_version(session, KAFKA, "3.9.1", "phrases", VersionedPhraseExtractor())
     assert first.cached == 0
 
     extractor = VersionedPhraseExtractor()
-    again = scan_version(session, "3.9.1", "phrases", extractor)
+    again = scan_version(session, KAFKA, "3.9.1", "phrases", extractor)
     assert extractor.seen == []  # no model call
     assert again.cached == 3  # every issue the fix versions don't settle
     assert [(i.issue_key, i.answer) for i in again.items] == [
@@ -130,7 +133,7 @@ def test_rescans_and_other_versions_reuse_stored_facts(session):
     ]
 
     # Another version is answered from the same facts.
-    upgrade = scan_version(session, "3.8.0", "phrases", extractor)
+    upgrade = scan_version(session, KAFKA, "3.8.0", "phrases", extractor)
     assert extractor.seen == []
     regression = next(i for i in upgrade.items if i.issue_key == "KAFKA-2")
     assert regression.answer == "not_affected"  # 3.8.0 is before "Regression in 3.9.0"

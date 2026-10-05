@@ -1,8 +1,9 @@
 """The dependencies the system knows about.
 
-``DEPENDENCIES`` are the ones whose issues are synced. Only ``watchable`` ones are answered
-(scans, checks, the eval): the prompt, the version scheme and the ground truth are Kafka's.
-Spark and Hadoop are synced for the overview only, a scope decision of 2026-10-04.
+``DEPENDENCIES`` are the ones whose issues are synced, each with the scheme its releases are
+numbered in. Only ``watchable`` ones are answered (scans, checks, the eval): the prompt and the
+ground truth are Kafka's so far. Spark and Hadoop are synced for the overview only, a scope
+decision of 2026-10-04.
 
 ``FAMILIES`` names the artifacts a repository scan recognizes, so a scan can say "Apache Spark
 3.5.1" instead of listing ``org.apache.spark:spark-core_2.12`` and its siblings. A family is
@@ -11,6 +12,8 @@ watchable only if its ``watch`` id is in ``DEPENDENCIES``; the others are shown,
 
 from dataclasses import dataclass, field
 
+from dep_watch_agent.versions import KAFKA, THREE_PART, VersionScheme
+
 
 @dataclass(frozen=True)
 class Dependency:
@@ -18,6 +21,7 @@ class Dependency:
     name: str
     project: str  # the JIRA project its issues are synced from
     tracker_url: str
+    scheme: VersionScheme = THREE_PART
     watchable: bool = True  # answered for a version, not only synced
 
 
@@ -27,6 +31,7 @@ DEPENDENCIES = (
         name="Apache Kafka",
         project="KAFKA",
         tracker_url="https://issues.apache.org/jira/projects/KAFKA",
+        scheme=KAFKA,
     ),
     Dependency(
         id="spark",
@@ -45,6 +50,16 @@ DEPENDENCIES = (
 )
 
 
+def dependency_for_project(project: str) -> Dependency | None:
+    return next((d for d in DEPENDENCIES if d.project == project), None)
+
+
+def scheme_for_project(project: str) -> VersionScheme:
+    """The scheme to order a project's versions by; three-part for a project not listed."""
+    dependency = dependency_for_project(project)
+    return dependency.scheme if dependency else THREE_PART
+
+
 @dataclass(frozen=True)
 class Family:
     id: str
@@ -54,8 +69,16 @@ class Family:
     packages: tuple[str, ...] = field(default=())  # "pypi:name" / "npm:name" at the same version
 
     @property
+    def dependency(self) -> Dependency | None:
+        return next((d for d in DEPENDENCIES if d.id == self.id), None)
+
+    @property
     def watchable(self) -> bool:
-        return any(d.id == self.id and d.watchable for d in DEPENDENCIES)
+        return self.dependency is not None and self.dependency.watchable
+
+    @property
+    def scheme(self) -> VersionScheme:
+        return self.dependency.scheme if self.dependency else THREE_PART
 
     def matches_group(self, group: str) -> bool:
         return any(group == g or (g.endswith(".") and group.startswith(g)) for g in self.groups)

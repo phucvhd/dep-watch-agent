@@ -49,7 +49,7 @@ def create_app(
 
     app = FastAPI(
         title="dep-watch-agent",
-        description="Does an upstream Kafka issue affect my pinned version?",
+        description="Does an upstream issue affect the version I run?",
         version=__version__,
         lifespan=lifespan,
     )

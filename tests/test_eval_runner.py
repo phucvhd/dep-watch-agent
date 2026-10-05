@@ -23,7 +23,7 @@ def result(expected, answer, basis="b", total=1, valid=1) -> CaseResult:
         case_id=f"c{id(object())}",
         issue_key="KAFKA-1",
         basis=basis,
-        kafka_version="3.7.0",
+        version="3.7.0",
         expected=expected,
         answer=answer,
         evidence_total=total,

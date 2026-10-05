@@ -312,7 +312,7 @@ function Jobs() {
                 <tr key={j.id}>
                   <td>
                     {j.kind}
-                    {typeof j.params.kafka_version === 'string' && ` ${j.params.kafka_version}`}
+                    {typeof j.params.version === 'string' && ` ${j.params.version}`}
                   </td>
                   <td>
                     <span className={`job-status job-${j.status}`}>{j.status}</span>

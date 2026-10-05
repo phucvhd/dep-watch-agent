@@ -66,7 +66,7 @@ export function App() {
 
   // The latest scan of what is watched, for the count beside Scan and the Scan page.
   const latestScan = scans.data?.find(
-    (j) => j.params.kafka_version === version && j.params.project === project,
+    (j) => j.params.version === version && j.params.project === project,
   )
   const affected =
     latestScan?.status === 'succeeded'

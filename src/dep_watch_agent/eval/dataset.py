@@ -43,7 +43,7 @@ LABEL_FIELDS = [
     "case_id",
     "issue_key",
     "url",
-    "kafka_version",
+    "version",
     "metadata_answer",
     "basis",
     "affects_versions",
@@ -169,7 +169,7 @@ def write_dataset(
                     "case_id": case.case_id,
                     "issue_key": case.issue_key,
                     "url": issue.url,
-                    "kafka_version": case.kafka_version,
+                    "version": case.version,
                     "metadata_answer": case.metadata_answer,
                     "basis": case.basis,
                     "affects_versions": " ".join(case.affects_versions),
@@ -243,7 +243,7 @@ def _review_markdown(
         lines.append("")
         for case in by_issue.get(issue.key, []):
             lines.append(
-                f"- `{case.case_id}`: config {case.kafka_version}, metadata answer "
+                f"- `{case.case_id}`: config {case.version}, metadata answer "
                 f"**{case.metadata_answer}** ({case.basis})"
             )
         hint = ", ".join(issue.versions_in_text) or "none"
@@ -343,7 +343,7 @@ def langfuse_items(dataset: Dataset) -> list[dict[str, Any]]:
                     "description": issue["description"],
                     "comments": issue["comments"],
                     **({"fix_versions": issue["fix_versions"]} if "fix_versions" in issue else {}),
-                    "kafka_version": case.kafka_version,
+                    "version": case.version,
                 },
                 "expected_output": {"answer": expected_answer(case, label)},
                 "metadata": {

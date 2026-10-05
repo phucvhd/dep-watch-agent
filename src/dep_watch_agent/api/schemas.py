@@ -119,7 +119,9 @@ class ReleaseVersion(BaseModel):
 
 class CheckRequest(BaseModel):
     issue_key: IssueKey
-    kafka_version: str = Field(examples=["3.6.1"])
+    version: str = Field(
+        examples=["3.6.1"], description="A release, in the scheme of the issue's dependency"
+    )
     system: str | None = Field(None, description="Default: the first registered system")
 
 
@@ -137,7 +139,7 @@ class CheckResponse(BaseModel):
     issue_key: str
     url: str
     summary: str
-    kafka_version: str
+    version: str
     answer: Answer
     system: str
     decided_by: str = Field(
@@ -198,8 +200,8 @@ class ReadingTime(BaseModel):
 
 
 class ScanRequest(BaseModel):
-    kafka_version: str = Field(examples=["3.9.1"])
-    project: ProjectKey = "KAFKA"
+    project: ProjectKey = Field(examples=["KAFKA"], description="The dependency's project")
+    version: str = Field(examples=["3.9.1"], description="A release, in the dependency's scheme")
     since: datetime | None = Field(
         None, description="Only issues updated since then, e.g. the last scan (alerting)"
     )
@@ -233,7 +235,7 @@ class ScanResponse(BaseModel):
     """The ``result`` of a finished scan job. Items: affected first, then
     insufficient_information, then not_affected; newest first within each."""
 
-    kafka_version: str
+    version: str
     system: str
     since: datetime | None
     candidates_total: int = Field(description="Issues matching the filters, before the limit")
@@ -267,7 +269,7 @@ class JobOut(BaseModel):
 
 
 class SyncRequest(BaseModel):
-    project: ProjectKey = "KAFKA"
+    project: ProjectKey = Field(examples=["KAFKA"])
     full: bool = Field(False, description="Ignore the watermark and re-sync every issue")
     request_delay: float = Field(1.0, ge=0.5, le=60, description="Seconds between JIRA requests")
 
