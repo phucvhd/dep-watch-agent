@@ -1,9 +1,9 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { api, type Answer, type Dependency, type Job, type ScanResponse } from '../api/client'
 import { IssueDetail, IssueRow } from '../components/IssueResult'
-import { BugsByDay, EvidenceByLine, IssueSources } from '../components/ScanCharts'
+import { BugsByDay, EvidenceByLine } from '../components/ScanCharts'
 import { RulerKey } from '../components/VersionRuler'
-import { ErrorNote, JobLine } from '../components/common'
+import { ErrorNote, JobLine, StepHead } from '../components/common'
 import { ANSWER_TEXT, formatDay, plural } from '../format'
 import { isActive, message, useJob } from '../hooks'
 
@@ -64,7 +64,8 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
         : `${plural(affected, 'bug')} ${affected === 1 ? 'affects' : 'affect'} ${target}.`
 
   return (
-    <div className="dash">
+    <>
+      <StepHead n={2} title="Scan" />
       <section className={`widget w-8 status-tile hero-${tone}`} aria-live="polite">
         <h1 className="hero-line">{headline}</h1>
         {result && (
@@ -75,12 +76,6 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
           </p>
         )}
       </section>
-
-      <section className="widget w-4">
-        <IssueSources />
-      </section>
-
-
       <section className="widget w-4" aria-labelledby="scan-title">
         <h2 id="scan-title" className="widget-title">
           Scan upstream
@@ -125,9 +120,11 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
           </p>
         )}
       </section>
+
+      <StepHead n={3} title="Results" muted={!result} />
       {result ? (
         <>
-          <div className="w-8 count-tiles" role="tablist" aria-label="Answers">
+          <div className="w-12 count-tiles" role="tablist" aria-label="Answers">
             {TABS.map((answer) => (
               <button
                 key={answer}
@@ -151,17 +148,12 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
         </>
       ) : (
         !running && (
-          <section className="widget w-8 empty-tile">
-            <h2>No scan of {version} yet</h2>
-            <p>
-              Scan reads the bugs updated since the day you pick and answers each for {target}.
-              The answers show up here, split into what affects you, what can't be told, and what
-              doesn't.
-            </p>
+          <section className="widget w-12 empty-tile">
+            <p>Results for {target} show up here after a scan.</p>
           </section>
         )
       )}
-    </div>
+    </>
   )
 }
 

@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { api, type CheckResponse, type Dependency } from '../api/client'
 import { AnswerBody } from '../components/IssueResult'
 import { RulerKey } from '../components/VersionRuler'
+import { IssueSources } from '../components/ScanCharts'
 import { LineChart } from '../components/charts'
 import { ErrorNote, PageIntro } from '../components/common'
 import { ANSWER_TEXT, formatDay } from '../format'
@@ -10,14 +11,49 @@ import { message, useLoad } from '../hooks'
 const PAGE = 30
 
 interface Props {
-  dependency: Dependency
+  dependencies: Dependency[] // every synced source
+  watched?: Dependency // the dependency whose version is watched, if any
   version: string // the watched version, or '' when nothing is watched
   systems: string[]
-  issueKey?: string // from the URL: #/issues/KAFKA-123
+  issueKey?: string // from the URL: #/dashboard/KAFKA-123
 }
 
-/** Every synced issue, and for the selected one, whether it affects the version you run. */
-export function Issues({ dependency, version, systems, issueKey }: Props) {
+/** Statistics from the database: where issues come from, then one source's numbers, trend and
+ * issues. For the watched dependency an issue also shows whether it affects your version. */
+export function Dashboard({ dependencies, watched, version, systems, issueKey }: Props) {
+  const [sourceId, setSourceId] = useState(() => {
+    const fromKey = issueKey && dependencies.find((d) => issueKey.startsWith(`${d.project}-`))
+    return (fromKey || watched || dependencies[0]).id
+  })
+  const dependency = dependencies.find((d) => d.id === sourceId) ?? dependencies[0]
+  return (
+    <SourceDashboard
+      key={dependency.id}
+      dependencies={dependencies}
+      dependency={dependency}
+      onSource={setSourceId}
+      answerFor={dependency.watchable && dependency.id === watched?.id ? version : ''}
+      systems={systems}
+      issueKey={issueKey}
+    />
+  )
+}
+
+function SourceDashboard({
+  dependencies,
+  dependency,
+  onSource,
+  answerFor: version,
+  systems,
+  issueKey,
+}: {
+  dependencies: Dependency[]
+  dependency: Dependency
+  onSource: (id: string) => void
+  answerFor: string // the version to answer for; '' hides the answer
+  systems: string[]
+  issueKey?: string
+}) {
   const [draft, setDraft] = useState(issueKey ?? '')
   const [filters, setFilters] = useState({
     q: issueKey ?? '',
@@ -57,10 +93,26 @@ export function Issues({ dependency, version, systems, issueKey }: Props) {
   const s = stats.data
   return (
     <div className="dash">
-      <PageIntro title="Issues" />
+      <PageIntro title="Dashboard">
+        <div className="source-switch" role="tablist" aria-label="Source">
+          {dependencies.map((d) => (
+            <button
+              key={d.id}
+              role="tab"
+              aria-selected={d.id === dependency.id}
+              onClick={() => onSource(d.id)}
+            >
+              {d.name.replace(/^Apache /, '')}
+            </button>
+          ))}
+        </div>
+      </PageIntro>
 
+      <section className="widget w-4">
+        <IssueSources />
+      </section>
       {s && (
-        <div className="w-12 stat-tiles">
+        <div className="w-8 stat-tiles stat-tiles-2x2">
           {[
             ['Bugs', s.bugs],
             ['Open bugs', s.open_bugs],
@@ -78,7 +130,7 @@ export function Issues({ dependency, version, systems, issueKey }: Props) {
       {monthly.data && (
         <section className="widget w-12">
           <LineChart
-            title="Bugs filed and fixed each month"
+            title={`${dependency.name} bugs filed and fixed each month`}
             categories={monthly.data.map((m) => m.month)}
             categoryLabel="Month"
             formatCategory={(m) =>
@@ -159,7 +211,7 @@ export function Issues({ dependency, version, systems, issueKey }: Props) {
                 aria-current={issue.key === current ? 'true' : undefined}
                 onClick={() => {
                   setSelected(issue.key)
-                  window.history.replaceState(null, '', `#/issues/${issue.key}`)
+                  window.history.replaceState(null, '', `#/dashboard/${issue.key}`)
                 }}
               >
                 <span className="row-key">{issue.key}</span>
@@ -231,12 +283,15 @@ function IssuePanel({
         </p>
       </header>
 
-      <VersionAnswer
-        issueKey={issueKey}
-        dependency={dependency}
-        version={version}
-        systems={systems}
-      />
+      {/* Only a watchable dependency is answered for a version; the others are synced only. */}
+      {dependency.watchable && (
+        <VersionAnswer
+          issueKey={issueKey}
+          dependency={dependency}
+          version={version}
+          systems={systems}
+        />
+      )}
 
       <dl className="facts-grid">
         <div>

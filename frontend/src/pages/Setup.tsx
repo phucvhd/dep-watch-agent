@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, type Dependency, type DetectedDependency, type RepoScan } from '../api/client'
-import { ErrorNote, PageIntro } from '../components/common'
+import { ErrorNote } from '../components/common'
 import { plural } from '../format'
 import { message, useLoad, type WatchItem } from '../hooks'
 import { readRepo } from '../repo'
@@ -117,13 +117,12 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
       repo ?? null,
       selected.map((d) => ({ dependency: d.family!, version: d.version!, files: d.files })),
     )
-    window.location.assign('#/alerts')
   }
 
   return (
-    <div className="page">
-      <PageIntro title="Your repository">
-        <p>Only the build files leave your browser.</p>
+    <section className="widget w-12 repo-step" aria-label="Choose the repository">
+      <div className="repo-step-head">
+        <p className="widget-text">Only the build files leave your browser.</p>
         <input
           ref={inputRef}
           type="file"
@@ -155,7 +154,7 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
           )}
         </div>
         <ErrorNote>{error}</ErrorNote>
-      </PageIntro>
+      </div>
 
       {busy && <Progress stage={stage} />}
 
@@ -224,7 +223,7 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
       )}
 
       <ManualAdd dependencies={dependencies.filter((d) => d.watchable)} onWatch={onWatch} />
-    </div>
+    </section>
   )
 }
 
@@ -338,10 +337,7 @@ function ManualAdd({
         </label>
         <button
           disabled={!version}
-          onClick={() => {
-            onWatch(null, [{ dependency, version }])
-            window.location.assign('#/alerts')
-          }}
+          onClick={() => onWatch(null, [{ dependency, version }])}
         >
           Watch this version
         </button>

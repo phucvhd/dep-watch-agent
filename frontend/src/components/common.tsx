@@ -37,3 +37,13 @@ export function PageIntro({ title, children }: { title: string; children?: React
     </header>
   )
 }
+
+/** A numbered step of the scan flow: the steps are a real sequence. */
+export function StepHead({ n, title, muted = false }: { n: number; title: string; muted?: boolean }) {
+  return (
+    <h2 className={muted ? 'step-head is-muted' : 'step-head'}>
+      <span className="step-n">{n}</span>
+      {title}
+    </h2>
+  )
+}

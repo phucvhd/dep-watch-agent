@@ -47,13 +47,21 @@ You tick the ones to watch; every dependency is shown, but only Apache Kafka can
 now. A version can also be added by hand, and changing the repository can be abandoned (Keep
 watching, Cancel, or Esc) without losing what is watched.
 
-Pages: **New bugs** (a scan as a triage list: affects you / can't tell / doesn't affect you,
-each with its version ruler and quoted evidence), **Issues** (every synced issue with counts;
-the selected one shows its answer for your version when that needs no model call, from the fix
-versions or stored facts via `GET /issues/{key}/answer`, and otherwise offers to read it), and
-**Data and models** (a sync per issue tracker, models, eval runs, jobs). Besides Kafka, Spark
-and Hadoop Common issues are synced for the overview (the dashboard's issues-by-source donut);
-only Kafka is answered for a version.
+Pages follow the flow:
+
+- **Scan** (`#/scan`): 1 choose the repository (the folder picker opens in place; Change,
+  Keep watching or Esc leave the watch list as it was), 2 scan upstream bugs for the watched
+  version, 3 the results: answer counts that filter the list, bugs by day, where the bugs were
+  seen, and each issue with its version ruler and quoted evidence.
+- **Dashboard** (`#/dashboard`): statistics from the database. Issues by source (Kafka, Spark,
+  Hadoop), then for the source picked: bug counts, bugs filed and fixed per month, and every
+  issue. For Kafka an issue also shows whether it affects your version, from fix versions or
+  stored facts, or read on request.
+- **Data and models** (`#/operations`): a sync per issue tracker, models, eval runs, jobs.
+
+Besides Kafka, Spark and Hadoop Common issues are synced for the overview; only Kafka is
+answered for a version. Old links (`#/alerts`, `#/setup`, `#/issues/KEY`, `#/check/KEY`) are
+rewritten to the new pages.
 
 ```bash
 cd frontend

@@ -1694,6 +1694,158 @@ main {
   margin-bottom: 4px;
 }
 
+/* --- the scan flow: numbered steps --------------------------------------------------- */
+
+.step-head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0 -4px;
+  padding: 0 4px;
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+.step-head.is-muted {
+  color: var(--ink-3);
+}
+
+.step-n {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.step-head.is-muted .step-n {
+  background: var(--line);
+  color: var(--ink-3);
+}
+
+/* Step 1 embeds the repository picker; its sections lose their page gutters in the tile. */
+.repo-step {
+  --gutter: 0px;
+  padding: 22px 24px;
+}
+
+.repo-step .progress,
+.repo-step .detected,
+.repo-step .manual {
+  border-bottom: 0;
+}
+
+.repo-step .progress {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+}
+
+.repo-step .detected {
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.repo-step .detected-head {
+  padding: 20px 0 16px;
+}
+
+.repo-step .detected-head h2 {
+  font-size: 30px;
+}
+
+.repo-step .manual {
+  border-top: 1px solid var(--line);
+  margin-top: 8px;
+}
+
+.repo-step .manual > summary {
+  padding: 16px 0;
+  font-size: 15px;
+}
+
+.repo-summary {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.repo-summary-label {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.repo-summary-name {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+.repo-deps {
+  list-style: none;
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+}
+
+.repo-deps button {
+  display: grid;
+  height: auto;
+  padding: 6px 16px 8px;
+  border-radius: 12px;
+  text-align: left;
+  color: var(--ink-3);
+}
+
+.repo-deps button[aria-pressed='true'] {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+/* Dashboard: the source switch, and stats as a 2x2 beside the donut. */
+.source-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  align-self: center;
+}
+
+.source-switch button {
+  height: 30px;
+  border: 0;
+  padding: 0 14px;
+  font-size: 14px;
+  color: var(--ink-2);
+  background: transparent;
+}
+
+.source-switch button[aria-selected='true'] {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.stat-tiles-2x2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-self: stretch;
+}
+
+.stat-tiles-2x2 .stat-tile {
+  align-content: space-between;
+}
+
 /* --- charts ------------------------------------------------------------------------ */
 
 .chart {
