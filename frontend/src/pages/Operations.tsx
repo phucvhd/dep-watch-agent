@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, type Dependency, type EvalRunSummary, type Job } from '../api/client'
 import { ColumnChart } from '../components/charts'
+import { sourceColor } from '../sources'
 import { ErrorNote, JobLine, PageIntro } from '../components/common'
 import { formatAgo, formatDate, plural } from '../format'
 import { isActive, message, useJob, useLoad } from '../hooks'
@@ -32,12 +33,6 @@ export function Operations({ dependency, systems, onSynced }: Props) {
       <Jobs />
     </div>
   )
-}
-
-const SOURCE_COLOR: Record<string, string> = {
-  kafka: 'var(--src-kafka)',
-  spark: 'var(--src-spark)',
-  hadoop: 'var(--src-hadoop)',
 }
 
 /** Every synced source: its issues, when it was last synced, and a sync of its own. */
@@ -82,13 +77,13 @@ function Sync({ onSynced }: { onSynced: () => void }) {
         Issue trackers
       </h2>
       <ul className="source-list">
-        {sources.data?.map((src) => {
+        {sources.data?.map((src, index) => {
           const job = running(src.project)
           return (
             <li key={src.dependency}>
               <span
                 className="legend-swatch"
-                style={{ background: SOURCE_COLOR[src.dependency] ?? 'var(--ink-3)' }}
+                style={{ background: sourceColor(index) }}
                 aria-hidden="true"
               />
               <span className="source-name">{src.name}</span>
@@ -176,7 +171,8 @@ function Models({ systems }: { systems: string[] }) {
 function Evaluation({ systems }: { systems: string[] }) {
   const runs = useLoad(() => api.runs(), [])
   const datasets = useLoad(() => api.datasets(), [])
-  const [dataset, setDataset] = useState('kafka-ground-truth-v2')
+  const [chosenDataset, setDataset] = useState<string>()
+  const dataset = chosenDataset ?? datasets.data?.[0]?.name ?? ''
   const [system, setSystem] = useState(systems[0] ?? '')
   const [jobId, setJobId] = useState<string>()
   const [error, setError] = useState<string>()

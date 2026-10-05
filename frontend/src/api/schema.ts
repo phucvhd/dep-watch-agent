@@ -879,17 +879,6 @@ export interface components {
             /** Finished At */
             finished_at: string | null;
         };
-        /** KafkaVersion */
-        KafkaVersion: {
-            /** Name */
-            name: string;
-            /** Released */
-            released: boolean;
-            /** Archived */
-            archived: boolean;
-            /** Release Date */
-            release_date: string | null;
-        };
         /** MonthCount */
         MonthCount: {
             /**
@@ -933,6 +922,17 @@ export interface components {
             to_s: number | null;
             /** Count */
             count: number;
+        };
+        /** ReleaseVersion */
+        ReleaseVersion: {
+            /** Name */
+            name: string;
+            /** Released */
+            released: boolean;
+            /** Archived */
+            archived: boolean;
+            /** Release Date */
+            release_date: string | null;
         };
         /** RepoFile */
         RepoFile: {
@@ -1484,7 +1484,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["KafkaVersion"][];
+                    "application/json": components["schemas"]["ReleaseVersion"][];
                 };
             };
             /** @description Validation Error */

@@ -105,7 +105,7 @@ class IssueDetail(IssueSummary):
     comments: list[Comment]
 
 
-class KafkaVersion(BaseModel):
+class ReleaseVersion(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     name: str

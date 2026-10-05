@@ -44,7 +44,13 @@ export function App() {
   const watch = useWatch()
   const dependencies = useLoad(() => api.dependencies(), [])
   const nameOf = (id: string) => dependencies.data?.find((d) => d.id === id)?.name ?? id
-  const watched = dependencies.data?.find((d) => d.id === watch.active?.dependency)
+  // A watch item without a dependency (a shared link with only a version) means the first one
+  // the API can answer for.
+  const watched = watch.active
+    ? dependencies.data?.find((d) =>
+        watch.active!.dependency ? d.id === watch.active!.dependency : d.watchable,
+      )
+    : undefined
   const version = watched ? watch.active!.version : ''
   const project = (watched ?? dependencies.data?.[0])?.project ?? ''
 
@@ -60,7 +66,7 @@ export function App() {
 
   // The latest scan of what is watched, for the count beside Scan and the Scan page.
   const latestScan = scans.data?.find(
-    (j) => j.params.kafka_version === version && (j.params.project ?? 'KAFKA') === project,
+    (j) => j.params.kafka_version === version && j.params.project === project,
   )
   const affected =
     latestScan?.status === 'succeeded'

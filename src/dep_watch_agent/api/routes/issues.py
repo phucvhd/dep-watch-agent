@@ -15,8 +15,8 @@ from dep_watch_agent.api.schemas import (
     IssuePage,
     IssueStats,
     IssueSummary,
-    KafkaVersion,
     ProjectKey,
+    ReleaseVersion,
     StoredAnswer,
 )
 from dep_watch_agent.check import (
@@ -106,7 +106,7 @@ def get_issue(key: str, session: SessionDep) -> IssueDetail:
     )
 
 
-@router.get("/versions", response_model=list[KafkaVersion])
+@router.get("/versions", response_model=list[ReleaseVersion])
 def list_versions(
     session: SessionDep, project: ProjectKey = "KAFKA", released: bool | None = None
 ) -> list[JiraVersionRow]:

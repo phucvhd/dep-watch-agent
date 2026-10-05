@@ -9,7 +9,7 @@ export type Dependency = Schemas['DependencyOut']
 export type RepoFile = Schemas['RepoFile']
 export type RepoScan = Schemas['RepoScanResponse']
 export type DetectedDependency = Schemas['DetectedDependencyOut']
-export type KafkaVersion = Schemas['KafkaVersion']
+export type ReleaseVersion = Schemas['ReleaseVersion']
 export type IssuePage = Schemas['IssuePage']
 export type IssueSummary = Schemas['IssueSummary']
 export type IssueDetail = Schemas['IssueDetail']
@@ -93,7 +93,7 @@ export const api = {
   dependencies: () => request<Dependency[]>('/dependencies'),
   scanRepo: (files: RepoFile[]) => post<RepoScan>('/repo/scan', { files }),
   systems: () => request<string[]>('/systems'),
-  versions: (project: string) => request<KafkaVersion[]>(`/versions${query({ project })}`),
+  versions: (project: string) => request<ReleaseVersion[]>(`/versions${query({ project })}`),
   issues: (params: {
     project: string
     q?: string
@@ -106,9 +106,9 @@ export const api = {
   }) => request<IssuePage>(`/issues${query(params)}`),
   issue: (key: string) => request<IssueDetail>(`/issues/${encodeURIComponent(key)}`),
   check: (body: CheckRequest) => post<CheckResponse>('/check', body),
-  storedAnswer: (key: string, kafkaVersion: string) =>
+  storedAnswer: (key: string, version: string) =>
     request<StoredAnswer>(
-      `/issues/${encodeURIComponent(key)}/answer${query({ kafka_version: kafkaVersion })}`,
+      `/issues/${encodeURIComponent(key)}/answer${query({ kafka_version: version })}`,
     ),
   issueStats: (project: string) => request<IssueStats>(`/stats/issues${query({ project })}`),
   monthly: (project: string, months = 24) =>

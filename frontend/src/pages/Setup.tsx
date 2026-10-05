@@ -167,8 +167,12 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
             </h2>
             <p>
               Read {plural(scan.files_read.length, 'build file')}
-              {leftOut > 0 && `; ${plural(leftOut, 'file')} left out for size`}. Only Apache
-              Kafka can be watched for now.
+              {leftOut > 0 && `; ${plural(leftOut, 'file')} left out for size`}. Only{' '}
+              {dependencies
+                .filter((d) => d.watchable)
+                .map((d) => d.name)
+                .join(', ')}{' '}
+              can be watched for now.
             </p>
           </div>
 

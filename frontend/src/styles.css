@@ -20,10 +20,11 @@
   --unknown-text: #8f6000;
   --clear: #2a78d6; /* doesn't affect you */
   --clear-text: #1f5fae;
-  /* Where issues come from, validated all-pairs (a donut puts every pair side by side). */
-  --src-kafka: #4a3aa7; /* violet */
-  --src-spark: #1baf7a; /* aqua: below 3:1 on white, so the legend carries the values */
-  --src-hadoop: #8c5e00; /* ochre */
+  /* Source slots, by the API's dependency order (sources.ts), validated all-pairs: a donut puts
+     every pair side by side. Three slots; further sources are gray and fold into "Other". */
+  --src-1: #4a3aa7; /* violet */
+  --src-2: #1baf7a; /* aqua: below 3:1 on white, so the legend carries the values */
+  --src-3: #8c5e00; /* ochre */
   --grid: #e9e9e6;
   --pin: #0e0e0e; /* the version you run */
   --highlight: rgb(251 193 99 / 0.45);
@@ -50,9 +51,9 @@
     --unknown-text: #f5bd5c;
     --clear: #3987e5;
     --clear-text: #8fb8f0;
-    --src-kafka: #9085e9;
-    --src-spark: #199e70;
-    --src-hadoop: #a87a1a;
+    --src-1: #9085e9;
+    --src-2: #199e70;
+    --src-3: #a87a1a;
     --grid: #232323;
     --pin: #f2f2f2;
     --highlight: rgb(241 171 58 / 0.32);
@@ -2108,8 +2109,24 @@ main {
   color: var(--ink-2);
 }
 
-.donut-legend li.is-active .donut-name {
+.donut-legend li.is-active .donut-name,
+.donut-legend li.is-picked .donut-name {
   color: var(--ink);
+}
+
+.donut-legend li.is-picked .donut-name {
+  font-weight: 600;
+}
+
+.donut-pick {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
 }
 
 .donut-legend .legend-swatch {

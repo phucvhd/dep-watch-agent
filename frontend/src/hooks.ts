@@ -87,11 +87,12 @@ export interface WatchState {
 const EMPTY: WatchState = { repo: null, items: [], active: 0 }
 
 function readWatch(): WatchState {
-  // A shared link (?dependency=kafka&version=3.9.1) wins over what this browser remembers.
+  // A shared link (?dependency=<id>&version=<version>) wins over what this browser remembers.
+  // Without a dependency it means the first watchable one (resolved where the list is known).
   const link = new URLSearchParams(window.location.search)
   const version = link.get('version')
   if (version) {
-    return { repo: null, items: [{ dependency: link.get('dependency') ?? 'kafka', version }], active: 0 }
+    return { repo: null, items: [{ dependency: link.get('dependency') ?? '', version }], active: 0 }
   }
   try {
     const stored = JSON.parse(localStorage.getItem(WATCH_KEY) ?? 'null')

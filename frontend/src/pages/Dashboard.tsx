@@ -15,7 +15,7 @@ interface Props {
   watched?: Dependency // the dependency whose version is watched, if any
   version: string // the watched version, or '' when nothing is watched
   systems: string[]
-  issueKey?: string // from the URL: #/dashboard/KAFKA-123
+  issueKey?: string // from the URL: #/dashboard/PROJECT-123
 }
 
 /** Statistics from the database: where issues come from, then one source's numbers, trend and
@@ -93,62 +93,20 @@ function SourceDashboard({
   const s = stats.data
   return (
     <div className="dash">
-      <PageIntro title="Dashboard">
-        <div className="source-switch" role="tablist" aria-label="Source">
-          {dependencies.map((d) => (
-            <button
-              key={d.id}
-              role="tab"
-              aria-selected={d.id === dependency.id}
-              onClick={() => onSource(d.id)}
-            >
-              {d.name.replace(/^Apache /, '')}
-            </button>
-          ))}
-        </div>
-      </PageIntro>
+      <PageIntro title="Dashboard" />
 
-      <section className="widget w-4">
-        <IssueSources />
-      </section>
-      {s && (
-        <div className="w-8 stat-tiles stat-tiles-2x2">
-          {[
-            ['Bugs', s.bugs],
-            ['Open bugs', s.open_bugs],
-            ['Fixed bugs', s.fixed_bugs],
-            ['Read by the model', s.read],
-          ].map(([label, value]) => (
-            <div key={label as string} className="widget stat-tile">
-              <span className="count-label">{label}</span>
-              <span className="count-value">{(value as number).toLocaleString()}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {monthly.data && (
-        <section className="widget w-12">
-          <LineChart
-            title={`${dependency.name} bugs filed and fixed each month`}
-            categories={monthly.data.map((m) => m.month)}
-            categoryLabel="Month"
-            formatCategory={(m) =>
-              new Date(`${m}-01T00:00:00Z`).toLocaleDateString(undefined, {
-                month: 'short',
-                year: '2-digit',
-                timeZone: 'UTC',
-              })
-            }
-            series={[
-              { key: 'filed', label: 'Filed', color: 'var(--ink)', values: monthly.data.map((m) => m.filed) },
-              { key: 'fixed', label: 'Fixed', color: 'var(--ink-3)', values: monthly.data.map((m) => m.fixed) },
-            ]}
-          />
-        </section>
-      )}
-
+      {/* One filter row above everything it scopes. */}
       <form className="widget w-12 toolbar search-widget" onSubmit={search} role="search">
+        <label>
+          <span>Source</span>
+          <select value={dependency.id} onChange={(e) => onSource(e.target.value)}>
+            {dependencies.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="grow">
           <span>Search</span>
           <input
@@ -190,6 +148,47 @@ function SourceDashboard({
         </label>
         <button type="submit">Search</button>
       </form>
+
+      <section className="widget w-4">
+        <IssueSources picked={dependency.id} onPick={onSource} />
+      </section>
+      {s && (
+        <div className="w-8 stat-tiles stat-tiles-2x2">
+          {[
+            ['Bugs', s.bugs],
+            ['Open bugs', s.open_bugs],
+            ['Fixed bugs', s.fixed_bugs],
+            ['Read by the model', s.read],
+          ].map(([label, value]) => (
+            <div key={label as string} className="widget stat-tile">
+              <span className="count-label">{label}</span>
+              <span className="count-value">{(value as number).toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {monthly.data && (
+        <section className="widget w-12">
+          <LineChart
+            title={`${dependency.name} bugs filed and fixed each month`}
+            categories={monthly.data.map((m) => m.month)}
+            categoryLabel="Month"
+            formatCategory={(m) =>
+              new Date(`${m}-01T00:00:00Z`).toLocaleDateString(undefined, {
+                month: 'short',
+                year: '2-digit',
+                timeZone: 'UTC',
+              })
+            }
+            series={[
+              { key: 'filed', label: 'Filed', color: 'var(--ink)', values: monthly.data.map((m) => m.filed) },
+              { key: 'fixed', label: 'Fixed', color: 'var(--ink-3)', values: monthly.data.map((m) => m.fixed) },
+            ]}
+          />
+        </section>
+      )}
+
       {page.error && (
         <div className="w-12">
           <ErrorNote>{page.error}</ErrorNote>

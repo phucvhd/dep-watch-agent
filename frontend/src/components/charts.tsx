@@ -417,10 +417,14 @@ export function DonutChart({
   title,
   segments,
   centerLabel,
+  picked,
+  onPick,
 }: {
   title: string
   segments: Segment[]
   centerLabel: string
+  picked?: string // the segment the page is scoped to, marked in the legend
+  onPick?: (key: string) => void
 }) {
   const [active, setActive] = useState<number>()
   const total = segments.reduce((sum, s) => sum + s.value, 0)
@@ -475,13 +479,14 @@ export function DonutChart({
               <path
                 key={s.key}
                 d={d}
-                style={{ fill: s.color }}
                 className={active === i ? 'donut-arc is-active' : 'donut-arc'}
                 tabIndex={0}
                 aria-label={`${s.label}: ${fmt(s.value)}, ${pct(s.value, total)}`}
                 onPointerMove={() => setActive(i)}
                 onFocus={() => setActive(i)}
                 onBlur={() => setActive(undefined)}
+                onClick={onPick && (() => onPick(s.key))}
+                style={{ fill: s.color, cursor: onPick ? 'pointer' : undefined }}
               />
             ) : null,
           )}
@@ -496,12 +501,25 @@ export function DonutChart({
           {segments.map((s, i) => (
             <li
               key={s.key}
-              className={active === i ? 'is-active' : undefined}
+              className={[active === i && 'is-active', picked === s.key && 'is-picked']
+                .filter(Boolean)
+                .join(' ') || undefined}
               onPointerEnter={() => setActive(i)}
               onPointerLeave={() => setActive(undefined)}
             >
               <span className="legend-swatch" style={{ background: s.color }} aria-hidden="true" />
-              <span className="donut-name">{s.label}</span>
+              {onPick ? (
+                <button
+                  type="button"
+                  className="donut-name donut-pick"
+                  aria-pressed={picked === s.key}
+                  onClick={() => onPick(s.key)}
+                >
+                  {s.label}
+                </button>
+              ) : (
+                <span className="donut-name">{s.label}</span>
+              )}
               <strong>{pct(s.value, total)}</strong>
               <span className="donut-count">
                 {fmt(s.value)}
