@@ -23,9 +23,7 @@ interface Props {
 export function Operations({ dependency, systems, onSynced }: Props) {
   return (
     <div className="dash">
-      <PageIntro title="Data and models">
-        <p>Where the issues come from, and how well each model reads them.</p>
-      </PageIntro>
+      <PageIntro title="Data and models" />
       <Sync dependency={dependency} onSynced={onSynced} />
       <Models systems={systems} />
       <Facts dependency={dependency} />
@@ -61,14 +59,10 @@ function Sync({ dependency, onSynced }: { dependency: Dependency; onSynced: () =
         Issue tracker
       </h2>
       <p className="pane-lead">
-        {dependency.name} issues from{' '}
         <a href={dependency.tracker_url} target="_blank" rel="noreferrer">
-          JIRA
+          {dependency.name} JIRA
         </a>
-        .{' '}
-        {watermark
-          ? `Synced ${formatAgo(watermark.watermark)}; a sync fetches only what changed since.`
-          : 'Not synced yet; the first sync takes a few minutes.'}
+        {watermark ? `, synced ${formatAgo(watermark.watermark)}` : ', not synced yet'}
       </p>
       <button onClick={start} disabled={job?.status === 'running'}>
         Sync now
@@ -97,11 +91,7 @@ function Facts({ dependency }: { dependency: Dependency }) {
         Stored facts
       </h2>
       <span className="count-value">{s ? s.read.toLocaleString() : '…'}</span>
-      <span className="count-hint">
-        {s
-          ? `of ${s.bugs.toLocaleString()} ${dependency.name} bugs have been read by a model. Their answers, for any version, need no model call.`
-          : 'Loading…'}
-      </span>
+      <span className="count-hint">{s ? `of ${s.bugs.toLocaleString()} bugs read` : ''}</span>
     </section>
   )
 }
@@ -114,8 +104,7 @@ function ReadingTimeChart({ dependency }: { dependency: Dependency }) {
   return (
     <section className="widget w-12">
       <ColumnChart
-        title="Time the model takes to read an issue"
-        note={`${r.count.toLocaleString()} issues read; half took under ${seconds(r.median_ms)}, nine in ten under ${seconds(r.p90_ms)}. Stored facts answer again without this wait.`}
+        title={`Reading time per issue (median ${seconds(r.median_ms)}, 90% under ${seconds(r.p90_ms)})`}
         categories={r.bins.map((b) => (b.to_s == null ? `${b.from_s} s+` : `${b.from_s}–${b.to_s} s`))}
         categoryLabel="Reading time"
         series={[
@@ -134,16 +123,9 @@ function Models({ systems }: { systems: string[] }) {
         Models
       </h2>
       {systems.length === 0 ? (
-        <p className="pane-lead">
-          None configured. Set DEP_WATCH_LLM_MODEL to a model on an OpenAI-compatible server and
-          restart the API.
-        </p>
+        <p className="pane-lead">None configured. Set DEP_WATCH_LLM_MODEL.</p>
       ) : (
         <>
-          <p className="pane-lead">
-            The model reads issue text and quotes what it says about versions; code makes every
-            decision. Scans and checks use the first one.
-          </p>
           <ul className="model-list">
             {systems.map((s, i) => (
               <li key={s}>
@@ -184,10 +166,6 @@ function Evaluation({ systems }: { systems: string[] }) {
           <h2 id="eval-title" className="widget-title">
             Evaluation
           </h2>
-          <p className="pane-lead">
-            Scores a model on labeled issues through the same decision code as scans. Every issue
-            is read again, so a 100-issue run takes about an hour.
-          </p>
         </div>
         <div className="toolbar">
           <label>
@@ -284,7 +262,6 @@ function Jobs() {
           <h2 id="jobs-title" className="widget-title">
             Background jobs
           </h2>
-          <p className="pane-lead">Since the API last started; a restart forgets them.</p>
         </div>
         <button onClick={jobs.reload}>Refresh</button>
       </div>

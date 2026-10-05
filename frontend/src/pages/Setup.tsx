@@ -123,11 +123,7 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
   return (
     <div className="page">
       <PageIntro title="Your repository">
-        <p>
-          Choose the folder of the project you run. Its build files (Maven, Gradle, sbt, Python,
-          npm, SBOM, Compose and Dockerfiles) are read in this browser; only those files are sent
-          to find the dependencies and the versions you use.
-        </p>
+        <p>Only the build files leave your browser.</p>
         <input
           ref={inputRef}
           type="file"
@@ -138,8 +134,7 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
         {onCancel && (
           <p className="current-watch">
             Watching {watchedRepo ? `${watchedRepo}: ` : ''}
-            {current.map((w) => `${nameOf(w.dependency)} ${w.version}`).join(', ')}. Nothing
-            changes until you choose Watch.
+            {current.map((w) => `${nameOf(w.dependency)} ${w.version}`).join(', ')}.
           </p>
         )}
         <div className="button-row">
@@ -173,9 +168,8 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
             </h2>
             <p>
               Read {plural(scan.files_read.length, 'build file')}
-              {leftOut > 0 && `; ${plural(leftOut, 'file')} left out for size`}. Choose the
-              dependencies to watch. Only Apache Kafka can be watched for now; everything else is
-              listed so you can see what the repository uses.
+              {leftOut > 0 && `; ${plural(leftOut, 'file')} left out for size`}. Only Apache
+              Kafka can be watched for now.
             </p>
           </div>
 

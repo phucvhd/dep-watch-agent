@@ -4,7 +4,7 @@ import { AnswerBody } from '../components/IssueResult'
 import { RulerKey } from '../components/VersionRuler'
 import { LineChart } from '../components/charts'
 import { ErrorNote, PageIntro } from '../components/common'
-import { ANSWER_TEXT, formatAgo, formatDay } from '../format'
+import { ANSWER_TEXT, formatDay } from '../format'
 import { message, useLoad } from '../hooks'
 
 const PAGE = 30
@@ -57,27 +57,19 @@ export function Issues({ dependency, version, systems, issueKey }: Props) {
   const s = stats.data
   return (
     <div className="dash">
-      <PageIntro title="Issues">
-        <p>
-          Every {dependency.name} issue synced from JIRA
-          {s ? ` (${s.total.toLocaleString()}, newest update ${s.newest ? formatAgo(s.newest) : 'unknown'})` : ''}.
-          Pick one to see whether it affects{' '}
-          {version ? `${dependency.name} ${version}` : 'the version you run'}.
-        </p>
-      </PageIntro>
+      <PageIntro title="Issues" />
 
       {s && (
         <div className="w-12 stat-tiles">
           {[
-            ['Bugs', s.bugs, 'of every issue type'],
-            ['Open bugs', s.open_bugs, 'not resolved yet'],
-            ['Fixed bugs', s.fixed_bugs, 'with a fix in some release'],
-            ['Read by the model', s.read, 'answered from stored facts'],
-          ].map(([label, value, hint]) => (
+            ['Bugs', s.bugs],
+            ['Open bugs', s.open_bugs],
+            ['Fixed bugs', s.fixed_bugs],
+            ['Read by the model', s.read],
+          ].map(([label, value]) => (
             <div key={label as string} className="widget stat-tile">
               <span className="count-label">{label}</span>
               <span className="count-value">{(value as number).toLocaleString()}</span>
-              <span className="count-hint">{hint}</span>
             </div>
           ))}
         </div>
@@ -87,7 +79,6 @@ export function Issues({ dependency, version, systems, issueKey }: Props) {
         <section className="widget w-12">
           <LineChart
             title="Bugs filed and fixed each month"
-            note="The last 24 complete months. A gap that stays open is a backlog growing upstream."
             categories={monthly.data.map((m) => m.month)}
             categoryLabel="Month"
             formatCategory={(m) =>
@@ -338,7 +329,7 @@ function VersionAnswer({
       </form>
 
       {!asked ? (
-        <p className="hint-line">Enter the version you run to see whether this issue affects it.</p>
+        <p className="hint-line">Enter a version.</p>
       ) : result ? (
         <>
           <p className={`verdict verdict-${result.answer}`}>{ANSWER_TEXT[result.answer]}</p>
@@ -348,16 +339,13 @@ function VersionAnswer({
       ) : stored.loading || reading ? (
         <p className="job-line" aria-live="polite">
           <span className="spinner" aria-hidden="true" />
-          {reading ? 'Reading the issue; the model takes 30 to 90 seconds.' : 'Looking it up…'}
+          {reading ? 'Reading the issue (30–90 s)…' : 'Looking it up…'}
         </p>
       ) : stored.error ? (
         <ErrorNote>{stored.error}</ErrorNote>
       ) : (
         <div className="unread">
-          <p>
-            Not read yet for {asked}. The fix versions don't settle it, so the issue text has to
-            be read.
-          </p>
+          <p>Not read yet for {asked}.</p>
           <button className="primary" onClick={readIssue} disabled={systems.length === 0}>
             {systems.length ? `Read with ${systems[0]}` : 'No model configured'}
           </button>

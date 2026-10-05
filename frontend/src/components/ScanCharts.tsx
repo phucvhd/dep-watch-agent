@@ -40,7 +40,6 @@ export function BugsByDay({ result }: { result: ScanResponse }) {
   return (
     <ColumnChart
       title="Scanned bugs by day"
-      note="By the day each bug was last updated upstream."
       categories={categories.map(dayLabel)}
       categoryLabel="Day"
       series={series}
@@ -82,7 +81,6 @@ export function EvidenceByLine({ result, version }: { result: ScanResponse; vers
   return (
     <ColumnChart
       title="Where the bugs were seen"
-      note={`Scanned issues that show the bug on each release line. ${yours} is the line you run.`}
       categories={lines}
       categoryLabel="Release line"
       series={[

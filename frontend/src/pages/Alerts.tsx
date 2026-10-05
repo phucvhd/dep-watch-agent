@@ -9,12 +9,6 @@ import { isActive, message, useJob } from '../hooks'
 
 const TABS: Answer[] = ['affected', 'insufficient_information', 'not_affected']
 
-const TAB_HINT: Record<Answer, string> = {
-  affected: 'The issue shows the bug at your version, unfixed',
-  insufficient_information: "The text doesn't say where the bug starts",
-  not_affected: 'Fixed in your version, or starts after it',
-}
-
 function weekAgo(): string {
   return new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString().slice(0, 10)
 }
@@ -86,10 +80,6 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
         <h2 id="scan-title" className="widget-title">
           Scan upstream
         </h2>
-        <p className="widget-text">
-          Bugs the fix versions settle are answered at once; the model reads the rest, 30 to 90
-          seconds each the first time, then from stored facts.
-        </p>
         <form className="toolbar" onSubmit={startScan}>
           <label>
             <span>Updated since</span>
@@ -144,7 +134,6 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
               >
                 <span className="count-label">{ANSWER_TEXT[answer]}</span>
                 <span className="count-value">{result.counts[answer] ?? 0}</span>
-                <span className="count-hint">{TAB_HINT[answer]}</span>
               </button>
             ))}
           </div>
