@@ -103,6 +103,7 @@ def test_quote_matching_ignores_whitespace_but_not_words():
         ("0.10.2.1", True),
         ("3.7", False),
         ("0.10.2", False),
+        ("0.8.0", True),  # an early Kafka release, written with three parts
         ("nope", False),
     ],
 )
@@ -245,3 +246,11 @@ def test_fix_versions_are_not_quotable_text():
 def test_issue_text_reads_given_fix_versions():
     issue = IssueText.from_dict({"summary": "s", "description": "d", "fix_versions": ["3.7.1"]})
     assert issue.fix_versions == ["3.7.1"]
+
+
+def test_early_kafka_fix_versions_count():
+    # JIRA writes Kafka's early releases short: a fix in 0.8.1 used to be dropped as a line.
+    issue = IssueText("s", "Seen on 0.8.0.", fix_versions=["0.8.1"])
+    assert decide(issue, "0.8.1.1", Extraction([]), KAFKA).answer == NOT_AFFECTED
+    seen = Extraction([Evidence("0.8.0", "affects", "Seen on 0.8.0.")])
+    assert decide(issue, "0.8.0", seen, KAFKA).answer == AFFECTED

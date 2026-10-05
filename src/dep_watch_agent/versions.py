@@ -14,7 +14,11 @@ names its own (``dependencies.py``). Every scheme shares the rest:
   its release: ``3.6.2 < 3.7.0-rc0 < 3.7.0-rc1 < 3.7.0``.
 
 Kafka's scheme (``KAFKA``): four parts before 1.0 (``0.10.2.1`` is patch 1 of the ``0.10.2``
-line), three from 1.0 on. ``THREE_PART``: three parts throughout (Spark's ``0.9.1``).
+line), three from 1.0 on. Its first releases were written shorter, and JIRA keeps those names:
+``0.6`` and ``0.7``, then ``0.7.1`` to ``0.8.1``, then ``0.8.1.1``; four parts only from
+``0.8.2.0``. Those are on ``x.y`` lines (``0.8.1`` and ``0.8.1.1`` patch the ``0.8`` line),
+and are padded to four parts like every 0.x version, so they compare correctly.
+``THREE_PART``: three parts throughout (Spark's ``0.9.1``).
 
 Versions are only compared within one scheme: a dependency's versions with each other.
 """
@@ -52,10 +56,15 @@ class Version:
     release: tuple[int, ...]
     pre: tuple[str, int] | None = None
     raw: str = field(default="", compare=False)
+    # Parts naming the release line, when the scheme says it isn't all but the last (an early
+    # release: Kafka's 0.7.2 and 0.8.1.1 are on the 0.7 and 0.8 lines).
+    line_parts: int | None = field(default=None, compare=False)
 
     @property
     def line(self) -> tuple[int, ...]:
         """Release line this version belongs to: ``3.7.1 -> (3, 7)``, ``0.10.2.1 -> (0, 10, 2)``."""
+        if self.line_parts is not None:
+            return self.release[: self.line_parts]
         return self.release[:-1]
 
     @property
@@ -82,11 +91,19 @@ class Version:
 
 @dataclass(frozen=True)
 class VersionScheme:
-    """How a dependency numbers its releases: the parts of a release, before and from 1.0."""
+    """How a dependency numbers its releases: the parts of a release, before and from 1.0.
+
+    ``early`` lists releases written with fewer parts, oldest first, as ``(below, parts)``: a
+    version below ``below`` is a release when written with at least ``parts`` parts.
+    """
 
     name: str
     parts: int = 3
     parts_before_1: int = 3
+    early: tuple[tuple[tuple[int, ...], int], ...] = ()
+
+    def _early_parts(self, release: tuple[int, ...]) -> int | None:
+        return next((parts for below, parts in self.early if release < below), None)
 
     def parse(self, value: str | Version) -> Version:
         """Parse a version string. Raises ``VersionParseError`` rather than guessing."""
@@ -112,7 +129,9 @@ class VersionScheme:
         if match["tag"] is not None:
             pre = (match["tag"].lower(), int(match["num"] or 0))
 
-        return Version(release=release, pre=pre, raw=raw)
+        # Early releases are on x.y lines, as releases from 1.0 are: 0.8.1.1 patches the 0.8 line.
+        line_parts = self.parts - 1 if self._early_parts(release) is not None else None
+        return Version(release=release, pre=pre, raw=raw, line_parts=line_parts)
 
     def is_release(self, value: str) -> bool:
         """True for a specific release (``3.7.0``), false for a line (``3.7``) or a string that
@@ -121,11 +140,14 @@ class VersionScheme:
             parsed = self.parse(value)
         except VersionParseError:
             return False
-        given = value.strip().lstrip("vV").split("-")[0].split(".")
-        return len(given) == len(parsed.release)
+        given = len(value.strip().lstrip("vV").split("-")[0].split("."))
+        early = self._early_parts(parsed.release)
+        if early is not None:
+            return given >= early
+        return given == len(parsed.release)
 
 
-KAFKA = VersionScheme("Kafka", parts=3, parts_before_1=4)
+KAFKA = VersionScheme("Kafka", parts=3, parts_before_1=4, early=(((0, 7, 1), 2), ((0, 8, 2), 3)))
 THREE_PART = VersionScheme("three-part")
 
 
