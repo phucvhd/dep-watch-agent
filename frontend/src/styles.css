@@ -308,54 +308,13 @@ button:disabled {
   font-weight: 600;
 }
 
-/* What you run: the repository and the dependencies chosen from it, versions set large. */
-.watch {
-  display: grid;
-  gap: 4px;
-}
+/* A watched dependency's name and version, set large (step 1 of Scan). */
 
-.watch-label {
-  margin: 0;
-  font-size: 13px;
-  color: var(--ink-3);
-}
 
-.watch-repo {
-  margin: 0 0 8px;
-  font-size: 18px;
-  letter-spacing: -0.015em;
-  overflow-wrap: anywhere;
-}
 
-.watch-items {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-}
 
-.watch-items button {
-  display: grid;
-  width: 100%;
-  height: auto;
-  padding: 8px 0 8px 14px;
-  border: 0;
-  border-left: 2px solid var(--line);
-  border-radius: 0;
-  background: none;
-  text-align: left;
-  color: var(--ink-3);
-}
 
-.watch-items button:hover:not(:disabled) {
-  border-color: var(--ink-3);
-  color: var(--ink-2);
-}
 
-.watch-items button[aria-pressed='true'] {
-  border-left-color: var(--ink);
-  color: var(--ink);
-}
 
 .watch-name {
   font-size: 14px;
@@ -368,12 +327,6 @@ button:disabled {
   letter-spacing: -0.035em;
 }
 
-.watch-change {
-  margin-top: 10px;
-  font-size: 15px;
-  color: var(--ink-2);
-  width: fit-content;
-}
 
 .status {
   margin-top: auto;
@@ -2236,14 +2189,6 @@ main {
   .nav a {
     white-space: nowrap;
     font-size: 16px;
-  }
-  .watch-items {
-    grid-auto-flow: column;
-    justify-content: start;
-    gap: 16px;
-  }
-  .watch-version {
-    font-size: 26px;
   }
   .status {
     display: none;

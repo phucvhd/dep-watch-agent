@@ -109,32 +109,6 @@ export function App() {
             ))}
           </nav>
 
-          <div className="sb-section watch" aria-label="What you run">
-            <p className="watch-label">
-              {watch.repo ? 'Repository' : watch.items.length ? 'Added by hand' : 'Nothing watched'}
-            </p>
-            {watch.repo && <p className="watch-repo">{watch.repo}</p>}
-            {watch.items.length > 0 && (
-              <ul className="watch-items">
-                {watch.items.map((item, i) => (
-                  <li key={`${item.dependency}@${item.version}`}>
-                    <button
-                      aria-pressed={i === watch.activeIndex}
-                      onClick={() => watch.select(i)}
-                      title={item.files?.join(', ')}
-                    >
-                      <span className="watch-name">{nameOf(item.dependency)}</span>
-                      <span className="watch-version">{item.version}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <a className="watch-change" href="#/scan/edit">
-              {watch.items.length ? 'Change' : 'Choose a repository'}
-            </a>
-          </div>
-
           <div className="sb-section status">
             <p
               title={[
