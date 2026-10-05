@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { api, type Answer, type Dependency, type Job, type ScanResponse } from '../api/client'
 import { IssueDetail, IssueRow } from '../components/IssueResult'
-import { BugsByDay, EvidenceByLine } from '../components/ScanCharts'
 import { RulerKey } from '../components/VersionRuler'
 import { ErrorNote, JobLine, StepHead } from '../components/common'
 import { ANSWER_TEXT, plural } from '../format'
@@ -112,12 +111,6 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
               </button>
             ))}
           </div>
-          <section className="widget w-7">
-            <BugsByDay result={result} />
-          </section>
-          <section className="widget w-5">
-            <EvidenceByLine result={result} version={version} />
-          </section>
           <Triage key={tab} result={result} tab={tab} version={version} />
         </>
       ) : (
