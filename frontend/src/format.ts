@@ -43,5 +43,14 @@ export function formatAgo(value: string, now = Date.now()): string {
   return 'just now'
 }
 
+/** "now", "9m ago", "3h ago", "2d ago": for tight spots. */
+export function formatAgoShort(value: string, now = Date.now()): string {
+  const minutes = Math.round((now - new Date(value).getTime()) / 60000)
+  if (minutes < 1) return 'now'
+  if (minutes < 60) return `${minutes}m ago`
+  if (minutes < 60 * 24) return `${Math.round(minutes / 60)}h ago`
+  return `${Math.round(minutes / 60 / 24)}d ago`
+}
+
 export const plural = (n: number, one: string, many = `${one}s`) =>
   `${n} ${n === 1 ? one : many}`

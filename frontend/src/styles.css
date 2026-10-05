@@ -397,6 +397,10 @@ button:disabled {
   background: var(--ink-3);
 }
 
+.status-ago {
+  color: var(--ink-3);
+}
+
 main {
   min-width: 0;
 }

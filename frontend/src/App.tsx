@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api, type ScanResponse } from './api/client'
 import { VersionOrder } from './components/versionOrder'
-import { formatAgo } from './format'
+import { formatAgoShort } from './format'
 import { useLoad, useWatch } from './hooks'
 import { Dashboard } from './pages/Dashboard'
 import { Operations } from './pages/Operations'
@@ -130,11 +130,18 @@ export function App() {
           </div>
 
           <div className="sb-section status">
-            <p>
+            <p
+              title={[
+                model ? `Issues are read with ${model}` : 'No model configured',
+                watermark && `issues synced ${new Date(watermark).toLocaleString()}`,
+              ]
+                .filter(Boolean)
+                .join('; ')}
+            >
               <span className={model ? 'status-dot' : 'status-dot status-off'} aria-hidden="true" />
-              {model ? `Reading with ${model}` : 'No model configured'}
+              {model ?? 'No model'}
+              {watermark && <span className="status-ago">({formatAgoShort(watermark)})</span>}
             </p>
-            {watermark && <p>Issues synced {formatAgo(watermark)}</p>}
           </div>
         </aside>
 
