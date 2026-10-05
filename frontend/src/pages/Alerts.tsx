@@ -76,6 +76,11 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
         )}
       </section>
 
+      <section className="widget w-4">
+        <IssueSources />
+      </section>
+
+
       <section className="widget w-4" aria-labelledby="scan-title">
         <h2 id="scan-title" className="widget-title">
           Scan upstream
@@ -120,10 +125,9 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
           </p>
         )}
       </section>
-
       {result ? (
         <>
-          <div className="w-12 count-tiles" role="tablist" aria-label="Answers">
+          <div className="w-8 count-tiles" role="tablist" aria-label="Answers">
             {TABS.map((answer) => (
               <button
                 key={answer}
@@ -137,34 +141,25 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
               </button>
             ))}
           </div>
-          <section className="widget w-4">
-            <IssueSources />
-          </section>
-          <section className="widget w-8">
+          <section className="widget w-7">
             <BugsByDay result={result} />
           </section>
-          <section className="widget w-12">
+          <section className="widget w-5">
             <EvidenceByLine result={result} version={version} />
           </section>
           <Triage key={tab} result={result} tab={tab} version={version} />
         </>
       ) : (
-        // Where issues come from doesn't depend on a scan: shown before one too.
-        <>
-          <section className="widget w-4">
-            <IssueSources />
+        !running && (
+          <section className="widget w-8 empty-tile">
+            <h2>No scan of {version} yet</h2>
+            <p>
+              Scan reads the bugs updated since the day you pick and answers each for {target}.
+              The answers show up here, split into what affects you, what can't be told, and what
+              doesn't.
+            </p>
           </section>
-          {!running && (
-            <section className="widget w-8 empty-tile">
-              <h2>No scan of {version} yet</h2>
-              <p>
-                Scan reads the bugs updated since the day you pick and answers each for {target}.
-                The answers show up here, split into what affects you, what can't be told, and
-                what doesn't.
-              </p>
-            </section>
-          )}
-        </>
+        )
       )}
     </div>
   )

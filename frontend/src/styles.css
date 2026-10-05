@@ -1540,6 +1540,10 @@ main {
 }
 
 /* Counts as tiles; the three answers double as the filter for the list below. */
+.count-tiles {
+  align-self: stretch;
+}
+
 .count-tiles,
 .stat-tiles {
   display: grid;
@@ -1562,6 +1566,7 @@ main {
 .count-tile {
   cursor: pointer;
   position: relative;
+  align-content: space-between; /* label at the top, the number on the floor of the tile */
 }
 
 .count-tile:hover:not(:disabled) {
