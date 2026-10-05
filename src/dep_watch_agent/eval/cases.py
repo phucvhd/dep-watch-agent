@@ -34,7 +34,7 @@ NEGATIVE_KIND_WEIGHTS = {
 class Case:
     case_id: str
     issue_key: str
-    kafka_version: str
+    version: str
     metadata_answer: str  # Applicability.AFFECTED or Applicability.NOT_AFFECTED
     basis: str  # listed_affected | inferred_affected | one of NEGATIVE_KIND_WEIGHTS
     affects_versions: list[str]
@@ -64,7 +64,7 @@ def make_cases(
         return Case(
             case_id=f"{candidate.key}@{version}",
             issue_key=candidate.key,
-            kafka_version=str(version),
+            version=str(version),
             metadata_answer=answer.value,
             basis=basis,
             affects_versions=candidate.affects_versions,

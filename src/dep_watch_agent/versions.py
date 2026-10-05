@@ -1,16 +1,26 @@
-"""Version parsing and comparison for Kafka releases.
+"""Version parsing and comparison for upstream releases.
 
 This is the only place in the codebase where versions are compared. Everything else,
 including the LangChain tools the agent calls, goes through these functions. Never compare
 version strings directly and never ask the LLM to do it.
 
-Kafka version scheme:
+A ``VersionScheme`` says how many numeric parts a dependency's releases have; each dependency
+names its own (``dependencies.py``). Every scheme shares the rest:
 
-- Before 1.0, four numeric parts: ``0.10.2.1`` is patch 1 of the ``0.10.2`` release line.
-- From 1.0 on, three numeric parts: ``3.7.1`` is patch 1 of the ``3.7`` release line.
-- Shorter forms are padded with zeros, so ``3.7 == 3.7.0``.
+- Shorter forms are padded with zeros, so ``3.7 == 3.7.0``. A padded form names a release
+  line, not a release (``VersionScheme.is_release``).
+- The last part is the patch: ``3.7.1`` is patch 1 of the ``3.7`` release line.
 - Optional pre-release tag: ``3.7.0-rc1``, ``3.7.0-SNAPSHOT``. A pre-release sorts before
   its release: ``3.6.2 < 3.7.0-rc0 < 3.7.0-rc1 < 3.7.0``.
+
+Kafka's scheme (``KAFKA``): four parts before 1.0 (``0.10.2.1`` is patch 1 of the ``0.10.2``
+line), three from 1.0 on. Its first releases were written shorter, and JIRA keeps those names:
+``0.6`` and ``0.7``, then ``0.7.1`` to ``0.8.1``, then ``0.8.1.1``; four parts only from
+``0.8.2.0``. Those are on ``x.y`` lines (``0.8.1`` and ``0.8.1.1`` patch the ``0.8`` line),
+and are padded to four parts like every 0.x version, so they compare correctly.
+``THREE_PART``: three parts throughout (Spark's ``0.9.1``).
+
+Versions are only compared within one scheme: a dependency's versions with each other.
 """
 
 import re
@@ -31,7 +41,7 @@ _VERSION_RE = re.compile(
 
 
 class VersionParseError(ValueError):
-    """Raised when a string is not a valid Kafka version."""
+    """Raised when a string is not a valid version in the scheme asked for."""
 
 
 class Applicability(StrEnum):
@@ -46,10 +56,15 @@ class Version:
     release: tuple[int, ...]
     pre: tuple[str, int] | None = None
     raw: str = field(default="", compare=False)
+    # Parts naming the release line, when the scheme says it isn't all but the last (an early
+    # release: Kafka's 0.7.2 and 0.8.1.1 are on the 0.7 and 0.8 lines).
+    line_parts: int | None = field(default=None, compare=False)
 
     @property
     def line(self) -> tuple[int, ...]:
         """Release line this version belongs to: ``3.7.1 -> (3, 7)``, ``0.10.2.1 -> (0, 10, 2)``."""
+        if self.line_parts is not None:
+            return self.release[: self.line_parts]
         return self.release[:-1]
 
     @property
@@ -74,36 +89,77 @@ class Version:
         return f"Version({self.raw!r})"
 
 
-def parse_version(value: str | Version) -> Version:
-    """Parse a Kafka version string. Raises ``VersionParseError`` rather than guessing."""
-    if isinstance(value, Version):
-        return value
-    if not isinstance(value, str):
-        raise VersionParseError(f"expected a version string, got {type(value).__name__}")
+@dataclass(frozen=True)
+class VersionScheme:
+    """How a dependency numbers its releases: the parts of a release, before and from 1.0.
 
-    raw = value.strip()
-    match = _VERSION_RE.fullmatch(raw)
-    if match is None:
-        raise VersionParseError(f"not a valid version: {value!r}")
+    ``early`` lists releases written with fewer parts, oldest first, as ``(below, parts)``: a
+    version below ``below`` is a release when written with at least ``parts`` parts.
+    """
 
-    parts = tuple(int(p) for p in match["release"].split("."))
-    scheme_length = 4 if parts[0] == 0 else 3
-    if len(parts) > scheme_length:
-        raise VersionParseError(
-            f"too many parts for a {parts[0]}.x version (max {scheme_length}): {value!r}"
-        )
-    release = parts + (0,) * (scheme_length - len(parts))
+    name: str
+    parts: int = 3
+    parts_before_1: int = 3
+    early: tuple[tuple[tuple[int, ...], int], ...] = ()
 
-    pre = None
-    if match["tag"] is not None:
-        pre = (match["tag"].lower(), int(match["num"] or 0))
+    def _early_parts(self, release: tuple[int, ...]) -> int | None:
+        return next((parts for below, parts in self.early if release < below), None)
 
-    return Version(release=release, pre=pre, raw=raw)
+    def parse(self, value: str | Version) -> Version:
+        """Parse a version string. Raises ``VersionParseError`` rather than guessing."""
+        if isinstance(value, Version):
+            return value
+        if not isinstance(value, str):
+            raise VersionParseError(f"expected a version string, got {type(value).__name__}")
+
+        raw = value.strip()
+        match = _VERSION_RE.fullmatch(raw)
+        if match is None:
+            raise VersionParseError(f"not a valid version: {value!r}")
+
+        parts = tuple(int(p) for p in match["release"].split("."))
+        length = self.parts_before_1 if parts[0] == 0 else self.parts
+        if len(parts) > length:
+            raise VersionParseError(
+                f"too many parts for a {parts[0]}.x {self.name} version (max {length}): {value!r}"
+            )
+        release = parts + (0,) * (length - len(parts))
+
+        pre = None
+        if match["tag"] is not None:
+            pre = (match["tag"].lower(), int(match["num"] or 0))
+
+        # Early releases are on x.y lines, as releases from 1.0 are: 0.8.1.1 patches the 0.8 line.
+        line_parts = self.parts - 1 if self._early_parts(release) is not None else None
+        return Version(release=release, pre=pre, raw=raw, line_parts=line_parts)
+
+    def is_release(self, value: str) -> bool:
+        """True for a specific release (``3.7.0``), false for a line (``3.7``) or a string that
+        isn't a version at all."""
+        try:
+            parsed = self.parse(value)
+        except VersionParseError:
+            return False
+        given = len(value.strip().lstrip("vV").split("-")[0].split("."))
+        early = self._early_parts(parsed.release)
+        if early is not None:
+            return given >= early
+        return given == len(parsed.release)
 
 
-def compare_versions(a: str | Version, b: str | Version) -> int:
+KAFKA = VersionScheme("Kafka", parts=3, parts_before_1=4, early=(((0, 7, 1), 2), ((0, 8, 2), 3)))
+THREE_PART = VersionScheme("three-part")
+
+
+def parse_version(value: str | Version, scheme: VersionScheme = KAFKA) -> Version:
+    """``scheme.parse``. The default is Kafka's, the scheme of the eval's ground truth; code that
+    answers for a dependency passes that dependency's scheme."""
+    return scheme.parse(value)
+
+
+def compare_versions(a: str | Version, b: str | Version, scheme: VersionScheme = KAFKA) -> int:
     """Return -1 if ``a < b``, 0 if equal, 1 if ``a > b``."""
-    va, vb = parse_version(a), parse_version(b)
+    va, vb = scheme.parse(a), scheme.parse(b)
     return (va > vb) - (va < vb)
 
 
@@ -111,6 +167,7 @@ def in_affected_range(
     version: str | Version,
     affected_versions: Iterable[str | Version],
     fix_versions: Iterable[str | Version],
+    scheme: VersionScheme = KAFKA,
 ) -> Applicability:
     """Decide whether ``version`` has the bug, given JIRA's affects and fix versions.
 
@@ -131,9 +188,9 @@ def in_affected_range(
        saw, which is a known limitation of this rule.
     5. Otherwise: affected.
     """
-    target = parse_version(version)
-    affected = [parse_version(v) for v in affected_versions]
-    fixes = [parse_version(v) for v in fix_versions]
+    target = scheme.parse(version)
+    affected = [scheme.parse(v) for v in affected_versions]
+    fixes = [scheme.parse(v) for v in fix_versions]
 
     if target in affected and target not in fixes:
         return Applicability.AFFECTED

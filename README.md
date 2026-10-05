@@ -8,8 +8,10 @@ never get a CVE.
 
 - Version parsing and affected-range checks (`dep_watch_agent.versions`)
 - Incremental JIRA sync into Postgres (`POST /sync/jira`)
+- An LLM system on any OpenAI-compatible server (LM Studio, vLLM, Ollama) that extracts cited
+  version facts; code makes every decision (`dep_watch_agent.llm`)
 - Web API for the frontend: issues, versions, "does this issue affect my version?" (`POST /check`),
-  sync and eval jobs
+  "which issues affect my version?" (`POST /scan`), sync and eval jobs
 
 ## Development
 
@@ -31,6 +33,46 @@ Interactive API docs are at http://127.0.0.1:8000/docs and the OpenAPI schema at
 Set `DATABASE_URL` to use a different Postgres, and `DEP_WATCH_CORS_ORIGINS` to the frontend's
 origin (see `.env.example`). Tests use
 `TEST_DATABASE_URL` if set, and each test runs in its own throwaway schema.
+
+### Web UI
+
+`frontend/` is a React + TypeScript app (Vite) over the API. It starts by asking for your
+repository folder: the browser reads its build files (Maven `pom.xml` with properties, Gradle
+build files, lockfile and version catalog, sbt, Python requirements, `pyproject.toml` and
+locks, npm `package.json` with its lock, CycloneDX SBOMs, images in Compose files and
+Dockerfiles), skipping hidden and generated folders, and sends only their text to
+`POST /repo/scan`, which lists every dependency and version found. Confluent Platform's
+`cp-kafka` x.y.0 images count as the Apache Kafka release they ship.
+You tick the ones to watch; every dependency is shown, but only Apache Kafka can be watched for
+now. A version can also be added by hand, and changing the repository can be abandoned (Keep
+watching, Cancel, or Esc) without losing what is watched.
+
+Pages follow the flow:
+
+- **Scan** (`#/scan`): 1 choose the repository (the folder picker opens in place; Change,
+  Keep watching or Esc leave the watch list as it was), 2 scan upstream bugs for the watched
+  version, 3 the results: answer counts that filter the list, bugs by day, where the bugs were
+  seen, and each issue with its version ruler and quoted evidence.
+- **Dashboard** (`#/dashboard`): statistics from the database. Issues by source (Kafka, Spark,
+  Hadoop), then for the source picked: bug counts, bugs filed and fixed per month, and every
+  issue. For Kafka an issue also shows whether it affects your version, from fix versions or
+  stored facts, or read on request.
+- **Data and models** (`#/operations`): a sync per issue tracker, models, eval runs, jobs.
+
+Besides Kafka, Spark and Hadoop Common issues are synced for the overview; only Kafka is
+answered for a version. Old links (`#/alerts`, `#/setup`, `#/issues/KEY`, `#/check/KEY`) are
+rewritten to the new pages.
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:5173, proxies /api to the API on :8000
+npm run gen:api    # regenerate src/api/schema.ts from /openapi.json after changing schemas.py
+npm run build      # type-check and build to dist/
+```
+
+The choice is kept in the browser; a link with `?dependency=kafka&version=3.9.1` opens on that
+version without a repository.
 
 ### Schema migrations
 
@@ -58,25 +100,65 @@ before landing; a test fails when there is more than one head.
 `POST /sync/jira` starts a background job that pulls issues with their affected versions, fix versions, components and comments
 from `issues.apache.org` anonymously. The first run fetches all ~20k KAFKA issues (about
 7 minutes with the default 1 s delay between requests); later runs fetch only issues updated
-since the previous run. Send `{"full": true}` to re-sync everything. Poll `GET /jobs/{id}` for
+since the previous run. Send `{"project": "KAFKA", "full": true}` to re-sync everything. Poll `GET /jobs/{id}` for
 progress (issues synced so far) and the result; `GET /sync/state` shows the watermark.
 
 ```bash
-curl -XPOST localhost:8000/sync/jira -H 'content-type: application/json' -d '{}'
+curl -XPOST localhost:8000/sync/jira -H 'content-type: application/json' -d '{"project": "KAFKA"}'
 ```
+
+### The LLM system
+
+The system that reads issue text is an open model behind an OpenAI-compatible server. With LM
+Studio, load a model, start its server (default `http://localhost:1234/v1`) and set in `.env`:
+
+```bash
+DEP_WATCH_LLM_MODEL=google/gemma-4-e4b   # the model id the server lists at /v1/models
+```
+
+It is registered as `gemma-4-e4b` (override with `DEP_WATCH_LLM_SYSTEM`). Without a model,
+`/check` and `/scan` return 503. The prompt is `src/dep_watch_agent/llm/prompts/extract_facts.md`.
+The model answers in text and the JSON is parsed out of it: reasoning models such as gemma-4
+skip their thinking under schema-constrained decoding and then find no facts at all
+(`DEP_WATCH_LLM_OUTPUT=json_schema` turns constraints on for models that don't reason). Invalid
+output is retried, then counts as no facts.
+Issues longer than one chunk (30k characters) are read in chunks, up to six. Calls are traced to
+Langfuse when its keys are set.
 
 ### Checking an issue
 
 ```bash
 curl -XPOST localhost:8000/check -H 'content-type: application/json' \
-  -d '{"issue_key": "KAFKA-15417", "kafka_version": "3.5.1"}'
+  -d '{"issue_key": "KAFKA-15417", "version": "3.5.1"}'
 ```
 
 The answer is `affected`, `not_affected` or `insufficient_information`, with the cited facts it
 used, the facts it rejected (and why), and a link to the issue. The system sees what it sees in
-the eval: issue text without bot comments, plus JIRA's fix versions. Pass `"system"` to pick
-one; the default is the first registered in `systems.SYSTEMS`. Until a system is registered,
-`/check` returns 503.
+the eval: issue text without bot comments, plus JIRA's fix versions. If the fix versions alone
+put the version past the fix, the answer is `not_affected` without a model call
+(`decided_by: "fix_versions"`). Pass `"system"` to pick one; the default is the first registered.
+
+### Scanning for a version
+
+```bash
+curl -XPOST localhost:8000/scan -H 'content-type: application/json' \
+  -d '{"project": "KAFKA", "version": "3.9.1", "since": "2026-09-27T00:00:00Z", "limit": 200}'
+```
+
+A background job answers every candidate issue for the version: bugs (not duplicates, invalid
+or not-a-bug), updated since `since`, newest first, at most `limit`. Poll `GET /jobs/{id}`; the
+result lists affected issues first, then `insufficient_information`, then `not_affected`, each
+with cited facts and a link. An issue that fails (e.g. the model server is down) is reported
+with its `error`, not dropped. Each issue the fix versions don't settle costs one model call
+(30–90 s on a laptop with a reasoning model), so scan this week's issues with `since`; a whole
+version is ~3k issues.
+
+The facts a system extracts don't depend on the version asked about, so they are stored in
+Postgres (`extractions`, keyed by issue, system, extractor version and a hash of the text the
+system sees) and committed per issue. Scanning again, scanning another version, or `/check`
+reuse them without a model call (`cached: true`); a new comment, a new fix version, another
+model or an edited prompt extracts again. Eval runs don't use stored facts, so they always
+measure the system as it is.
 
 ## Evaluation
 

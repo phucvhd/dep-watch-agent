@@ -18,6 +18,7 @@ from dep_watch_agent.api.deps import (
     SessionDep,
     SettingsDep,
     SystemsDep,
+    pick_system,
 )
 from dep_watch_agent.api.schemas import (
     FILE_NAME_PATTERN,
@@ -115,8 +116,7 @@ def start_run(
 ):
     """Score a system on the dataset. Poll ``/jobs/{id}``; the result has the metrics, and local
     runs are saved under ``/eval/runs``."""
-    if body.system not in systems:
-        raise HTTPException(422, f"unknown system {body.system!r}; registered: {sorted(systems)}")
+    pick_system(systems, body.system)
     if body.langfuse and body.provisional:
         raise HTTPException(400, "provisional runs are local only; Langfuse holds labeled data")
     dataset = None if body.langfuse else _load(settings.datasets_dir, body.dataset)

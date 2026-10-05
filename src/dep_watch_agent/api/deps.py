@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Any
 
-from fastapi import Depends, Request
+from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session, sessionmaker
 
 from dep_watch_agent.api.jobs import JobRegistry
@@ -60,6 +60,17 @@ def get_langfuse_factory(request: Request) -> Callable[[], Any]:
 
 def get_systems(request: Request) -> SystemRegistry:
     return request.app.state.systems
+
+
+def pick_system(systems: SystemRegistry, name: str | None) -> str:
+    """The requested system's name, or the first registered one. 503 if none is registered,
+    422 if the name is unknown."""
+    if not systems:
+        raise HTTPException(503, "no system registered; set DEP_WATCH_LLM_MODEL (see .env.example)")
+    name = name or next(iter(systems))
+    if name not in systems:
+        raise HTTPException(422, f"unknown system {name!r}; registered: {sorted(systems)}")
+    return name
 
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]

@@ -1,6 +1,8 @@
 import pytest
 
 from dep_watch_agent.versions import (
+    KAFKA,
+    THREE_PART,
     Applicability,
     Version,
     VersionParseError,
@@ -381,3 +383,80 @@ def test_version_repr():
 
 def test_version_type():
     assert isinstance(parse_version("3.9.0"), Version)
+
+
+# --- schemes -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("scheme", "version", "expected"),
+    [
+        (KAFKA, "0.10.2.1", True),
+        (KAFKA, "0.10.2", False),  # a Kafka 0.x line
+        (KAFKA, "3.7.0", True),
+        # Kafka's first releases, as JIRA names them: shorter than four parts until 0.8.2.0.
+        (KAFKA, "0.7", True),
+        (KAFKA, "0.7.2", True),
+        (KAFKA, "0.8.0", True),
+        (KAFKA, "0.8.1", True),
+        (KAFKA, "0.8.1.1", True),
+        (KAFKA, "0.8", False),  # the 0.8 line; its first release is 0.8.0
+        (KAFKA, "0.8.2", False),  # the 0.8.2 line: 0.8.2.0, 0.8.2.1, ...
+        (KAFKA, "0.9.0", False),
+        (THREE_PART, "0.9.1", True),  # Spark 0.9.1 is a release, not a line
+        (THREE_PART, "0.9", False),
+        (THREE_PART, "3.5.1", True),
+        (THREE_PART, "0.10.2.1", False),  # too many parts
+        (THREE_PART, "nope", False),
+    ],
+)
+def test_scheme_is_release(scheme, version, expected):
+    assert scheme.is_release(version) is expected
+
+
+def test_scheme_sets_the_release_line():
+    assert parse_version("0.9.1", THREE_PART).line == (0, 9)
+    assert parse_version("0.9.1", KAFKA).line == (0, 9, 1)  # 0.9.1.0: patch 0 of 0.9.1
+
+
+@pytest.mark.parametrize(
+    ("version", "line"),
+    [
+        ("0.7", (0, 7)),
+        ("0.7.2", (0, 7)),
+        ("0.8.1", (0, 8)),
+        ("0.8.1.1", (0, 8)),  # a patch of 0.8.1, on the 0.8 line
+        ("0.8.2.0", (0, 8, 2)),
+    ],
+)
+def test_early_kafka_release_lines(version, line):
+    assert parse_version(version).line == line
+
+
+def test_early_kafka_releases_compare_with_four_part_ones():
+    assert parse_version("0.7") == parse_version("0.7.0")
+    assert parse_version("0.8.1") < parse_version("0.8.1.1") < parse_version("0.8.2.0")
+
+
+@pytest.mark.parametrize(
+    ("version", "fixes", "expected"),
+    [
+        ("0.7.2", ["0.7.1", "0.8.0"], NOT_AFFECTED),  # 0.7.2 patches the 0.7 line
+        ("0.8.1.1", ["0.8.1", "0.8.2.0"], NOT_AFFECTED),
+        ("0.8.1", ["0.8.0", "0.9.0.0"], NOT_AFFECTED),
+        ("0.8.2.1", ["0.8.1.1", "0.9.0.0"], UNKNOWN),  # the 0.8.2 line has no fix of its own
+    ],
+)
+def test_early_kafka_backports(version, fixes, expected):
+    assert in_affected_range(version, [], fixes) is expected
+
+
+def test_three_part_rejects_four_parts():
+    with pytest.raises(VersionParseError, match="three-part"):
+        parse_version("0.10.2.1", THREE_PART)
+
+
+def test_backports_follow_the_scheme_line():
+    # A 0.9.1 fix covers 0.9.2 on Spark's 0.9 line; on Kafka's scheme 0.9.2 is another line.
+    assert in_affected_range("0.9.2", [], ["0.9.1", "1.0.0"], THREE_PART) is NOT_AFFECTED
+    assert in_affected_range("0.9.2", [], ["0.9.1", "1.0.0"], KAFKA) is UNKNOWN

@@ -21,10 +21,10 @@ from dep_watch_agent import __version__
 from dep_watch_agent.api.deps import Settings
 from dep_watch_agent.api.jobs import JobConflict, JobRegistry
 from dep_watch_agent.api.routes import eval as eval_routes
-from dep_watch_agent.api.routes import issues, ops
+from dep_watch_agent.api.routes import issues, ops, repo, scan, stats
 from dep_watch_agent.api.schemas import JobOut
 from dep_watch_agent.eval.dataset import DatasetError
-from dep_watch_agent.systems import SYSTEMS, SystemRegistry
+from dep_watch_agent.systems import SystemRegistry, configured_systems
 
 
 def create_app(
@@ -49,7 +49,7 @@ def create_app(
 
     app = FastAPI(
         title="dep-watch-agent",
-        description="Does an upstream Kafka issue affect my pinned version?",
+        description="Does an upstream issue affect the version I run?",
         version=__version__,
         lifespan=lifespan,
     )
@@ -58,7 +58,7 @@ def create_app(
     app.state.jobs = jobs or JobRegistry()
     app.state.jira_client_factory = jira_client_factory or _default_jira_client
     app.state.langfuse_factory = langfuse_factory or _default_langfuse
-    app.state.systems = SYSTEMS if systems is None else systems
+    app.state.systems = configured_systems() if systems is None else systems
 
     if settings.cors_origins:
         app.add_middleware(
@@ -81,6 +81,9 @@ def create_app(
 
     app.include_router(ops.router)
     app.include_router(issues.router)
+    app.include_router(scan.router)
+    app.include_router(repo.router)
+    app.include_router(stats.router)
     app.include_router(eval_routes.router)
     return app
 

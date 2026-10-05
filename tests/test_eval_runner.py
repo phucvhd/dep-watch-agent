@@ -23,7 +23,7 @@ def result(expected, answer, basis="b", total=1, valid=1) -> CaseResult:
         case_id=f"c{id(object())}",
         issue_key="KAFKA-1",
         basis=basis,
-        kafka_version="3.7.0",
+        version="3.7.0",
         expected=expected,
         answer=answer,
         evidence_total=total,
@@ -53,6 +53,14 @@ def test_metric_definitions():
     assert m["abstention_recall"] == 2 / 3
     assert m["citation_validity"] == 6 / 7
     assert m["always_abstain_accuracy"] == 3 / 8
+    # F1 = 2TP / (2TP + FP + FN) per answer
+    assert m["f1_by_answer"] == {
+        AFFECTED: 4 / 7,  # TP 2, FP 2, FN 1
+        NOT_AFFECTED: 2 / 3,  # TP 1, FP 0, FN 1
+        INSUFFICIENT_INFORMATION: 4 / 6,  # TP 2, FP 1, FN 1
+    }
+    assert m["f1"] == 4 / 7
+    assert m["macro_f1"] == pytest.approx((4 / 7 + 2 / 3 + 4 / 6) / 3)
     assert m["confusion"][NOT_AFFECTED][AFFECTED] == 1
     assert m["accuracy_by_basis"] == {"b": 4 / 6, "fix_version": 1 / 2}
 
@@ -63,6 +71,9 @@ def test_zero_denominators_are_none_not_zero():
     assert m["recall"] is None  # nothing expected affected
     assert m["abstention_recall"] is None
     assert m["citation_validity"] is None
+    assert m["f1"] is None  # affected never expected nor answered
+    assert m["f1_by_answer"][NOT_AFFECTED] == 0.0  # expected, never given
+    assert m["macro_f1"] == 0.0  # mean over the two answers that occur
     assert "n/a" in format_metrics(m)
     assert "(always abstain)" in format_metrics(m)
 
@@ -71,15 +82,20 @@ def test_zero_denominators_are_none_not_zero():
 
 
 class CountingExtractor:
-    """Says every issue is affected from 3.7.0 and fixed in 3.7.1, quoting the description."""
+    """Says every issue is affected from 3.7.0 (quoting the description) and fixed in 3.7.1
+    (quoting the first comment)."""
 
     def __init__(self):
         self.calls = []
 
     def extract(self, issue: IssueText) -> Extraction:
         self.calls.append(issue.summary)
-        quote = issue.description
-        return Extraction([Evidence("3.7.0", "affects", quote), Evidence("3.7.1", "fix", quote)])
+        return Extraction(
+            [
+                Evidence("3.7.0", "affects", issue.description),
+                Evidence("3.7.1", "fix", issue.comments[0]),
+            ]
+        )
 
 
 def test_local_run_requires_labels(written):

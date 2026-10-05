@@ -8,9 +8,10 @@ from dep_watch_agent.verdict import (
     Extraction,
     IssueText,
     decide,
-    is_release,
     quote_in_issue,
+    version_in_quote,
 )
+from dep_watch_agent.versions import KAFKA
 
 ISSUE = IssueText(
     summary="Consumer hangs after rebalance",
@@ -24,7 +25,7 @@ FIX_380 = Evidence("3.8.0", "fix", "Fixed in 3.7.1 and 3.8.0.")
 
 
 def run(version, *evidence):
-    return decide(ISSUE, version, Extraction(list(evidence)))
+    return decide(ISSUE, version, Extraction(list(evidence)), KAFKA)
 
 
 @pytest.mark.parametrize(
@@ -102,11 +103,12 @@ def test_quote_matching_ignores_whitespace_but_not_words():
         ("0.10.2.1", True),
         ("3.7", False),
         ("0.10.2", False),
+        ("0.8.0", True),  # an early Kafka release, written with three parts
         ("nope", False),
     ],
 )
 def test_is_release(version, expected):
-    assert is_release(version) is expected
+    assert KAFKA.is_release(version) is expected
 
 
 def test_issue_text_from_dict_tolerates_missing_fields():
@@ -128,7 +130,7 @@ AFFECTS_361 = Evidence("3.6.1", "affects", "Reproduced on 3.6.1.")
 
 
 def start_run(version, *evidence, issue=START_ISSUE):
-    return decide(issue, version, Extraction(list(evidence))).answer
+    return decide(issue, version, Extraction(list(evidence)), KAFKA).answer
 
 
 @pytest.mark.parametrize(
@@ -146,12 +148,24 @@ def test_introduced_sets_where_the_bug_starts(version, answer):
     assert start_run(version, INTRODUCED_360) == answer
 
 
-def test_unaffected_covers_that_version_and_earlier_only():
+def test_unaffected_covers_only_that_version():
     assert start_run("3.5.2", AFFECTS_361, UNAFFECTED_352) == NOT_AFFECTED
-    assert start_run("3.4.0", AFFECTS_361, UNAFFECTED_352) == NOT_AFFECTED
+    # "Works on 3.5.2" says nothing about 3.4.0: only "introduced" marks where the bug starts.
+    assert start_run("3.4.0", AFFECTS_361, UNAFFECTED_352) == INSUFFICIENT_INFORMATION
     # Between "works on 3.5.2" and "seen on 3.6.1": unknown.
     assert start_run("3.6.0", AFFECTS_361, UNAFFECTED_352) == INSUFFICIENT_INFORMATION
     assert start_run("3.6.1", AFFECTS_361, UNAFFECTED_352) == AFFECTED
+    # With the start stated, versions before it are settled.
+    assert start_run("3.4.0", INTRODUCED_360, UNAFFECTED_352) == NOT_AFFECTED
+
+
+def test_absent_on_a_later_version_says_nothing_about_earlier_ones():
+    # KAFKA-20003: "not causing a real problem in 4.2.0" was read as every version up to 4.2.0
+    # being unaffected, a silent miss for 3.9.1.
+    issue = IssueText("s", "This issue is not causing a real problem in 4.2.0.")
+    absent = Evidence("4.2.0", "unaffected", "This issue is not causing a real problem in 4.2.0.")
+    assert start_run("3.9.1", absent, issue=issue) == INSUFFICIENT_INFORMATION
+    assert start_run("4.2.0", absent, issue=issue) == NOT_AFFECTED
 
 
 def test_observed_only_is_insufficient_below_it():
@@ -181,6 +195,49 @@ def test_release_lines_in_given_fix_versions_are_ignored():
     assert start_run("3.7.0", AFFECTS_361, issue=issue) == AFFECTED
 
 
+def test_a_fact_whose_quote_does_not_name_its_version_is_dropped():
+    # KAFKA-14102: a stack trace line cited as evidence for 3.0.1; KAFKA-20770: "introduced by
+    # KIP-1023" cited as "introduced 4.3.0".
+    issue = IssueText(
+        "s",
+        "Caused by: java.lang.IllegalArgumentException: Callback handler must be castable.\n"
+        "Identified while comparing the implementations introduced by KIP-1023.",
+    )
+    decision = decide(
+        issue,
+        "3.9.1",
+        Extraction(
+            [
+                Evidence("3.0.1", "affects", "Caused by: java.lang.IllegalArgumentException"),
+                Evidence("4.3.0", "introduced", "the implementations introduced by KIP-1023."),
+            ]
+        ),
+        KAFKA,
+    )
+    assert decision.answer == INSUFFICIENT_INFORMATION  # was affected and not_affected
+    assert [d.reason for d in decision.dropped] == ["version not in quote"] * 2
+    assert decision.citations_valid == 2  # the quotes exist; they just don't name the version
+
+
+@pytest.mark.parametrize(
+    ("version", "quote", "named"),
+    [
+        ("3.6.0", "Seen on 3.6.0.", True),
+        ("3.6.0", "Kafka Version: {{3.6.0}}", True),
+        ("3.6.0", "at kafka-raft-3.6.0.jar", True),
+        ("3.6.0", "upgraded to v3.6.0 today", True),
+        ("0.10.2.0", "版本 kafka_2.11-0.10.2.0 中", True),
+        ("v3.6.0", "Seen on 3.6.0", True),
+        ("3.6.0", "Seen on 13.6.0", False),
+        ("3.6.0", "Seen on 3.6.01", False),
+        ("3.6.0", "Seen on 3.6.0.1", False),
+        ("3.6.0", "Seen on the 3.6 line", False),
+    ],
+)
+def test_version_in_quote(version, quote, named):
+    assert version_in_quote(version, quote) is named
+
+
 def test_fix_versions_are_not_quotable_text():
     issue = IssueText("s", "d", fix_versions=["3.7.1"])
     assert not quote_in_issue("3.7.1", issue)
@@ -189,3 +246,11 @@ def test_fix_versions_are_not_quotable_text():
 def test_issue_text_reads_given_fix_versions():
     issue = IssueText.from_dict({"summary": "s", "description": "d", "fix_versions": ["3.7.1"]})
     assert issue.fix_versions == ["3.7.1"]
+
+
+def test_early_kafka_fix_versions_count():
+    # JIRA writes Kafka's early releases short: a fix in 0.8.1 used to be dropped as a line.
+    issue = IssueText("s", "Seen on 0.8.0.", fix_versions=["0.8.1"])
+    assert decide(issue, "0.8.1.1", Extraction([]), KAFKA).answer == NOT_AFFECTED
+    seen = Extraction([Evidence("0.8.0", "affects", "Seen on 0.8.0.")])
+    assert decide(issue, "0.8.0", seen, KAFKA).answer == AFFECTED

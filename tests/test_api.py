@@ -136,6 +136,57 @@ def test_cors_allows_the_frontend(client):
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
 
 
+def test_dependencies_are_listed(client):
+    kafka, spark, hadoop = client.get("/dependencies").json()
+    assert (kafka["id"], kafka["name"], kafka["project"]) == ("kafka", "Apache Kafka", "KAFKA")
+    assert kafka["watchable"]
+    assert (spark["project"], spark["watchable"]) == ("SPARK", False)  # synced, not answered
+    assert (hadoop["project"], hadoop["watchable"]) == ("HADOOP", False)
+
+
+def test_sources_count_issues_per_dependency(client):
+    kafka, spark, hadoop = client.get("/stats/sources").json()
+    assert (kafka["issues"], kafka["bugs"], kafka["open_bugs"]) == (2, 2, 1)
+    assert (spark["name"], spark["issues"], spark["synced_at"]) == ("Apache Spark", 0, None)
+    assert hadoop["dependency"] == "hadoop"
+
+
+def test_repo_scan_reads_manifests_only(client):
+    lockfile = "org.apache.kafka:kafka-clients:3.9.1=runtimeClasspath\n"
+    sbt = '"org.apache.spark" %% "spark-sql" % "3.5.1"\n'
+    response = client.post(
+        "/repo/scan",
+        json={
+            "files": [
+                {"path": "gradle.lockfile", "content": lockfile},
+                {"path": "build.sbt", "content": sbt},
+                {"path": "/etc/passwd", "content": "root:x:0:0"},  # not a manifest: ignored
+            ]
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["files_read"] == ["gradle.lockfile", "build.sbt"]
+    kafka, spark = body["dependencies"]
+    assert (kafka["key"], kafka["version"], kafka["watchable"]) == ("kafka", "3.9.1", True)
+    assert (kafka["ecosystem"], kafka["notes"]) == ("maven", [])
+    assert (spark["name"], spark["watchable"], spark["reason"]) == (
+        "Apache Spark",
+        False,
+        "Not watched yet",
+    )
+
+
+def test_repo_scan_limits_its_input(client):
+    too_many = [{"path": "pom.xml", "content": ""}] * 501
+    assert client.post("/repo/scan", json={"files": too_many}).status_code == 422
+
+
+def test_systems_lists_the_default_first(client, make_client):
+    assert client.get("/systems").json() == ["phrases", "phrases-2"]
+    assert make_client(systems={}).get("/systems").json() == []
+
+
 def test_openapi_schema_is_served(client):
     paths = client.get("/openapi.json").json()["paths"]
     assert {"/check", "/issues", "/sync/jira", "/eval/runs"} <= set(paths)
@@ -145,7 +196,7 @@ def test_openapi_schema_is_served(client):
 
 
 def test_list_issues_newest_first(client):
-    body = client.get("/issues").json()
+    body = client.get("/issues", params={"project": "KAFKA"}).json()
     assert body["total"] == 2
     assert [i["key"] for i in body["items"]] == ["KAFKA-101", "KAFKA-100"]
     assert body["items"][1]["url"] == "https://issues.apache.org/jira/browse/KAFKA-100"
@@ -164,11 +215,14 @@ def test_list_issues_newest_first(client):
     ],
 )
 def test_list_issues_filters(client, params, keys):
-    assert [i["key"] for i in client.get("/issues", params=params).json()["items"]] == keys
+    assert [
+        i["key"]
+        for i in client.get("/issues", params={"project": "KAFKA", **params}).json()["items"]
+    ] == keys
 
 
 def test_list_issues_paginates(client):
-    body = client.get("/issues", params={"limit": 1, "offset": 1}).json()
+    body = client.get("/issues", params={"project": "KAFKA", "limit": 1, "offset": 1}).json()
     assert body["total"] == 2
     assert [i["key"] for i in body["items"]] == ["KAFKA-100"]
 
@@ -189,9 +243,12 @@ def test_get_missing_issue(client):
 
 
 def test_versions_are_ordered_numerically(client):
-    names = [v["name"] for v in client.get("/versions").json()]
+    names = [v["name"] for v in client.get("/versions", params={"project": "KAFKA"}).json()]
     assert names == ["3.5.2", "3.6.0", "3.9.0", "3.10.0", "4.0.0", "trunk"]
-    released = [v["name"] for v in client.get("/versions", params={"released": True}).json()]
+    released = [
+        v["name"]
+        for v in client.get("/versions", params={"project": "KAFKA", "released": True}).json()
+    ]
     assert released == ["3.5.2", "3.6.0", "3.9.0", "3.10.0"]
 
 
@@ -199,7 +256,7 @@ def test_versions_are_ordered_numerically(client):
 
 
 def check(client, version, key="KAFKA-100", **extra):
-    return client.post("/check", json={"issue_key": key, "kafka_version": version, **extra})
+    return client.post("/check", json={"issue_key": key, "version": version, **extra})
 
 
 def test_check_affected_cites_the_issue(client):
@@ -208,7 +265,24 @@ def test_check_affected_cites_the_issue(client):
     assert body["system"] == "phrases"  # the first registered system
     assert body["url"] == "https://issues.apache.org/jira/browse/KAFKA-100"
     assert body["fix_versions"] == ["3.9.0"]
+    assert body["decided_by"] == "phrases"
     assert {"version": "3.6.0", "kind": "introduced", "quote": DEADLOCK_QUOTE} in body["evidence"]
+
+
+class VersionedPhraseExtractor(PhraseExtractor):
+    version = "v1"
+
+
+def test_check_reuses_stored_facts(make_client):
+    client = make_client(systems={"phrases": VersionedPhraseExtractor})
+    assert check(client, "3.6.0").json()["cached"] is False
+    body = check(client, "3.6.1").json()  # another version, same facts
+    assert (body["cached"], body["answer"]) == (True, "affected")
+
+
+def test_check_past_the_fix_is_decided_by_code(client):
+    body = check(client, "3.9.0").json()
+    assert (body["answer"], body["decided_by"]) == ("not_affected", "fix_versions")
 
 
 DEADLOCK_QUOTE = "Regression in 3.6.0: the consumer hangs."
@@ -257,6 +331,56 @@ def test_check_needs_a_registered_system(make_client):
     assert response.status_code == 503
 
 
+# --- scan --------------------------------------------------------------------------------
+
+
+def scan(client, **body):
+    return client.post("/scan", json={"project": "KAFKA", "version": "3.6.0", **body})
+
+
+def test_scan_answers_each_issue(client):
+    response = scan(client)
+    assert response.status_code == 202
+    job = wait(client, response.json())
+
+    assert job["status"] == "succeeded", job["error"]
+    assert job["params"]["system"] == "phrases"
+    result = job["result"]
+    assert result["counts"] == {"affected": 1, "not_affected": 0, "insufficient_information": 1}
+    assert result["candidates_total"] == result["scanned"] == 2
+    assert result["errors"] == 0
+    affected, vague = result["items"]
+    assert (affected["issue_key"], affected["answer"]) == ("KAFKA-100", "affected")
+    assert affected["url"] == "https://issues.apache.org/jira/browse/KAFKA-100"
+    assert affected["evidence"][0]["quote"] == DEADLOCK_QUOTE
+    assert (vague["issue_key"], vague["answer"]) == ("KAFKA-101", "insufficient_information")
+
+
+def test_scan_past_the_fix(client):
+    job = wait(client, scan(client, version="3.10.0").json())
+    deadlock = next(i for i in job["result"]["items"] if i["issue_key"] == "KAFKA-100")
+    assert (deadlock["answer"], deadlock["decided_by"]) == ("not_affected", "fix_versions")
+
+
+def test_scan_since_filters_by_update_time(client):
+    job = wait(client, scan(client, since="2030-01-01T00:00:00Z").json())
+    assert job["result"]["items"] == []
+
+
+def test_scan_answers_only_watchable_dependencies(client):
+    response = scan(client, project="SPARK", version="3.5.1")
+    assert response.status_code == 422
+    assert "synced, not answered" in response.json()["detail"]
+    assert scan(client, project="NOPE").status_code == 422
+
+
+def test_scan_validates_its_request(client, make_client):
+    assert scan(client, version="3.6").status_code == 422
+    assert scan(client, limit=0).status_code == 422
+    assert scan(client, system="nope").status_code == 422
+    assert scan(make_client(systems={}), version="3.6.0").status_code == 503
+
+
 # --- sync --------------------------------------------------------------------------------
 
 
@@ -292,7 +416,7 @@ def test_sync_runs_as_a_job(make_client):
     fake = FakeJira([raw_issue(200, "KAFKA-200")])
     client = make_client(jira_client_factory=fake)
 
-    response = client.post("/sync/jira", json={"request_delay": 2})
+    response = client.post("/sync/jira", json={"project": "KAFKA", "request_delay": 2})
     assert response.status_code == 202
     job = wait(client, response.json())
 
@@ -307,9 +431,9 @@ def test_sync_runs_as_a_job(make_client):
 def test_second_sync_of_a_project_is_a_conflict(make_client):
     release = threading.Event()
     client = make_client(jira_client_factory=FakeJira([], release=release))
-    first = client.post("/sync/jira", json={}).json()
+    first = client.post("/sync/jira", json={"project": "KAFKA"}).json()
 
-    response = client.post("/sync/jira", json={"full": True})
+    response = client.post("/sync/jira", json={"project": "KAFKA", "full": True})
     assert response.status_code == 409
     assert response.json()["job"]["id"] == first["id"]  # the frontend can poll the running one
 
@@ -323,13 +447,15 @@ def test_sync_failure_is_reported_on_the_job(make_client):
             raise RuntimeError("JIRA is down")
 
     client = make_client(jira_client_factory=Broken([]))
-    job = wait(client, client.post("/sync/jira", json={}).json())
+    job = wait(client, client.post("/sync/jira", json={"project": "KAFKA"}).json())
     assert job["status"] == "failed"
     assert "JIRA is down" in job["error"]
 
 
 def test_sync_rejects_request_delays_that_hammer_jira(client):
-    assert client.post("/sync/jira", json={"request_delay": 0}).status_code == 422
+    assert (
+        client.post("/sync/jira", json={"project": "KAFKA", "request_delay": 0}).status_code == 422
+    )
 
 
 def test_unknown_job(client):
@@ -449,3 +575,79 @@ def test_upload_needs_labels(make_client, written):
         "uploaded": 4,
     }
     assert len(fake.items) == 4
+
+
+# --- stored answers and stats ------------------------------------------------------------
+
+
+class CountingPhrases(PhraseExtractor):
+    version = "v1"
+    calls = 0
+
+    def extract(self, issue):
+        CountingPhrases.calls += 1
+        return super().extract(issue)
+
+
+def answer(client, key="KAFKA-100", version="3.6.0"):
+    return client.get(f"/issues/{key}/answer", params={"version": version})
+
+
+def test_stored_answer_never_calls_the_model(make_client):
+    client = make_client(systems={"phrases": CountingPhrases})
+    CountingPhrases.calls = 0
+
+    body = answer(client).json()
+    assert (body["answered"], body["system"], body["result"]) == (False, "phrases", None)
+
+    # Past the fix, code answers without stored facts.
+    past = answer(client, version="3.9.0").json()
+    assert past["answered"] and past["result"]["decided_by"] == "fix_versions"
+
+    # Once /check has read the issue, its stored facts answer any version.
+    check(client, "3.6.0")
+    assert CountingPhrases.calls == 1
+    stored = answer(client, version="3.6.1").json()
+    assert stored["answered"] and stored["result"]["answer"] == "affected"
+    assert stored["result"]["cached"] is True
+    assert CountingPhrases.calls == 1  # no further model call
+    assert client.get("/stats/issues", params={"project": "KAFKA"}).json()["read"] == 1
+
+
+def test_stored_answer_without_a_model(make_client):
+    client = make_client(systems={})
+    assert answer(client).json() == {"answered": False, "system": None, "result": None}
+    assert answer(client, version="3.9.0").json()["answered"] is True
+    assert answer(client, key="KAFKA-999").status_code == 404
+    assert answer(client, version="3.6").status_code == 422
+
+
+def test_issue_stats(client):
+    stats = client.get("/stats/issues", params={"project": "KAFKA"}).json()
+    assert (stats["total"], stats["bugs"], stats["open_bugs"], stats["fixed_bugs"]) == (2, 2, 1, 1)
+    assert stats["read"] == 0
+    assert stats["newest"].startswith("2024-01-05")
+
+
+def test_monthly_bugs_filed_and_fixed(client):
+    rows = client.get(
+        "/stats/issues/monthly",
+        params={"project": "KAFKA", "months": 3, "now": "2024-02-15T00:00:00Z"},
+    ).json()
+    # DEADLOCK: created 2024-01-01, resolved (Fixed) 2024-01-05. CPU: created 2024-02-01, open.
+    assert rows == [
+        {"month": "2023-12", "filed": 0, "fixed": 0},
+        {"month": "2024-01", "filed": 1, "fixed": 1},
+        {"month": "2024-02", "filed": 1, "fixed": 0},
+    ]
+
+
+def test_reading_time(make_client):
+    client = make_client(systems={"phrases": CountingPhrases})
+    empty = client.get("/stats/reading", params={"project": "KAFKA"}).json()
+    assert (empty["count"], empty["median_ms"], len(empty["bins"])) == (0, None, 8)
+    check(client, "3.6.0")
+    stats = client.get("/stats/reading", params={"project": "KAFKA"}).json()
+    assert stats["count"] == 1
+    assert stats["bins"][0]["count"] == 1  # a fake reads in well under 15 s
+    assert stats["bins"][-1]["to_s"] is None

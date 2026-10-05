@@ -75,7 +75,7 @@ def count(session, model) -> int:
 def test_first_sync_is_full_and_saves_start_time(db, schema):
     client = FakeClient([raw_issue(1, "KAFKA-1"), raw_issue(2, "KAFKA-2")])
 
-    result = sync_project(db, client, now=clock(T0))
+    result = sync_project(db, client, "KAFKA", now=clock(T0))
 
     assert result.issues_synced == 2
     assert result.since is None
@@ -87,10 +87,10 @@ def test_first_sync_is_full_and_saves_start_time(db, schema):
 
 
 def test_second_sync_is_incremental_with_overlap(db):
-    sync_project(db, FakeClient([raw_issue(1, "KAFKA-1")]), now=clock(T0))
+    sync_project(db, FakeClient([raw_issue(1, "KAFKA-1")]), "KAFKA", now=clock(T0))
 
     client = FakeClient([])
-    result = sync_project(db, client, now=clock(T1), overlap=timedelta(minutes=10))
+    result = sync_project(db, client, "KAFKA", now=clock(T1), overlap=timedelta(minutes=10))
 
     assert result.since == T0 - timedelta(minutes=10)
     assert 'updated >= "2026-09-01 11:50"' in client.queries[0]
@@ -98,9 +98,9 @@ def test_second_sync_is_incremental_with_overlap(db):
 
 
 def test_full_flag_ignores_watermark(db):
-    sync_project(db, FakeClient([]), now=clock(T0))
+    sync_project(db, FakeClient([]), "KAFKA", now=clock(T0))
     client = FakeClient([])
-    sync_project(db, client, full=True, now=clock(T1))
+    sync_project(db, client, "KAFKA", full=True, now=clock(T1))
     assert "updated >=" not in client.queries[0]
 
 
@@ -114,7 +114,7 @@ def test_watermark_not_saved_if_sync_fails(db, schema):
             raise Boom
 
     with pytest.raises(Boom):
-        sync_project(db, FailingClient([]), now=clock(T0))
+        sync_project(db, FailingClient([]), "KAFKA", now=clock(T0))
 
     with schema.session() as other:
         assert load_watermark(other, "jira:KAFKA") is None
@@ -132,7 +132,7 @@ def test_fetches_truncated_comments(db):
     issue = raw_issue(1, "KAFKA-1", comments=full[:2], comment_total=5)
     client = FakeClient([issue], comments={"KAFKA-1": full})
 
-    sync_project(db, client, now=clock(T0))
+    sync_project(db, client, "KAFKA", now=clock(T0))
 
     assert client.comment_requests == ["KAFKA-1"]
     assert count(db, JiraCommentRow) == 5
@@ -141,14 +141,14 @@ def test_fetches_truncated_comments(db):
 def test_does_not_fetch_complete_comments(db):
     issue = raw_issue(1, "KAFKA-1", comments=[raw_comment(1, "only")])
     client = FakeClient([issue])
-    sync_project(db, client, now=clock(T0))
+    sync_project(db, client, "KAFKA", now=clock(T0))
     assert client.comment_requests == []
 
 
 def test_progress_callback(db):
     seen = []
     client = FakeClient([raw_issue(n, f"KAFKA-{n}") for n in range(1, 4)])
-    sync_project(db, client, now=clock(T0), on_issue=seen.append)
+    sync_project(db, client, "KAFKA", now=clock(T0), on_issue=seen.append)
     assert seen == [1, 2, 3]
 
 
@@ -254,8 +254,8 @@ def test_upsert_follows_key_change(db):
 
 def test_resync_is_idempotent(db):
     issues = [raw_issue(1, "KAFKA-1", fix=["3.7.0"]), raw_issue(2, "KAFKA-2")]
-    sync_project(db, FakeClient(issues), now=clock(T0))
-    sync_project(db, FakeClient(issues), full=True, now=clock(T1))
+    sync_project(db, FakeClient(issues), "KAFKA", now=clock(T0))
+    sync_project(db, FakeClient(issues), "KAFKA", full=True, now=clock(T1))
     assert count(db, JiraIssueRow) == 2
     assert count(db, JiraIssueVersionRow) == 1
 
@@ -271,7 +271,7 @@ def test_sync_stores_project_versions(db):
     client = FakeClient(
         [], versions=[raw_version(1, "3.7.0"), raw_version(2, "4.5.0", False, None)]
     )
-    result = sync_project(db, client, now=clock(T0))
+    result = sync_project(db, client, "KAFKA", now=clock(T0))
 
     assert result.versions_synced == 2
     rows = db.execute(

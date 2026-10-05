@@ -68,7 +68,7 @@ def build_jql(project: str, since: datetime | None) -> str:
 def sync_project(
     session: Session,
     client: JiraClient,
-    project: str = "KAFKA",
+    project: str,
     *,
     full: bool = False,
     overlap: timedelta = DEFAULT_OVERLAP,

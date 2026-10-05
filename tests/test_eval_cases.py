@@ -38,7 +38,7 @@ def build(c: IssueCandidate, seed: int = 1, design: str = "v1"):
 
 
 def rule(case) -> Applicability:
-    return in_affected_range(case.kafka_version, case.affects_versions, case.fix_versions)
+    return in_affected_range(case.version, case.affects_versions, case.fix_versions)
 
 
 def test_positive_and_negative_follow_the_rules():
@@ -51,7 +51,7 @@ def test_positive_and_negative_follow_the_rules():
 
 def test_positive_prefers_listed_affected_version():
     positive, _ = build(candidate(affects=("3.6.1",), fixes=("3.8.0",)))
-    assert positive.kafka_version == "3.6.1"
+    assert positive.version == "3.6.1"
     assert positive.basis == "listed_affected"
 
 
@@ -85,14 +85,14 @@ def test_negative_kinds_pick_the_hardest_version(kind, expected_version):
     found = {}
     for seed in range(200):
         _, negative = build(c, seed)
-        found.setdefault(negative.basis, set()).add(negative.kafka_version)
+        found.setdefault(negative.basis, set()).add(negative.version)
     assert found[kind] == {expected_version}
 
 
 def test_fix_version_negative_is_a_listed_fix():
     c = candidate(affects=("3.6.0",), fixes=("3.6.2", "3.7.1", "3.8.0"))
     fix_negatives = {
-        n.kafka_version for n in (build(c, s)[1] for s in range(200)) if n.basis == "fix_version"
+        n.version for n in (build(c, s)[1] for s in range(200)) if n.basis == "fix_version"
     }
     assert fix_negatives == {"3.6.2", "3.7.1", "3.8.0"}
 
@@ -109,13 +109,13 @@ def test_deterministic_per_seed_and_key():
     assert build(c, 7) == build(c, 7)
     # Different issues get independent draws under the same seed.
     other = candidate(key="KAFKA-2", affects=("3.6.0",), fixes=("3.6.2", "3.7.1", "3.8.0"))
-    draws = {build(c, s)[1].kafka_version != build(other, s)[1].kafka_version for s in range(50)}
+    draws = {build(c, s)[1].version != build(other, s)[1].version for s in range(50)}
     assert draws == {True, False}
 
 
 def test_case_fields():
     positive, negative = build(candidate(key="KAFKA-42"))
-    assert positive.case_id == f"KAFKA-42@{positive.kafka_version}"
+    assert positive.case_id == f"KAFKA-42@{positive.version}"
     assert positive.issue_key == negative.issue_key == "KAFKA-42"
     assert positive.affects_versions == ["3.6.0"]
     assert positive.fix_versions == ["3.8.0"]
@@ -136,8 +136,8 @@ def test_every_generated_case_agrees_with_the_version_module():
         positive, negative = cases
         assert rule(positive) is Applicability.AFFECTED, positive
         assert rule(negative) is Applicability.NOT_AFFECTED, negative
-        assert parse_version(positive.kafka_version) in RELEASES
-        assert parse_version(negative.kafka_version) in RELEASES
+        assert parse_version(positive.version) in RELEASES
+        assert parse_version(negative.version) in RELEASES
     assert built > 100
 
 
@@ -148,7 +148,7 @@ def test_v2_negative_is_always_before_affected():
     c = candidate(affects=("3.6.0",), fixes=("3.6.2", "3.7.1", "3.8.0"))
     negatives = [build(c, s, design="v2")[1] for s in range(100)]
     assert {n.basis for n in negatives} == {"before_affected"}
-    assert {n.kafka_version for n in negatives} == {"3.5.2"}
+    assert {n.version for n in negatives} == {"3.5.2"}
 
 
 def test_v2_skips_issues_without_a_release_before_the_bug():
@@ -171,7 +171,7 @@ def test_before_affected_is_never_a_fixed_release():
     # Fixed in 3.8.0 and backported to 3.5.2. The release just before 3.6.0 is 3.5.2, but it
     # contains the fix, so the negative must come from before that line's fix: 3.5.1.
     c = candidate(affects=("3.6.0",), fixes=("3.5.2", "3.8.0"))
-    negatives = {build(c, s, design="v2")[1].kafka_version for s in range(50)}
+    negatives = {build(c, s, design="v2")[1].version for s in range(50)}
     assert negatives == {"3.5.1"}
 
 

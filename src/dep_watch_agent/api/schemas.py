@@ -16,6 +16,48 @@ Answer = Literal["affected", "not_affected", "insufficient_information"]
 EvidenceKind = Literal["introduced", "affects", "unaffected", "fix"]
 
 
+class DependencyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    project: str = Field(description="Pass as `project` to /versions, /issues, /scan, /sync/jira")
+    tracker_url: str
+    watchable: bool = Field(description="Answered for a version; the others are only synced")
+
+
+# --- repository scan -----------------------------------------------------------------------
+
+
+class RepoFile(BaseModel):
+    path: str = Field(max_length=512, description="Path in the repository; a label only")
+    content: str = Field(max_length=2_000_000)
+
+
+class RepoScanRequest(BaseModel):
+    files: list[RepoFile] = Field(max_length=500, description="Manifest files and their text")
+
+
+class DetectedDependencyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    key: str
+    name: str
+    version: str | None = Field(description="None when the manifests don't resolve it")
+    family: str | None = Field(description="A known family id, e.g. kafka or spark")
+    ecosystem: Literal["maven", "pypi", "npm", "image"]
+    watchable: bool = Field(description="Supported and at a known release: can be watched")
+    reason: str | None = Field(description="Why it can't be watched")
+    artifacts: list[str]
+    files: list[str]
+    notes: list[str] = Field(description="How a version was read, e.g. from a Confluent image")
+
+
+class RepoScanResponse(BaseModel):
+    files_read: list[str]
+    dependencies: list[DetectedDependencyOut]
+
+
 class Health(BaseModel):
     status: Literal["ok"]
     version: str
@@ -63,7 +105,7 @@ class IssueDetail(IssueSummary):
     comments: list[Comment]
 
 
-class KafkaVersion(BaseModel):
+class ReleaseVersion(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     name: str
@@ -77,7 +119,9 @@ class KafkaVersion(BaseModel):
 
 class CheckRequest(BaseModel):
     issue_key: IssueKey
-    kafka_version: str = Field(examples=["3.6.1"])
+    version: str = Field(
+        examples=["3.6.1"], description="A release, in the scheme of the issue's dependency"
+    )
     system: str | None = Field(None, description="Default: the first registered system")
 
 
@@ -95,12 +139,111 @@ class CheckResponse(BaseModel):
     issue_key: str
     url: str
     summary: str
-    kafka_version: str
+    version: str
     answer: Answer
     system: str
+    decided_by: str = Field(
+        description="fix_versions when JIRA's fix versions settle it (the system isn't called); "
+        "otherwise the system"
+    )
+    cached: bool = Field(description="The system's facts were stored from an earlier run")
     fix_versions: list[str] = Field(description="Given as structured input, from JIRA")
     evidence: list[EvidenceOut] = Field(description="Cited facts the decision used")
     dropped: list[DroppedEvidenceOut] = Field(description="Facts rejected, with the reason")
+
+
+class StoredAnswer(BaseModel):
+    answered: bool = Field(description="False when only a model call (POST /check) can answer")
+    system: str | None
+    result: CheckResponse | None = None
+
+
+class IssueStats(BaseModel):
+    total: int
+    bugs: int
+    open_bugs: int
+    fixed_bugs: int
+    read: int = Field(description="Issues whose text a model has read (facts stored)")
+    newest: datetime | None = Field(description="The most recent update among synced issues")
+
+
+class SourceCount(BaseModel):
+    dependency: str
+    name: str
+    project: str
+    issues: int
+    bugs: int
+    open_bugs: int
+    synced_at: datetime | None = Field(description="The sync watermark; None if never synced")
+
+
+class MonthCount(BaseModel):
+    month: str = Field(examples=["2026-09"])
+    filed: int = Field(description="Bugs created that month")
+    fixed: int = Field(description="Bugs resolved as Fixed that month")
+
+
+class ReadingTimeBin(BaseModel):
+    from_s: int
+    to_s: int | None = Field(description="None for the last bin: everything slower")
+    count: int
+
+
+class ReadingTime(BaseModel):
+    count: int = Field(description="Stored extractions")
+    median_ms: int | None
+    p90_ms: int | None
+    bins: list[ReadingTimeBin]
+
+
+# --- scan --------------------------------------------------------------------------------
+
+
+class ScanRequest(BaseModel):
+    project: ProjectKey = Field(examples=["KAFKA"], description="The dependency's project")
+    version: str = Field(examples=["3.9.1"], description="A release, in the dependency's scheme")
+    since: datetime | None = Field(
+        None, description="Only issues updated since then, e.g. the last scan (alerting)"
+    )
+    limit: int = Field(
+        50,
+        ge=1,
+        le=10_000,
+        description="At most this many issues, newest first. Each one the "
+        "fix versions don't settle costs a model call.",
+    )
+    system: str | None = Field(None, description="Default: the first registered system")
+
+
+class ScanItemOut(BaseModel):
+    issue_key: str
+    url: str
+    summary: str
+    status: str | None
+    resolution: str | None
+    updated_at: datetime
+    answer: Answer
+    decided_by: str
+    cached: bool
+    fix_versions: list[str]
+    evidence: list[EvidenceOut]
+    dropped: list[DroppedEvidenceOut]
+    error: str | None = Field(description="Why the issue couldn't be answered, if it failed")
+
+
+class ScanResponse(BaseModel):
+    """The ``result`` of a finished scan job. Items: affected first, then
+    insufficient_information, then not_affected; newest first within each."""
+
+    version: str
+    system: str
+    since: datetime | None
+    candidates_total: int = Field(description="Issues matching the filters, before the limit")
+    scanned: int
+    counts: dict[str, int]
+    errors: int
+    cached: int = Field(description="Issues answered from stored facts, without a model call")
+    items: list[ScanItemOut]
 
 
 # --- jobs --------------------------------------------------------------------------------
@@ -126,7 +269,7 @@ class JobOut(BaseModel):
 
 
 class SyncRequest(BaseModel):
-    project: ProjectKey = "KAFKA"
+    project: ProjectKey = Field(examples=["KAFKA"])
     full: bool = Field(False, description="Ignore the watermark and re-sync every issue")
     request_delay: float = Field(1.0, ge=0.5, le=60, description="Seconds between JIRA requests")
 

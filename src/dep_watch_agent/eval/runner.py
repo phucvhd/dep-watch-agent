@@ -11,9 +11,14 @@ from typing import Any, Protocol
 from dep_watch_agent.eval.dataset import Dataset, DatasetError, expected_answer, label_problems
 from dep_watch_agent.eval.metrics import RATE_METRICS, CaseResult, compute_metrics
 from dep_watch_agent.verdict import Decision, Extraction, IssueText, decide
+from dep_watch_agent.versions import KAFKA  # the ground truth is Kafka's
 
 
 class Extractor(Protocol):
+    """Turns issue text into cited facts. May also have a ``version`` string (everything that
+    changes its output besides the text); only then are its extractions stored and reused
+    (``extractions.py``)."""
+
     """Turns issue text into cited facts. Its name is the key it is registered under in
     ``systems.SYSTEMS``, so one class can back several systems (e.g. one per model)."""
 
@@ -53,7 +58,7 @@ def run_local(
         issue = IssueText.from_dict(dataset.issues[case.issue_key])
         if case.issue_key not in extractions:
             extractions[case.issue_key] = extractor.extract(issue)
-        decision = decide(issue, case.kafka_version, extractions[case.issue_key])
+        decision = decide(issue, case.version, extractions[case.issue_key], KAFKA)
         expected = (
             case.metadata_answer
             if provisional
@@ -64,7 +69,7 @@ def run_local(
                 case_id=case.case_id,
                 issue_key=case.issue_key,
                 basis=case.basis,
-                kafka_version=case.kafka_version,
+                version=case.version,
                 expected=expected,
                 answer=decision.answer,
                 evidence_total=decision.evidence_total,
@@ -73,6 +78,12 @@ def run_local(
             )
         )
     return results
+
+
+def item_version(item: Any) -> str:
+    """The config version of a Langfuse dataset item. Items uploaded before the field was
+    renamed carry it as ``kafka_version``."""
+    return item.input.get("version") or item.input["kafka_version"]
 
 
 def run_langfuse(
@@ -99,7 +110,7 @@ def run_langfuse(
         key = item.metadata["issue_key"]
         if key not in extractions:
             extractions[key] = extractor.extract(issue)
-        return decision_output(decide(issue, item.input["kafka_version"], extractions[key]))
+        return decision_output(decide(issue, item_version(item), extractions[key], KAFKA))
 
     def per_case(*, output: Any, expected_output: Any, **_: Any) -> list[Any]:
         scores = [
@@ -121,7 +132,7 @@ def run_langfuse(
                     case_id=r.item.id,
                     issue_key=r.item.metadata["issue_key"],
                     basis=r.item.metadata["basis"],
-                    kafka_version=r.item.input["kafka_version"],
+                    version=item_version(r.item),
                     expected=r.item.expected_output["answer"],
                     answer=r.output["answer"],
                     evidence_total=r.output["evidence_total"],
