@@ -1,6 +1,7 @@
-/* DWatcher, in the manner of an editorial brand guide: white, flat, a large grotesk, grey
-   supporting text, superscript numbers. Color means something: the hero gradient is warm when
-   a bug affects you and cool when none does; answers wear their own tinted chips; and one
+/* DWatcher, set like an engineering notebook: an off-white page under a faint diagonal hatch,
+   square frames with crop marks at their corners, Geist for text and Geist Mono for data
+   (issue keys, dates, versions, counts). Color means something: the strip under each page
+   title is warm when a bug affects you and cool when none does; answers wear tinted chips; and one
    accent marks what you can act on or where you are (primary buttons, the current page and
    step, the selected card, focus) and the measure a chart is about. The accent is the
    gradient's orange (#f26522) made deep enough for text, so the page and its header share one
@@ -9,7 +10,7 @@
 :root {
   --bg: #ffffff;
   --bg-soft: #f8f8f6;
-  --canvas: #f3f3f0; /* behind widgets */
+  --canvas: #f4f4ef; /* behind widgets, under the hatch */
   --line: #dcdcd6; /* hairlines inside a widget */
   --line-strong: #c9c9c2; /* the edge of a widget, an input or a button */
   --ink: #0e0e0e;
@@ -45,7 +46,11 @@
   --pin: #0e0e0e; /* the version you run */
   --highlight: rgb(251 193 99 / 0.45);
 
-  --font: 'DM Sans', system-ui, -apple-system, sans-serif;
+  --font: 'Geist', system-ui, -apple-system, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --radius: 3px; /* frames are square; controls and chips barely round */
+  --mark: var(--ink-3); /* crop marks at a frame's corners */
+  --hatch: rgb(0 0 0 / 0.035);
   --gutter: 56px;
   --sidebar: 300px;
 
@@ -58,6 +63,7 @@
   --bg: #0d0d0d;
   --bg-soft: #151515;
   --canvas: #080808;
+  --hatch: rgb(255 255 255 / 0.03);
   --line: #2c2c2c;
   --line-strong: #3d3d3d;
   --ink: #f2f2f2;
@@ -164,7 +170,7 @@ select {
   height: 40px;
   background: var(--bg);
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 0 12px;
   min-width: 0;
 }
@@ -181,7 +187,7 @@ input[type='number'] {
 button {
   height: 40px;
   padding: 0 20px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   border: 1px solid var(--line-strong);
   background: var(--bg);
   font-weight: 500;
@@ -197,7 +203,7 @@ a.button {
   align-items: center;
   height: 40px;
   padding: 0 20px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   border: 1px solid var(--line-strong);
   font-weight: 500;
   text-decoration: none;
@@ -328,7 +334,7 @@ button:disabled {
   margin-top: 8px;
   padding: 3px;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius);
 }
 
 .theme-switch button {
@@ -452,23 +458,18 @@ main {
   background-color: #c9d4d9;
 }
 
+/* The status strip under a page title, from the old gradient's colors: warm when a bug affects
+   you, cool when none does, neutral before there is an answer. */
 .hero-hit {
-  background:
-    radial-gradient(85% 120% at 78% 105%, #f26522 0%, #f7923a 26%, #fbbe5e 46%, rgb(251 190 94 / 0) 74%),
-    radial-gradient(60% 90% at 40% 120%, #fbc163 0%, rgb(251 193 99 / 0) 70%),
-    linear-gradient(180deg, #b2c6d1 0%, #cbd3d2 100%);
+  --strip: linear-gradient(90deg, #b2c6d1 0%, #fbbe5e 55%, #f26522 100%);
 }
 
 .hero-calm {
-  background:
-    radial-gradient(85% 120% at 78% 105%, #8fb0c6 0%, #b4cad7 34%, #d6e1e7 58%, rgb(214 225 231 / 0) 80%),
-    linear-gradient(180deg, #dfe7eb 0%, #eef2f3 100%);
+  --strip: linear-gradient(90deg, #dfe7eb 0%, #8fb0c6 100%);
 }
 
 .hero-idle {
-  background:
-    radial-gradient(80% 120% at 80% 110%, #f6d9a6 0%, rgb(246 217 166 / 0) 60%),
-    linear-gradient(180deg, #c3d1d8 0%, #dfe4e3 100%);
+  --strip: linear-gradient(90deg, #c3d1d8 0%, #f6d9a6 100%);
 }
 
 .hero-line,
@@ -769,7 +770,7 @@ main {
   width: fit-content;
   margin: 0 0 14px;
   padding: 4px 12px 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   font-size: 14px;
   font-weight: 500;
 }
@@ -863,7 +864,7 @@ main {
 }
 
 .quote mark {
-  background: var(--highlight);
+  background: var(--accent-soft);
   color: inherit;
   padding: 0 2px;
 }
@@ -1201,7 +1202,7 @@ main {
   font-size: 12px;
   color: var(--ink-3);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   padding: 1px 8px;
   align-self: center;
 }
@@ -1448,7 +1449,8 @@ th {
 /* --- dashboards: a grid of widgets on a quiet canvas --------------------------------- */
 
 main {
-  background: var(--canvas);
+  background-color: var(--canvas);
+  background-image: repeating-linear-gradient(135deg, var(--hatch) 0 1px, transparent 1px 10px);
 }
 
 .page {
@@ -1481,11 +1483,30 @@ main {
 
 .widget {
   /* background-color only, so a tile's gradient (background-image) survives. */
+  position: relative;
   background-color: var(--bg);
   border: 1px solid var(--line-strong);
-  border-radius: 18px;
+  border-radius: var(--radius);
   padding: 22px 24px;
   min-width: 0;
+}
+
+/* Crop marks: an L at each corner of a frame, over its border. */
+.widget::before,
+.dash > .intro::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--mark), var(--mark)) top left / 8px 1px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) top left / 1px 8px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) top right / 8px 1px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) top right / 1px 8px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) bottom left / 8px 1px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) bottom left / 1px 8px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) bottom right / 8px 1px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) bottom right / 1px 8px no-repeat;
 }
 
 /* Tiles in a row share its height, as a grid of widgets should. */
@@ -1536,23 +1557,37 @@ main {
    dark in both themes, for contrast. */
 .dash > .intro {
   grid-column: 1 / -1;
+  position: relative;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px 24px;
-  min-height: 128px;
-  padding: 24px 28px;
-  border: 0;
-  border-radius: 18px;
-  color: #0e0e0e;
+  min-height: 112px;
+  padding: 24px 28px 28px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--ink);
+  /* Flat, under a denser hatch than the canvas. */
+  background-color: var(--bg);
+  background-image: repeating-linear-gradient(135deg, var(--hatch) 0 1px, transparent 1px 6px);
+}
+
+.dash > .intro::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
+  height: 4px;
+  background: var(--strip, var(--line-strong));
 }
 
 .dash > .intro h1 {
   font-size: 40px;
   line-height: 1;
   letter-spacing: -0.04em;
-  color: #0e0e0e;
+  color: var(--ink);
 }
 
 .dash > .intro .source-switch {
@@ -1598,7 +1633,7 @@ main {
   gap: 4px;
   text-align: left;
   height: auto;
-  border-radius: 18px;
+  border-radius: var(--radius);
   padding: 20px 22px;
   font-weight: 400;
 }
@@ -1742,7 +1777,6 @@ main {
 .list-widget,
 .detail-widget {
   padding: 0;
-  overflow: hidden;
 }
 
 .list-widget .filter {
@@ -1901,13 +1935,14 @@ button.btn-sm {
 .step-n {
   display: inline-grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+  min-width: 32px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: var(--radius);
   background: var(--accent);
   color: var(--accent-ink);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   letter-spacing: 0;
 }
 
@@ -1989,7 +2024,7 @@ button.btn-sm {
   display: grid;
   height: auto;
   padding: 6px 16px 8px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   text-align: left;
   color: var(--ink-3);
 }
@@ -2005,7 +2040,7 @@ button.btn-sm {
   gap: 2px;
   padding: 3px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: var(--bg);
   align-self: center;
 }
@@ -2176,7 +2211,7 @@ button.btn-sm {
   padding: 8px 12px;
   background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius);
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
   pointer-events: none;
   font-size: 13px;
@@ -2328,7 +2363,7 @@ button.btn-sm {
   margin-top: 18px;
   padding: 16px 18px;
   border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius);
   display: grid;
   gap: 12px;
 }
@@ -2586,7 +2621,7 @@ button.btn-sm {
   }
   .count-tile {
     padding: 12px 14px;
-    border-radius: 14px;
+    border-radius: var(--radius);
   }
   .count-tile::after {
     top: 14px;
@@ -2649,4 +2684,29 @@ button.btn-sm {
 .scan-widget .job-line {
   flex-basis: 100%;
   margin-top: 4px;
+}
+
+/* Data in Geist Mono: issue keys, dates, versions, counts, step numbers. */
+.row-key,
+.row-date,
+.timestamp-ago,
+.step-n,
+sup,
+.transition-arrow,
+.count-period,
+.dep-version,
+.detail-meta a,
+.chart-toggle,
+.ruler-label,
+.fact-kind strong,
+.status-ago,
+.answer-head input {
+  font-family: var(--mono);
+  letter-spacing: 0;
+}
+
+.row-key,
+.row-date,
+.timestamp-ago {
+  font-size: 12px;
 }
