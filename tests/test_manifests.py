@@ -186,7 +186,11 @@ def test_detect_groups_by_family_and_version():
     assert kafka.files == ["pom.xml", "app/pom.xml", "docker-compose.yml"]
 
     spark = detected[("spark", "3.5.1")]
-    assert (spark.name, spark.watchable, spark.reason) == ("Apache Spark", False, "Not watched yet")
+    assert (spark.name, spark.watchable, spark.reason) == (
+        "Apache Spark",
+        False,
+        "Not supported yet",
+    )
 
     unknown = detected[("org.slf4j:slf4j-api", None)]
     assert (unknown.family, unknown.watchable) == (None, False)
@@ -200,7 +204,7 @@ def test_a_watched_family_needs_a_release_version():
     detected = {(d.key, d.version): d for d in detect([f("pom.xml", pom)])}
     ccs = detected[("kafka", "7.7.1-ccs")]
     assert not ccs.watchable
-    assert "isn't a release" in ccs.reason
+    assert "is not a recognized release" in ccs.reason
     missing = detected[("kafka", None)]  # kafka-streams, whose version is managed elsewhere
     assert missing.reason == "Version not found in the manifests"
 

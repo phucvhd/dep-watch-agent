@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, type Dependency, type DetectedDependency, type RepoScan } from '../api/client'
-import { ErrorNote } from '../components/common'
+import { ErrorNote, Fields } from '../components/common'
 import { plural } from '../format'
 import { message, useLoad, type WatchItem } from '../hooks'
 import { readRepo } from '../repo'
@@ -122,7 +122,7 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
   return (
     <section className="widget w-12 repo-step" aria-label="Choose the repository">
       <div className="repo-step-head">
-        <p className="widget-text">Only the build files leave your browser.</p>
+        <p className="widget-text">Only build files are uploaded; other files stay in your browser.</p>
         <input
           ref={inputRef}
           type="file"
@@ -131,10 +131,13 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
           onChange={(e) => void pick(e.target.files)}
         />
         {onCancel && (
-          <p className="current-watch">
-            Watching {watchedRepo ? `${watchedRepo}: ` : ''}
-            {current.map((w) => `${nameOf(w.dependency)} ${w.version}`).join(', ')}.
-          </p>
+          <Fields
+            className="current-watch"
+            items={[
+              ['Current repository', watchedRepo ?? 'Added manually'],
+              ['Watched', current.map((w) => `${nameOf(w.dependency)} ${w.version}`).join(', ')],
+            ]}
+          />
         )}
         <div className="button-row">
           <button
@@ -149,7 +152,7 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
           </button>
           {onCancel && (
             <button onClick={onCancel} title="Esc">
-              Keep watching {current.length === 1 ? `${nameOf(current[0].dependency)} ${current[0].version}` : 'these'}
+              Keep current selection
             </button>
           )}
         </div>
@@ -165,21 +168,25 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
               {repo}
               <sup>{scan.dependencies.length}</sup>
             </h2>
-            <p>
-              Read {plural(scan.files_read.length, 'build file')}
-              {leftOut > 0 && `; ${plural(leftOut, 'file')} left out for size`}. Only{' '}
-              {dependencies
-                .filter((d) => d.watchable)
-                .map((d) => d.name)
-                .join(', ')}{' '}
-              can be watched for now.
-            </p>
+            <Fields
+              items={[
+                ['Build files read', scan.files_read.length.toLocaleString()],
+                ['Skipped (over 2 MB or 500 files)', leftOut > 0 ? leftOut.toLocaleString() : null],
+                [
+                  'Supported for checks',
+                  dependencies
+                    .filter((d) => d.watchable)
+                    .map((d) => d.name)
+                    .join(', '),
+                ],
+              ]}
+            />
           </div>
 
           {scan.dependencies.length === 0 ? (
             <p className="list-empty">
-              No dependencies found in {plural(scan.files_read.length, 'build file')}. Is this the
-              project's root folder?
+              No dependencies found in {plural(scan.files_read.length, 'build file')}. Select the
+              project's root folder.
             </p>
           ) : (
             <>
@@ -218,10 +225,10 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
           <div className="detected-actions button-row">
             <button className="primary" onClick={watch} disabled={selected.length === 0}>
               {selected.length === 0
-                ? 'Choose a dependency to watch'
+                ? 'Select a dependency'
                 : `Watch ${selected.map((d) => `${d.name} ${d.version}`).join(', ')}`}
             </button>
-            {onCancel && <button onClick={onCancel}>Cancel, keep what I watch</button>}
+            {onCancel && <button onClick={onCancel}>Cancel</button>}
           </div>
         </section>
       )}
@@ -234,13 +241,13 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
 function Progress({ stage }: { stage: Stage }) {
   const text =
     stage.step === 'picking'
-      ? 'Waiting for the folder. Your browser lists every file in it and asks you to confirm; a large folder takes a moment.'
+      ? 'Waiting for folder selection…'
       : stage.step === 'reading'
         ? stage.found === undefined
-          ? 'Reading the folder…'
-          : `Found ${plural(stage.found, 'build file')} among ${stage.total?.toLocaleString()} files. Reading them…`
+          ? 'Reading folder…'
+          : `Reading ${plural(stage.found, 'build file')} (of ${stage.total?.toLocaleString()} files)…`
         : stage.step === 'finding'
-          ? `Finding dependencies and versions in ${plural(stage.files, 'build file')}…`
+          ? `Detecting dependencies in ${plural(stage.files, 'build file')}…`
           : ''
   const steps = ['picking', 'reading', 'finding']
   const current = steps.indexOf(stage.step)
@@ -284,7 +291,7 @@ function DependencyRow({
       />
       <label htmlFor={id}>
         <span className="dep-name">{d.name}</span>
-        <span className="dep-version">{d.version ?? 'version unknown'}</span>
+        <span className="dep-version">{d.version ?? 'Version unknown'}</span>
         <span className="dep-tag">{ECOSYSTEM_TAG[d.ecosystem]}</span>
       </label>
       <span className="dep-meta">
@@ -316,7 +323,7 @@ function ManualAdd({
 
   return (
     <details className="manual">
-      <summary>Not in your repository? Add a version by hand</summary>
+      <summary>Add a dependency version manually</summary>
       <div className="toolbar">
         <label>
           <span>Dependency</span>
@@ -343,7 +350,7 @@ function ManualAdd({
           disabled={!version}
           onClick={() => onWatch(null, [{ dependency, version }])}
         >
-          Watch this version
+          Add
         </button>
       </div>
     </details>

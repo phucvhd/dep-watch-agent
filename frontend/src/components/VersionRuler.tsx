@@ -5,9 +5,9 @@ import { VersionOrder } from './versionOrder'
 type Mark = 'introduced' | 'affects' | 'unaffected' | 'fix'
 
 const MARK_TEXT: Record<Mark, string> = {
-  introduced: 'bug starts',
-  affects: 'bug seen',
-  unaffected: 'bug absent',
+  introduced: 'introduced',
+  affects: 'observed',
+  unaffected: 'not present',
   fix: 'fixed',
 }
 
@@ -41,7 +41,7 @@ function describe(versions: string[], marks: Map<string, Set<Mark>>, pinned: str
     .map((v) => {
       const kinds = [...marks.get(v)!].map((m) => MARK_TEXT[m])
       if (v === pinned) kinds.unshift('your version')
-      return `${v}: ${kinds.join(', ') || 'no facts'}`
+      return `${v}: ${kinds.join(', ') || 'no evidence'}`
     })
     .join('; ')
 }
@@ -69,7 +69,7 @@ function Marks({ kinds, x, y, scale = 1 }: { kinds: Set<Mark>; x: number; y: num
 
 /**
  * The signature view: every version the issue's facts name, on one axis with the version you
- * run. "Seen only above your version" reads at a glance as why an issue can't be told.
+ * run. "Observed only above your version" reads at a glance as why an issue is inconclusive.
  */
 export function VersionRuler(props: Props) {
   const { versions, marks } = useAxis(props)
@@ -169,11 +169,11 @@ export function RulerKey() {
   )
   return (
     <dl className="ruler-key">
-      {item('bug starts', 'introduced')}
-      {item('seen on', 'affects')}
-      {item('absent on', 'unaffected')}
-      {item('fixed in', 'fix')}
-      {item('your version', 'pin')}
+      {item('Introduced', 'introduced')}
+      {item('Observed', 'affects')}
+      {item('Not present', 'unaffected')}
+      {item('Fixed', 'fix')}
+      {item('Your version', 'pin')}
     </dl>
   )
 }

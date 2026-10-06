@@ -12,6 +12,7 @@ from dep_watch_agent.orm import (
     JiraIssueRow,
     JiraIssueVersionRow,
     JiraVersionRow,
+    SyncRunRow,
 )
 from tests.jira_factory import raw_comment, raw_issue
 
@@ -43,8 +44,10 @@ class FakeClient:
 
 
 def clock(*times: datetime):
+    """``now`` returning ``times`` in turn, then the last one again (a run's end)."""
     it = iter(times)
-    return lambda: next(it)
+    last = times[-1]
+    return lambda: next(it, last)
 
 
 T0 = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
@@ -120,6 +123,43 @@ def test_watermark_not_saved_if_sync_fails(db, schema):
         assert load_watermark(other, "jira:KAFKA") is None
         # Issues synced before the failure are committed; the rerun upserts them again.
         assert count(other, JiraIssueRow) == 1
+
+
+def test_each_sync_is_recorded_with_its_new_issues(db):
+    first = sync_project(
+        db,
+        FakeClient([raw_issue(1, "KAFKA-1"), raw_issue(2, "KAFKA-2")]),
+        "KAFKA",
+        now=clock(T0),
+    )
+    assert (first.issues_synced, first.new_issues) == (2, 2)
+
+    # One issue edited, one new: only the new one counts as new.
+    client = FakeClient([raw_issue(2, "KAFKA-2", summary="Edited"), raw_issue(3, "KAFKA-3")])
+    second = sync_project(db, client, "KAFKA", now=clock(T1, T1 + timedelta(seconds=5)))
+    assert (second.issues_synced, second.new_issues) == (2, 1)
+
+    runs = db.scalars(select(SyncRunRow).order_by(SyncRunRow.started_at)).all()
+    assert [(r.status, r.fetched, r.new_issues, r.full) for r in runs] == [
+        ("succeeded", 2, 2, False),
+        ("succeeded", 2, 1, False),
+    ]
+    assert (runs[1].started_at, runs[1].finished_at) == (T1, T1 + timedelta(seconds=5))
+
+
+def test_a_failed_sync_is_recorded_with_its_error(db, schema):
+    class FailingClient(FakeClient):
+        def search(self, jql, fields):
+            yield raw_issue(1, "KAFKA-1")
+            raise ConnectionError("JIRA is down")
+
+    with pytest.raises(ConnectionError):
+        sync_project(db, FailingClient([]), "KAFKA", now=clock(T0))
+
+    with schema.session() as other:
+        run = other.scalars(select(SyncRunRow)).one()
+        assert (run.status, run.fetched, run.new_issues) == ("failed", 1, 1)
+        assert run.error == "ConnectionError: JIRA is down"
 
 
 def test_watermarks_are_per_project(db):

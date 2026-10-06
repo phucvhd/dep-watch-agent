@@ -1,6 +1,8 @@
 """Health, background jobs, and JIRA sync."""
 
-from fastapi import APIRouter, HTTPException, status
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from dep_watch_agent import __version__
@@ -11,9 +13,17 @@ from dep_watch_agent.api.deps import (
     SessionsDep,
     SystemsDep,
 )
-from dep_watch_agent.api.schemas import DependencyOut, Health, JobOut, SyncRequest, SyncState
+from dep_watch_agent.api.schemas import (
+    DependencyOut,
+    Health,
+    JobOut,
+    ProjectKey,
+    SyncRequest,
+    SyncRun,
+    SyncState,
+)
 from dep_watch_agent.dependencies import DEPENDENCIES
-from dep_watch_agent.orm import SyncStateRow
+from dep_watch_agent.orm import JiraIssueRow, SyncRunRow, SyncStateRow
 
 router = APIRouter()
 
@@ -27,9 +37,26 @@ def health(session: SessionDep) -> Health:
 
 
 @router.get("/dependencies", response_model=list[DependencyOut], tags=["ops"])
-def list_dependencies():
-    """The dependencies that can be watched."""
-    return DEPENDENCIES
+def list_dependencies(session: SessionDep) -> list[DependencyOut]:
+    """The catalog of sources, in a fixed order, each marked if it has been added (synced)."""
+    added = added_projects(session)
+    return [
+        DependencyOut(
+            id=d.id,
+            name=d.name,
+            project=d.project,
+            tracker_url=d.tracker_url,
+            watchable=d.watchable,
+            added=d.project in added,
+        )
+        for d in DEPENDENCIES
+    ]
+
+
+def added_projects(session) -> set[str]:
+    """Projects with synced issues. A sync commits issue by issue, so a first sync counts as
+    soon as its first issue is in."""
+    return set(session.scalars(select(JiraIssueRow.project).distinct()))
 
 
 @router.get("/systems", response_model=list[str], tags=["ops"])
@@ -74,11 +101,25 @@ def start_jira_sync(
             "source": result.source,
             "since": result.since.isoformat() if result.since else None,
             "issues_synced": result.issues_synced,
+            "new_issues": result.new_issues,
             "versions_synced": result.versions_synced,
             "watermark": result.watermark.isoformat(),
         }
 
     return jobs.submit("sync-jira", run, key=f"sync:{body.project}", params=body.model_dump())
+
+
+@router.get("/sync/runs", response_model=list[SyncRun], tags=["sync"])
+def sync_runs(
+    session: SessionDep, project: ProjectKey, limit: Annotated[int, Query(ge=1, le=200)] = 20
+):
+    """The project's syncs, newest first: finished and failed ones, with what each fetched."""
+    return session.scalars(
+        select(SyncRunRow)
+        .where(SyncRunRow.source == f"jira:{project}")
+        .order_by(SyncRunRow.started_at.desc(), SyncRunRow.id.desc())
+        .limit(limit)
+    ).all()
 
 
 @router.get("/sync/state", response_model=list[SyncState], tags=["sync"])

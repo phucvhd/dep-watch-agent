@@ -3,14 +3,10 @@ import { api, type Answer, type Dependency, type Job, type ScanResponse } from '
 import { IssueDetail, IssueRow } from '../components/IssueResult'
 import { RulerKey } from '../components/VersionRuler'
 import { ErrorNote, JobLine, StepHead } from '../components/common'
-import { ANSWER_TEXT, plural } from '../format'
+import { ANSWER_TEXT, dayStart, plural } from '../format'
 import { isActive, message, useJob } from '../hooks'
 
 const TABS: Answer[] = ['affected', 'insufficient_information', 'not_affected']
-
-function weekAgo(): string {
-  return new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString().slice(0, 10)
-}
 
 interface Props {
   dependency: Dependency
@@ -18,13 +14,22 @@ interface Props {
   systems: string[]
   latestScanId?: string
   onScanned: () => void
+  since: string // a date input's value: the scan covers issues updated since that day (UTC)
+  onSince: (since: string) => void
 }
 
 /** The dashboard: is the watched version affected by what changed upstream, as widgets. */
-export function Alerts({ dependency, version, systems, latestScanId, onScanned }: Props) {
+export function Alerts({
+  dependency,
+  version,
+  systems,
+  latestScanId,
+  onScanned,
+  since,
+  onSince: setSince,
+}: Props) {
   const [startedId, setStartedId] = useState<string>()
   const { job } = useJob(startedId ?? latestScanId, onScanned)
-  const [since, setSince] = useState(weekAgo)
   const [limit, setLimit] = useState(50)
   const [error, setError] = useState<string>()
   const [chosenTab, setTab] = useState<Answer>()
@@ -36,7 +41,7 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
       const started = await api.startScan({
         version,
         project: dependency.project,
-        since: since ? new Date(`${since}T00:00:00Z`).toISOString() : null,
+        since: dayStart(since),
         limit,
       })
       setStartedId(started.id)
@@ -53,10 +58,10 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
 
   return (
     <>
-      <StepHead n={2} title="Scan" />
+      <StepHead n={3} title="Scan" />
       <section className="widget w-12 scan-widget" aria-labelledby="scan-title">
         <h2 id="scan-title" className="widget-title">
-          Scan upstream for {target}
+          Scan upstream issues for {target}
         </h2>
         <form className="toolbar" onSubmit={startScan}>
           <label>
@@ -64,7 +69,7 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
             <input type="date" value={since} onChange={(e) => setSince(e.target.value)} />
           </label>
           <label>
-            <span>At most</span>
+            <span>Maximum issues</span>
             <input
               type="number"
               min={1}
@@ -85,16 +90,16 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
           <JobLine
             job={job}
             describe={(j: Job) =>
-              j.status === 'queued' ? 'Waiting to start.' : `${plural(j.progress, 'issue')} read so far.`
+              j.status === 'queued' ? 'Queued' : `Scanning: ${j.progress.toLocaleString()} checked`
             }
           />
         )}
         {result && result.errors > 0 && (
-          <ErrorNote>{plural(result.errors, 'issue')} couldn't be read.</ErrorNote>
+          <ErrorNote>Check failed for {plural(result.errors, 'issue')}; listed as Inconclusive.</ErrorNote>
         )}
       </section>
 
-      <StepHead n={3} title="Results" muted={!result} />
+      <StepHead n={4} title="Results" muted={!result} />
       {result ? (
         <>
           <div className="w-12 count-tiles" role="tablist" aria-label="Answers">
@@ -116,7 +121,7 @@ export function Alerts({ dependency, version, systems, latestScanId, onScanned }
       ) : (
         !running && (
           <section className="widget w-12 empty-tile">
-            <p>Results for {target} show up here after a scan.</p>
+            <p>No scan results for {target}.</p>
           </section>
         )
       )}
@@ -162,7 +167,7 @@ function Triage({ result, tab, version }: { result: ScanResponse; tab: Answer; v
         </div>
         {items.length === 0 ? (
           <p className="list-empty">
-            {filter ? 'No issue here matches the filter.' : 'No issue has this answer.'}
+            {filter ? 'No matching issues' : 'No issues'}
           </p>
         ) : (
           <ul className="rows">
@@ -187,7 +192,7 @@ function Triage({ result, tab, version }: { result: ScanResponse; tab: Answer; v
         {selected ? (
           <IssueDetail key={selected.issue_key} item={selected} pinned={version} />
         ) : (
-          <p className="list-empty">Pick an issue to see why.</p>
+          <p className="list-empty">Select an issue</p>
         )}
         <RulerKey />
       </section>

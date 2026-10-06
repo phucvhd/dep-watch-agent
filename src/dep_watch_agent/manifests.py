@@ -149,11 +149,11 @@ def _plain_name(d: Declared) -> str:
 
 def _watchability(family: Family | None, version: str | None) -> tuple[bool, str | None]:
     if family is None or not family.watchable:
-        return False, "Not watched yet"
+        return False, "Not supported yet"
     if version is None:
         return False, "Version not found in the manifests"
     if not family.scheme.is_release(version):
-        return False, f"{version} isn't a release this system knows"
+        return False, f"{version} is not a recognized release"
     return True, None
 
 

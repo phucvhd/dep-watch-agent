@@ -30,7 +30,7 @@ export interface paths {
         };
         /**
          * List Dependencies
-         * @description The dependencies that can be watched.
+         * @description The catalog of sources, in a fixed order, each marked if it has been added (synced).
          */
         get: operations["list_dependencies_dependencies_get"];
         put?: never;
@@ -114,6 +114,26 @@ export interface paths {
          *     ``progress`` counts issues synced so far.
          */
         post: operations["start_jira_sync_sync_jira_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/sync/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sync Runs
+         * @description The project's syncs, newest first: finished and failed ones, with what each fetched.
+         */
+        get: operations["sync_runs_sync_runs_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -211,7 +231,8 @@ export interface paths {
          * Check
          * @description Is ``version`` affected by the issue? Decided by code from cited facts; the answer may be
          *     ``insufficient_information``. 422 when the issue's dependency isn't answered or the version
-         *     isn't one of its releases; 503 until a system is registered.
+         *     isn't one of its releases; 502 when the system fails to read the issue (e.g. its model
+         *     server is down); 503 until a system is registered.
          */
         post: operations["check_check_post"];
         delete?: never;
@@ -242,6 +263,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stored Answers
+         * @description ``/issues/{key}/answer`` for a page of issues at once: each answered only from the fix
+         *     versions or stored facts, never by calling the model. An issue that isn't synced is
+         *     returned unanswered.
+         */
+        get: operations["stored_answers_answers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/stats/issues": {
         parameters: {
             query?: never;
@@ -254,6 +297,28 @@ export interface paths {
          * @description Counts over the synced issues, for the top of the issues page.
          */
         get: operations["issue_stats_stats_issues_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scan/backlog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Scan Backlog
+         * @description What a scan with the same filters would find, without calling the model: how many
+         *     candidates the fix versions settle, how many have stored facts, and how many are not
+         *     checked yet (each a model call).
+         */
+        get: operations["scan_backlog_scan_backlog_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -340,6 +405,28 @@ export interface paths {
          *     months including the current one. Months with none are included as zero.
          */
         get: operations["monthly_stats_issues_monthly_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/stats/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Activity
+         * @description What is new in the project: issues created and resolved per day (UTC) over the last
+         *     ``days`` days, including today; how many were created in the last 24 hours, 7 and 30 days;
+         *     and the types of those created over ``days``.
+         */
+        get: operations["activity_stats_activity_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -475,6 +562,28 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** Activity */
+        Activity: {
+            /**
+             * Days
+             * @description Oldest first, the last ``days`` days up to today
+             */
+            days: components["schemas"]["DayCount"][];
+            /**
+             * New 24H
+             * @description Issues created in the last 24 hours
+             */
+            new_24h: number;
+            /** New 7D */
+            new_7d: number;
+            /** New 30D */
+            new_30d: number;
+            /**
+             * By Type
+             * @description Issues created over ``days``, most first
+             */
+            by_type: components["schemas"]["TypeCount"][];
+        };
         /** CheckRequest */
         CheckRequest: {
             /** Issue Key */
@@ -490,6 +599,12 @@ export interface components {
              * @description Default: the first registered system
              */
             system?: string | null;
+            /**
+             * Refresh
+             * @description Re-check: read the issue again and replace its stored facts. Has no effect when the fix versions settle the answer.
+             * @default false
+             */
+            refresh?: boolean;
         };
         /** CheckResponse */
         CheckResponse: {
@@ -576,6 +691,29 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** DayCount */
+        DayCount: {
+            /**
+             * Day
+             * Format: date
+             */
+            day: string;
+            /**
+             * Created
+             * @description Issues created that day (UTC)
+             */
+            created: number;
+            /**
+             * Bugs
+             * @description Of those, bugs
+             */
+            bugs: number;
+            /**
+             * Resolved
+             * @description Issues resolved that day and still resolved
+             */
+            resolved: number;
+        };
         /** DependencyOut */
         DependencyOut: {
             /** Id */
@@ -594,6 +732,11 @@ export interface components {
              * @description Answered for a version; the others are only synced
              */
             watchable: boolean;
+            /**
+             * Added
+             * @description Added as a source: some of its issues have been synced
+             */
+            added: boolean;
         };
         /** DetectedDependencyOut */
         DetectedDependencyOut: {
@@ -742,6 +885,17 @@ export interface components {
             version: string;
             /** Db Revision */
             db_revision: string | null;
+        };
+        /** IssueAnswer */
+        IssueAnswer: {
+            /** Issue Key */
+            issue_key: string;
+            /**
+             * Answered
+             * @description False when only a model call (POST /check) can answer
+             */
+            answered: boolean;
+            result?: components["schemas"]["CheckResponse"] | null;
         };
         /** IssueDetail */
         IssueDetail: {
@@ -1006,6 +1160,40 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** ScanBacklog */
+        ScanBacklog: {
+            /** Project */
+            project: string;
+            /** Version */
+            version: string;
+            /** Since */
+            since: string | null;
+            /**
+             * System
+             * @description The system whose stored facts count as checked
+             */
+            system: string | null;
+            /**
+             * Candidates
+             * @description Issues a scan would answer, before its limit
+             */
+            candidates: number;
+            /**
+             * Settled
+             * @description Answered by the fix versions, without a model call
+             */
+            settled: number;
+            /**
+             * Checked
+             * @description Answered from the system's stored facts
+             */
+            checked: number;
+            /**
+             * Unchecked
+             * @description Not checked yet: each takes a model call in a scan
+             */
+            unchecked: number;
+        };
         /** ScanItemOut */
         ScanItemOut: {
             /** Issue Key */
@@ -1116,6 +1304,11 @@ export interface components {
             name: string;
             /** Project */
             project: string;
+            /**
+             * Added
+             * @description Some of its issues have been synced
+             */
+            added: boolean;
             /** Issues */
             issues: number;
             /** Bugs */
@@ -1139,6 +1332,18 @@ export interface components {
             system: string | null;
             result?: components["schemas"]["CheckResponse"] | null;
         };
+        /** StoredAnswers */
+        StoredAnswers: {
+            /** Version */
+            version: string;
+            /** System */
+            system: string | null;
+            /**
+             * Items
+             * @description In the order the keys were given
+             */
+            items: components["schemas"]["IssueAnswer"][];
+        };
         /** SyncRequest */
         SyncRequest: {
             /**
@@ -1159,6 +1364,40 @@ export interface components {
              */
             request_delay?: number;
         };
+        /** SyncRun */
+        SyncRun: {
+            /** Source */
+            source: string;
+            /** Full */
+            full: boolean;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /**
+             * Finished At
+             * Format: date-time
+             */
+            finished_at: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "succeeded" | "failed";
+            /**
+             * Fetched
+             * @description Issues written, new or updated
+             */
+            fetched: number;
+            /**
+             * New Issues
+             * @description Issues the database didn't have before
+             */
+            new_issues: number;
+            /** Error */
+            error: string | null;
+        };
         /** SyncState */
         SyncState: {
             /** Source */
@@ -1173,6 +1412,13 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** TypeCount */
+        TypeCount: {
+            /** Issue Type */
+            issue_type: string;
+            /** Count */
+            count: number;
         };
         /** UploadResponse */
         UploadResponse: {
@@ -1372,6 +1618,38 @@ export interface operations {
             };
         };
     };
+    sync_runs_sync_runs_get: {
+        parameters: {
+            query: {
+                project: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncRun"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     sync_state_sync_state_get: {
         parameters: {
             query?: never;
@@ -1539,6 +1817,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Service Unavailable */
             503: {
                 headers: {
@@ -1587,6 +1872,38 @@ export interface operations {
             };
         };
     };
+    stored_answers_answers_get: {
+        parameters: {
+            query: {
+                version: string;
+                /** @description Issue keys */
+                key: string[];
+                system?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredAnswers"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     issue_stats_stats_issues_get: {
         parameters: {
             query: {
@@ -1615,6 +1932,38 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    scan_backlog_scan_backlog_get: {
+        parameters: {
+            query: {
+                project: string;
+                version: string;
+                since?: string | null;
+                system?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanBacklog"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -1744,6 +2093,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MonthCount"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    activity_stats_activity_get: {
+        parameters: {
+            query: {
+                project: string;
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Activity"];
                 };
             };
             /** @description Validation Error */

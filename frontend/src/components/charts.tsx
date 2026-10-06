@@ -68,7 +68,7 @@ function ChartFrame({ title, note, series, categories, categoryLabel, children }
           {table ? 'Chart' : 'Table'}
         </button>
       </figcaption>
-      {note && <p className="chart-note">{note}</p>}
+      {note && <div className="chart-note">{note}</div>}
       {series.length >= 2 && !table && (
         <ul className="chart-legend">
           {series.map((s) => (

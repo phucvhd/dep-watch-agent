@@ -2,8 +2,10 @@ import { useState } from 'react'
 import type { Dependency } from '../api/client'
 import { PageIntro, StepHead, type Tone } from '../components/common'
 import type { WatchItem } from '../hooks'
+import { daysAgo } from '../format'
 import { Alerts } from './Alerts'
 import { Setup } from './Setup'
+import { SyncStep } from './SyncStep'
 
 interface Props {
   dependencies: Dependency[]
@@ -16,17 +18,21 @@ interface Props {
   systems: string[]
   latestScanId?: string
   onScanned: () => void
+  onSynced: () => void
   /** Open step 1 for editing (the sidebar's Change, or an old #/setup link). */
   editing?: boolean
   tone: Tone
 }
 
-/** The flow, top to bottom: 1 choose the repository, 2 scan, 3 the results. */
+/** The flow, top to bottom: 1 choose the repository, 2 sync its dependencies' issues, 3 scan,
+ * 4 the results. Steps 2 and 3 share the scan window. */
 export function ScanFlow(props: Props) {
   const { dependencies, repo, items, activeIndex, nameOf, onSelect, onWatch } = props
   const [editing, setEditing] = useState(props.editing || items.length === 0)
   const active = items[activeIndex]
   const dependency = dependencies.find((d) => d.id === active?.dependency)
+  const [since, setSince] = useState(() => daysAgo(7))
+  const [scanned, setScanned] = useState(0) // a finished scan changes what is checked
 
   return (
     <div className="dash">
@@ -48,7 +54,7 @@ export function ScanFlow(props: Props) {
       ) : (
         <section className="widget w-12 repo-summary" aria-label="The repository you run">
           <div>
-            <p className="repo-summary-label">{repo ? 'Repository' : 'Added by hand'}</p>
+            <p className="repo-summary-label">{repo ? 'Repository' : 'Added manually'}</p>
             <p className="repo-summary-name">{repo ?? 'No repository'}</p>
           </div>
           <ul className="repo-deps">
@@ -65,6 +71,17 @@ export function ScanFlow(props: Props) {
         </section>
       )}
 
+      <StepHead n={2} title="Sync" muted={items.length === 0} />
+      {items.length > 0 && (
+        <SyncStep
+          items={items}
+          dependencies={dependencies}
+          since={since}
+          scanned={scanned}
+          onSynced={props.onSynced}
+        />
+      )}
+
       {dependency && active ? (
         <Alerts
           key={`${dependency.project}/${active.version}`}
@@ -72,12 +89,17 @@ export function ScanFlow(props: Props) {
           version={active.version}
           systems={props.systems}
           latestScanId={props.latestScanId}
-          onScanned={props.onScanned}
+          onScanned={() => {
+            setScanned((n) => n + 1)
+            props.onScanned()
+          }}
+          since={since}
+          onSince={setSince}
         />
       ) : (
         <>
-          <StepHead n={2} title="Scan" muted />
-          <StepHead n={3} title="Results" muted />
+          <StepHead n={3} title="Scan" muted />
+          <StepHead n={4} title="Results" muted />
         </>
       )}
     </div>

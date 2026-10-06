@@ -1,4 +1,4 @@
-// A thin, typed wrapper over the dep-watch API. Types come from the API's OpenAPI schema
+// A thin, typed wrapper over the DWatcher API. Types come from the API's OpenAPI schema
 // (`npm run gen:api` with the API running), so a change to `schemas.py` shows up here as a
 // type error rather than a runtime surprise.
 import type { components } from './schema'
@@ -16,17 +16,22 @@ export type IssueDetail = Schemas['IssueDetail']
 export type CheckRequest = Schemas['CheckRequest']
 export type CheckResponse = Schemas['CheckResponse']
 export type StoredAnswer = Schemas['StoredAnswer']
+export type StoredAnswers = Schemas['StoredAnswers']
 export type IssueStats = Schemas['IssueStats']
 export type MonthCount = Schemas['MonthCount']
 export type SourceCount = Schemas['SourceCount']
 export type ReadingTime = Schemas['ReadingTime']
 export type ScanRequest = Schemas['ScanRequest']
+export type ScanBacklog = Schemas['ScanBacklog']
 export type ScanResponse = Schemas['ScanResponse']
 export type ScanItem = Schemas['ScanItemOut']
 export type Evidence = Schemas['EvidenceOut']
 export type DroppedEvidence = Schemas['DroppedEvidenceOut']
 export type Job = Schemas['JobOut']
 export type SyncState = Schemas['SyncState']
+export type SyncRun = Schemas['SyncRun']
+export type Activity = Schemas['Activity']
+export type TypeCount = Schemas['TypeCount']
 export type DatasetSummary = Schemas['DatasetSummary']
 export type EvalRunSummary = Schemas['EvalRunSummary']
 export type EvalRunRequest = Schemas['EvalRunRequest']
@@ -110,16 +115,29 @@ export const api = {
     request<StoredAnswer>(
       `/issues/${encodeURIComponent(key)}/answer${query({ version })}`,
     ),
+  /** Stored answers for a page of issues; never calls the model. */
+  answers: (version: string, keys: string[]) => {
+    const search = new URLSearchParams({ version })
+    for (const key of keys) search.append('key', key)
+    return request<StoredAnswers>(`/answers?${search}`)
+  },
   issueStats: (project: string) => request<IssueStats>(`/stats/issues${query({ project })}`),
   monthly: (project: string, months = 24) =>
     request<MonthCount[]>(`/stats/issues/monthly${query({ project, months })}`),
   sources: () => request<SourceCount[]>('/stats/sources'),
   readingTime: (project: string) => request<ReadingTime>(`/stats/reading${query({ project })}`),
   startScan: (body: ScanRequest) => post<Job>('/scan', body),
+  /** What a scan with these filters would find; never calls the model. */
+  scanBacklog: (project: string, version: string, since: string | null) =>
+    request<ScanBacklog>(`/scan/backlog${query({ project, version, since })}`),
   jobs: (kind?: string) => request<Job[]>(`/jobs${query({ kind })}`),
   job: (id: string) => request<Job>(`/jobs/${id}`),
   syncState: () => request<SyncState[]>('/sync/state'),
-  startSync: (project: string) => post<Job>('/sync/jira', { project }),
+  startSync: (project: string, full = false) => post<Job>('/sync/jira', { project, full }),
+  syncRuns: (project: string, limit = 20) =>
+    request<SyncRun[]>(`/sync/runs${query({ project, limit })}`),
+  activity: (project: string, days = 30) =>
+    request<Activity>(`/stats/activity${query({ project, days })}`),
   datasets: () => request<DatasetSummary[]>('/eval/datasets'),
   runs: () => request<EvalRunSummary[]>('/eval/runs'),
   startRun: (body: EvalRunRequest) => post<Job>('/eval/runs', body),

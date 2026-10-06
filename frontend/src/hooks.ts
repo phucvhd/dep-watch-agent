@@ -132,3 +132,58 @@ export function message(error: unknown): string {
   if (error instanceof ApiError || error instanceof Error) return error.message
   return String(error)
 }
+
+/** The JIRA sync jobs: which project is syncing, starting one, and a count that goes up each
+ * time running syncs finish (a key to reload what they change). Follows running syncs by
+ * polling; ``onFinished`` runs when they end. */
+export function useSyncJobs(onFinished?: () => void) {
+  const jobs = useLoad(() => api.jobs('sync-jira'), [])
+  const [error, setError] = useState<string>()
+  const [finished, setFinished] = useState(0)
+  const anyRunning = jobs.data?.some(isActive) ?? false
+  const reload = jobs.reload
+
+  useEffect(() => {
+    if (!anyRunning) return
+    const timer = window.setInterval(reload, 3000)
+    return () => window.clearInterval(timer)
+  }, [anyRunning, reload])
+
+  const wasRunning = useRef(false)
+  const onFinishedRef = useRef(onFinished)
+  useEffect(() => {
+    onFinishedRef.current = onFinished
+  })
+  useEffect(() => {
+    if (wasRunning.current && !anyRunning) {
+      onFinishedRef.current?.()
+      setFinished((n) => n + 1)
+    }
+    wasRunning.current = anyRunning
+  }, [anyRunning])
+
+  const start = useCallback(
+    async (project: string, full = false) => {
+      setError(undefined)
+      try {
+        await api.startSync(project, full)
+        reload()
+      } catch (e) {
+        setError(message(e))
+      }
+    },
+    [reload],
+  )
+
+  return {
+    /** The project's running sync, if any. */
+    running: (project: string) =>
+      jobs.data?.find((j) => j.params.project === project && isActive(j)),
+    /** The project's latest sync, finished or not. */
+    latest: (project: string) => jobs.data?.find((j) => j.params.project === project),
+    anyRunning,
+    finished,
+    start,
+    error,
+  }
+}

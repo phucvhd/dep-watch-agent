@@ -1,6 +1,6 @@
 """Numbers for the charts: issues over time and how long the model takes to read one."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Query
@@ -8,11 +8,14 @@ from sqlalchemy import func, select
 
 from dep_watch_agent.api.deps import SessionDep
 from dep_watch_agent.api.schemas import (
+    Activity,
+    DayCount,
     MonthCount,
     ProjectKey,
     ReadingTime,
     ReadingTimeBin,
     SourceCount,
+    TypeCount,
 )
 from dep_watch_agent.dependencies import DEPENDENCIES
 from dep_watch_agent.orm import ExtractionRow, JiraIssueRow, SyncStateRow
@@ -45,6 +48,7 @@ def sources(session: SessionDep) -> list[SourceCount]:
             dependency=d.id,
             name=d.name,
             project=d.project,
+            added=d.project in counts,
             issues=counts.get(d.project, (0, 0, 0))[0],
             bugs=counts.get(d.project, (0, 0, 0))[1],
             open_bugs=counts.get(d.project, (0, 0, 0))[2],
@@ -85,6 +89,69 @@ def monthly(
     filed = per_month(JiraIssueRow.created_at)
     fixed = per_month(JiraIssueRow.resolved_at, JiraIssueRow.resolution == "Fixed")
     return [MonthCount(month=m, filed=filed.get(m, 0), fixed=fixed.get(m, 0)) for m in labels]
+
+
+@router.get("/stats/activity", response_model=Activity)
+def activity(
+    session: SessionDep,
+    project: ProjectKey,
+    days: Annotated[int, Query(ge=1, le=365)] = 30,
+    now: Annotated[datetime | None, Query(include_in_schema=False)] = None,
+) -> Activity:
+    """What is new in the project: issues created and resolved per day (UTC) over the last
+    ``days`` days, including today; how many were created in the last 24 hours, 7 and 30 days;
+    and the types of those created over ``days``."""
+    end = now or datetime.now(UTC)
+    today = end.astimezone(UTC).date()
+    first = today - timedelta(days=days - 1)
+    start = datetime(first.year, first.month, first.day, tzinfo=UTC)
+    in_project = JiraIssueRow.project == project
+
+    def per_day(column, *columns, where=()):
+        day = func.date(func.timezone("UTC", column))
+        rows = session.execute(
+            select(day, *columns).where(in_project, column >= start, *where).group_by(day)
+        )
+        return {row[0]: row[1:] for row in rows}
+
+    created = per_day(
+        JiraIssueRow.created_at, func.count(), func.count().filter(JiraIssueRow.issue_type == "Bug")
+    )
+    # A reopened issue may keep its old resolution date; only a current resolution counts.
+    resolved = per_day(
+        JiraIssueRow.resolved_at, func.count(), where=[JiraIssueRow.resolution.is_not(None)]
+    )
+
+    def created_since(delta: timedelta) -> int:
+        return (
+            session.scalar(
+                select(func.count()).where(in_project, JiraIssueRow.created_at >= end - delta)
+            )
+            or 0
+        )
+
+    issue_type = func.coalesce(JiraIssueRow.issue_type, "Unknown")
+    types = session.execute(
+        select(issue_type, func.count())
+        .where(in_project, JiraIssueRow.created_at >= start)
+        .group_by(issue_type)
+        .order_by(func.count().desc(), issue_type)
+    )
+    return Activity(
+        days=[
+            DayCount(
+                day=first + timedelta(days=i),
+                created=created.get(first + timedelta(days=i), (0, 0))[0],
+                bugs=created.get(first + timedelta(days=i), (0, 0))[1],
+                resolved=resolved.get(first + timedelta(days=i), (0,))[0],
+            )
+            for i in range(days)
+        ],
+        new_24h=created_since(timedelta(hours=24)),
+        new_7d=created_since(timedelta(days=7)),
+        new_30d=created_since(timedelta(days=30)),
+        by_type=[TypeCount(issue_type=t, count=c) for t, c in types],
+    )
 
 
 @router.get("/stats/reading", response_model=ReadingTime)

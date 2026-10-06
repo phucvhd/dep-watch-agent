@@ -135,10 +135,30 @@ class SyncStateRow(Base):
     updated_at: Mapped[datetime] = mapped_column(Timestamp, server_default=func.now())
 
 
+class SyncRunRow(Base):
+    """One sync of a source, finished or failed: what it fetched and how much was new."""
+
+    __tablename__ = "sync_runs"
+    __table_args__ = (
+        CheckConstraint("status IN ('succeeded', 'failed')", name="sync_runs_status_check"),
+        Index("ix_sync_runs_source_started_at", "source", "started_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    source: Mapped[str] = mapped_column(Text)
+    full: Mapped[bool] = mapped_column(Boolean)
+    started_at: Mapped[datetime] = mapped_column(Timestamp)
+    finished_at: Mapped[datetime] = mapped_column(Timestamp)
+    status: Mapped[str] = mapped_column(Text)
+    fetched: Mapped[int] = mapped_column(BigInteger)  # issues written, new or updated
+    new_issues: Mapped[int] = mapped_column(BigInteger)  # issues not in the database before
+    error: Mapped[str | None] = mapped_column(Text)
+
+
 class ExtractionRow(Base):
     """Cited version facts a system extracted from an issue's text (``verdict.Extraction``).
 
-    Facts don't depend on the Kafka version asked about, so one extraction answers every
+    Facts don't depend on the version asked about, so one extraction answers every
     version, and model calls are only repeated when something they depend on changes: the
     text the system sees (``text_hash``), the system, or its configuration
     (``extractor_version``: model, prompt, chunking). Older rows stay as history.

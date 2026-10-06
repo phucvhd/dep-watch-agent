@@ -6,7 +6,7 @@ These functions don't commit; the caller owns the transaction.
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, literal_column, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -17,12 +17,14 @@ from dep_watch_agent.orm import (
     JiraIssueRow,
     JiraIssueVersionRow,
     JiraVersionRow,
+    SyncRunRow,
     SyncStateRow,
 )
 
 
-def upsert_issue(session: Session, issue: JiraIssue) -> None:
-    """Insert or replace an issue and its versions, components and comments."""
+def upsert_issue(session: Session, issue: JiraIssue) -> bool:
+    """Insert or replace an issue and its versions, components and comments. True if the issue
+    is new to the database."""
     values = {
         "id": issue.id,
         "key": issue.key,
@@ -40,11 +42,12 @@ def upsert_issue(session: Session, issue: JiraIssue) -> None:
         "raw": issue.raw,
     }
     stmt = insert(JiraIssueRow).values(values)  # synced_at defaults to now() on insert
-    session.execute(
+    # xmax is 0 only on a row this statement inserted; an updated row carries the updater's id.
+    inserted = session.scalar(
         stmt.on_conflict_do_update(
             index_elements=[JiraIssueRow.id],
             set_={**{k: stmt.excluded[k] for k in values if k != "id"}, "synced_at": func.now()},
-        )
+        ).returning(literal_column("xmax = 0"))
     )
 
     # Child rows are replaced wholesale so removed versions, components and deleted comments
@@ -76,6 +79,7 @@ def upsert_issue(session: Session, issue: JiraIssue) -> None:
     ):
         if rows:
             session.execute(insert(model), rows)
+    return bool(inserted)
 
 
 def upsert_versions(session: Session, project: str, versions: list[dict[str, Any]]) -> int:
@@ -121,3 +125,7 @@ def save_watermark(session: Session, source: str, watermark: datetime) -> None:
             set_={"watermark": stmt.excluded.watermark, "updated_at": func.now()},
         )
     )
+
+
+def record_sync_run(session: Session, **values: Any) -> None:
+    session.add(SyncRunRow(**values))

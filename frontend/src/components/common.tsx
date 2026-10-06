@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Job } from '../api/client'
+import { formatAgo, formatDate } from '../format'
 
 export function ErrorNote({ children }: { children: ReactNode }) {
   if (!children) return null
@@ -56,5 +57,37 @@ export function StepHead({ n, title, muted = false }: { n: number; title: string
       <span className="step-n">{n}</span>
       {title}
     </h2>
+  )
+}
+
+/** Labeled values in a row, for statuses and summaries: "Last sync" over its date, not a
+ * sentence around it. Empty values are left out. */
+export function Fields({
+  items,
+  className,
+}: {
+  items: [string, ReactNode][]
+  className?: string
+}) {
+  const shown = items.filter(([, value]) => value !== null && value !== undefined && value !== '')
+  return (
+    <dl className={className ? `fields ${className}` : 'fields'}>
+      {shown.map(([label, value]) => (
+        <div key={label}>
+          <dt>{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+/** A date and time with how long ago it was, for "last sync" style values. */
+export function Timestamp({ value }: { value: string }) {
+  return (
+    <>
+      <time dateTime={value}>{formatDate(value)}</time>
+      <span className="timestamp-ago">{formatAgo(value)}</span>
+    </>
   )
 }
