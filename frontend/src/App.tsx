@@ -6,6 +6,7 @@ import { useLoad, useWatch } from './hooks'
 import { Dashboard } from './pages/Dashboard'
 import { Operations } from './pages/Operations'
 import { Sources } from './pages/Sources'
+import { Upgrade } from './pages/Upgrade'
 import { useTheme, type ThemeChoice } from './theme'
 import { ScanFlow } from './pages/ScanFlow'
 
@@ -13,6 +14,7 @@ import { ScanFlow } from './pages/ScanFlow'
 // the issues come from, and the models that read them.
 const PAGES = {
   scan: 'Scan',
+  upgrade: 'Upgrade',
   dashboard: 'Dashboard',
   sources: 'Sources',
   operations: 'Models',
@@ -187,6 +189,12 @@ export function App() {
               repo={watch.repo}
               systems={systems.data ?? []}
               issueKey={route.key}
+            />
+          ) : route.page === 'upgrade' ? (
+            <Upgrade
+              dependencies={dependencies.data}
+              items={watch.items}
+              systems={systems.data ?? []}
             />
           ) : route.page === 'sources' ? (
             <Sources

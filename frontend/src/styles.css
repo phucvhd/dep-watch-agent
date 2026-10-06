@@ -1632,6 +1632,55 @@ main {
 .count-affected::after {
   background: var(--hit);
 }
+/* Upgrade changes: the color of the answer at the target. */
+.change-new_risk::after,
+.change-remains::after {
+  background: var(--hit);
+}
+.change-exposed::after,
+.change-inconclusive::after {
+  background: var(--unknown);
+}
+.change-fixed::after {
+  background: var(--clear);
+}
+
+.upgrade-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.upgrade-tiles .count-label {
+  padding-right: 22px; /* clear of the tile's dot */
+}
+
+
+.upgrade-unchecked {
+  margin-top: 12px;
+}
+
+.upgrade-answers {
+  margin: 4px 0 20px;
+}
+
+.upgrade-answers .verdict {
+  margin: 0;
+}
+
+/* A row's two answers: the version you run, then the target. */
+.transition {
+  grid-area: ruler;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.transition-arrow {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
 .count-insufficient_information::after {
   background: var(--unknown);
 }

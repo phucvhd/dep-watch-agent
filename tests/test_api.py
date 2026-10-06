@@ -390,6 +390,50 @@ def test_scan_backlog_counts_without_a_model_call(make_client):
     assert client.get("/scan/backlog", params={**params, "version": "3.6"}).status_code == 422
 
 
+def upgrade(client, **body):
+    return client.post(
+        "/upgrade",
+        json={"project": "KAFKA", "from_version": "3.6.0", "to_version": "3.9.0", **body},
+    )
+
+
+def test_upgrade_reports_fixes_from_fix_versions(client):
+    job = wait(client, upgrade(client).json())
+    assert job["status"] == "succeeded", job["error"]
+    result = job["result"]
+    assert result["direction"] == "upgrade"
+    deadlock = next(i for i in result["items"] if i["issue_key"] == "KAFKA-100")
+    assert (deadlock["change"], deadlock["decided_by"]) == ("fixed", "fix_versions")
+    assert deadlock["target"] == "not_affected"
+
+
+def test_a_downgrade_lists_the_fix_given_up(client):
+    job = wait(client, upgrade(client, from_version="3.9.0", to_version="3.6.0").json())
+    deadlock = next(i for i in job["result"]["items"] if i["issue_key"] == "KAFKA-100")
+    assert (job["result"]["direction"], deadlock["change"]) == ("downgrade", "exposed")
+
+
+def test_upgrade_reads_when_asked(client):
+    job = wait(client, upgrade(client, from_version="3.5.2", to_version="3.6.0", read=5).json())
+    result = job["result"]
+    deadlock = next(i for i in result["items"] if i["issue_key"] == "KAFKA-100")
+    # "Works fine on 3.5.2", "Regression in 3.6.0": a new risk for this upgrade.
+    assert (deadlock["current"], deadlock["target"], deadlock["change"]) == (
+        "not_affected",
+        "affected",
+        "new_risk",
+    )
+    assert deadlock["evidence"]
+    assert result["read"] == job["progress"] == 2
+
+
+def test_upgrade_validates_its_request(client, make_client):
+    assert upgrade(client, to_version="3.6.0").status_code == 422  # the same version
+    assert upgrade(client, to_version="3.9").status_code == 422  # a release line
+    assert upgrade(client, project="SPARK", from_version="3.5.0").status_code == 422
+    assert upgrade(make_client(systems={}), read=5).status_code == 503
+
+
 def test_scan_answers_only_watchable_dependencies(client):
     response = scan(client, project="SPARK", version="3.5.1")
     assert response.status_code == 422

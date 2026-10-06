@@ -296,6 +296,62 @@ class ScanResponse(BaseModel):
     items: list[ScanItemOut]
 
 
+# --- upgrade -----------------------------------------------------------------------------
+
+Change = Literal["new_risk", "exposed", "remains", "inconclusive", "fixed"]
+
+
+class UpgradeRequest(BaseModel):
+    project: ProjectKey = Field(examples=["KAFKA"])
+    from_version: str = Field(examples=["3.4.0"], description="The version you run")
+    to_version: str = Field(examples=["3.9.1"], description="The version to move to")
+    read: int = Field(
+        0,
+        ge=0,
+        le=500,
+        description="Read at most this many issues without stored facts (each a model call), "
+        "first those JIRA reports between the two versions. 0: stored facts and fix versions only",
+    )
+    system: str | None = Field(None, description="Default: the first registered system")
+
+
+class UpgradeItemOut(BaseModel):
+    issue_key: str
+    url: str
+    summary: str
+    status: str | None
+    resolution: str | None
+    updated_at: datetime
+    fix_versions: list[str]
+    current: Answer = Field(description="The answer at from_version")
+    target: Answer = Field(description="The answer at to_version")
+    change: Change
+    decided_by: str = Field(description="The system, when its facts were used; else fix_versions")
+    cached: bool
+    evidence: list[EvidenceOut]
+    dropped: list[DroppedEvidenceOut]
+    error: str | None
+
+
+class UpgradeResponse(BaseModel):
+    """The ``result`` of a finished upgrade job. Items: new_risk, exposed, remains,
+    inconclusive, then fixed; newest first within each. Issues not affected at either version
+    are only counted (``unchanged``), as are those never read (``unchecked``)."""
+
+    project: str
+    from_version: str
+    to_version: str
+    direction: Literal["upgrade", "downgrade"]
+    system: str | None
+    candidates: int = Field(description="Candidate bugs compared")
+    releases_between: int = Field(description="Releases after the lower version, up to the higher")
+    counts: dict[str, int]
+    unchecked: int = Field(description="Inconclusive at the target and never read by the model")
+    read: int = Field(description="Issues the model read in this run")
+    errors: int
+    items: list[UpgradeItemOut]
+
+
 # --- jobs --------------------------------------------------------------------------------
 
 
