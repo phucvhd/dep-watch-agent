@@ -3,8 +3,10 @@
 Each candidate issue (the scan's Tier 1: bugs that aren't "not a bug") is answered for both
 versions by ``verdict.decide``, from the same facts, and code compares the two answers:
 
-- ``fixed``: not affected at the target, and not known to be unaffected at the current
-  version. Usually the fix versions settle it, with no model call.
+- ``fixed``: affected now, not affected at the target: a bug you have that the move fixes.
+- ``fix_included``: not affected at the target, not known either way now. Usually the fix
+  versions settle the target with no model call, while the text doesn't say where the bug
+  starts.
 - ``new_risk``: not affected now, affected at the target.
 - ``exposed``: not affected now, but the target can't be ruled out. On a downgrade these are
   mostly the fixes you would give up: the fix versions settle the current version, while the
@@ -17,14 +19,18 @@ versions by ``verdict.decide``, from the same facts, and code compares the two a
 Nothing new decides anything: the per-version answers are what the eval measures, and the
 comparison is deterministic. Facts come from stored extractions; an issue without them is
 answered by its fix versions alone and counted as not checked, unless ``read`` lets the system
-read it. Issues whose JIRA affects versions fall between the two versions are read first: a
-Tier 1 hint for what to read, never evidence for the answer.
+read it. ``read_order`` decides which issues those are: first those the target's fix versions
+don't settle (they may affect the target), then the rest; within each, issues that aren't
+about tests, build or docs, those JIRA reports between the two versions or that were reported
+recently enough to be new, then by priority. These are Tier 1 hints for what to read first,
+never evidence for an answer, and nothing is left out: unread issues are counted.
 """
 
+import re
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -49,20 +55,30 @@ from dep_watch_agent.verdict import (
 from dep_watch_agent.versions import Version, VersionParseError, VersionScheme
 
 FIXED = "fixed"
+FIX_INCLUDED = "fix_included"
 NEW_RISK = "new_risk"
 EXPOSED = "exposed"
 REMAINS = "remains"
 INCONCLUSIVE = "inconclusive"
 UNCHANGED = "unchanged"
-CHANGES = (NEW_RISK, EXPOSED, REMAINS, INCONCLUSIVE, FIXED, UNCHANGED)
-# Listed in this order: what needs action first.
-REPORT_ORDER = {NEW_RISK: 0, EXPOSED: 1, REMAINS: 2, INCONCLUSIVE: 3, FIXED: 4}
+CHANGES = (NEW_RISK, REMAINS, EXPOSED, FIXED, INCONCLUSIVE, FIX_INCLUDED, UNCHANGED)
+# Listed in this order: the bugs at the target, then the bugs you have now that it fixes.
+REPORT_ORDER = {c: i for i, c in enumerate(CHANGES[:-1])}
+
+# Read-order hints. A bug that starts after the current version can't have been reported long
+# before it: trunk runs about one release cycle ahead of a release.
+TRUNK_LEAD = timedelta(days=183)
+PRIORITY_RANK = {"Blocker": 0, "Critical": 1, "Major": 2, "Minor": 3, "Trivial": 4}
+NOT_PRODUCT = {"unit tests", "system tests", "build", "docs", "documentation", "website"}
+FLAKY = re.compile(r"^\s*flaky\b", re.IGNORECASE)
 
 
 def change(current: str, target: str) -> str:
     """How an issue's answer changes from the current version to the target."""
     if target == NOT_AFFECTED:
-        return UNCHANGED if current == NOT_AFFECTED else FIXED
+        if current == NOT_AFFECTED:
+            return UNCHANGED
+        return FIXED if current == AFFECTED else FIX_INCLUDED
     if target == AFFECTED:
         return NEW_RISK if current == NOT_AFFECTED else REMAINS
     return EXPOSED if current == NOT_AFFECTED else INCONCLUSIVE
@@ -130,7 +146,11 @@ def diagnose(
     issues = session.scalars(
         candidates_query(dependency.project, None)
         .order_by(JiraIssueRow.updated_at.desc(), JiraIssueRow.id.desc())
-        .options(selectinload(JiraIssueRow.versions), selectinload(JiraIssueRow.comments))
+        .options(
+            selectinload(JiraIssueRow.versions),
+            selectinload(JiraIssueRow.comments),
+            selectinload(JiraIssueRow.components),
+        )
     ).all()
     texts = {issue.id: issue_text(issue) for issue in issues}
     stored = (
@@ -139,22 +159,29 @@ def diagnose(
         else set()
     )
 
-    def settled(issue: JiraIssueRow) -> bool:
-        """Both answers come from the fix versions: reading the text can't change them."""
-        text = texts[issue.id]
-        return all(
-            decide(text, v, Extraction([]), scheme).answer == NOT_AFFECTED
-            for v in (from_version, to_version)
-        )
+    def by_fixes(issue: JiraIssueRow, version: str) -> bool:
+        return decide(texts[issue.id], version, Extraction([]), scheme).answer == NOT_AFFECTED
 
     to_read: set[int] = set()
     if read and system and extractor:
+        # Reading can't change an answer both versions' fix versions settle.
         unread = [
             i
             for i in issues
-            if (i.id, extractions.text_hash(texts[i.id])) not in stored and not settled(i)
+            if (i.id, extractions.text_hash(texts[i.id])) not in stored
+            and not (by_fixes(i, from_version) and by_fixes(i, to_version))
         ]
-        unread.sort(key=lambda i: not _reported_between(i, low, high, scheme))  # stable
+        since = _release_date(session, dependency, low)
+        unread.sort(
+            key=lambda i: read_order(
+                i,
+                target_settled=by_fixes(i, to_version),
+                low=low,
+                high=high,
+                scheme=scheme,
+                recent_since=since - TRUNK_LEAD if since else None,
+            )
+        )  # stable: newest first within a tie
         to_read = {i.id for i in unread[:read]}
 
     items, unchanged, unchecked, done = [], 0, 0, 0
@@ -238,6 +265,49 @@ def _item(
         dropped=at_target.dropped,
         error=error,
     )
+
+
+def read_order(
+    issue: JiraIssueRow,
+    *,
+    target_settled: bool,
+    low: Version,
+    high: Version,
+    scheme: VersionScheme,
+    recent_since: date | None,
+) -> tuple:
+    """Sort key for what to read first (lower first). Reading an issue whose target answer the
+    fix versions already settle only tells whether you have the bug now, so those go last."""
+    components = {c.component.strip().lower() for c in issue.components}
+    not_product = bool(
+        FLAKY.match(issue.summary)
+        or "flaky-test" in (issue.labels or [])
+        or (components and components <= NOT_PRODUCT)
+    )
+    recent = recent_since is not None and issue.created_at.date() >= recent_since
+    return (
+        target_settled,
+        not_product,
+        not (_reported_between(issue, low, high, scheme) or recent),
+        PRIORITY_RANK.get(issue.priority or "", len(PRIORITY_RANK)),
+    )
+
+
+def _release_date(session: Session, dependency: Dependency, version: Version) -> date | None:
+    """When ``version`` was released, from JIRA's version list."""
+    rows = session.execute(
+        select(JiraVersionRow.name, JiraVersionRow.release_date).where(
+            JiraVersionRow.project == dependency.project,
+            JiraVersionRow.release_date.is_not(None),
+        )
+    )
+    for name, released in rows:
+        try:
+            if dependency.scheme.parse(name) == version:
+                return released
+        except VersionParseError:
+            continue
+    return None
 
 
 def _reported_between(

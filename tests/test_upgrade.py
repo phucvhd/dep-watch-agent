@@ -1,3 +1,6 @@
+from datetime import datetime
+from types import SimpleNamespace
+
 import pytest
 
 from dep_watch_agent.dependencies import DEPENDENCIES
@@ -5,6 +8,7 @@ from dep_watch_agent.jira.models import parse_issue
 from dep_watch_agent.jira.store import upsert_issue
 from dep_watch_agent.upgrade import (
     EXPOSED,
+    FIX_INCLUDED,
     FIXED,
     INCONCLUSIVE,
     NEW_RISK,
@@ -12,6 +16,7 @@ from dep_watch_agent.upgrade import (
     UNCHANGED,
     change,
     diagnose,
+    read_order,
 )
 from dep_watch_agent.verdict import Evidence, Extraction, IssueText
 from tests.jira_factory import raw_issue
@@ -72,7 +77,7 @@ def session(db):
     ("current", "target", "expected"),
     [
         ("affected", "not_affected", FIXED),
-        ("insufficient_information", "not_affected", FIXED),
+        ("insufficient_information", "not_affected", FIX_INCLUDED),
         ("not_affected", "not_affected", UNCHANGED),
         ("not_affected", "affected", NEW_RISK),
         ("affected", "affected", REMAINS),
@@ -96,10 +101,11 @@ def test_upgrade_without_reading_uses_fix_versions_only(session):
 
     assert result.direction == "upgrade"
     assert extractor.seen == []  # nothing stored, nothing read
-    assert (items["KAFKA-1"].change, items["KAFKA-1"].decided_by) == (FIXED, "fix_versions")
+    # The target has the fix; whether 3.7.0 has the bug, the fix versions don't say.
+    assert (items["KAFKA-1"].change, items["KAFKA-1"].decided_by) == (FIX_INCLUDED, "fix_versions")
     assert result.unchanged == 1  # KAFKA-3, fixed before both
     assert result.unchecked == 4  # the rest: never read, only counted
-    assert result.counts[FIXED] == 1
+    assert (result.counts[FIX_INCLUDED], result.counts[FIXED]) == (1, 0)
 
 
 def test_a_downgrade_lists_the_fixes_given_up(session):
@@ -145,4 +151,51 @@ def test_a_failed_read_is_reported_not_dropped(session):
 def test_without_a_system_only_fix_versions_answer(session):
     result = diagnose(session, KAFKA, "3.7.0", "3.9.1", None, None, read=10)
     assert result.read == 0
-    assert result.counts[FIXED] == 1
+    assert result.counts[FIX_INCLUDED] == 1
+
+
+def test_a_bug_you_have_that_the_target_fixes_is_fixed(session):
+    upsert_issue(
+        session,
+        parse_issue(issue(7, "known", description="Seen on 3.7.0 in production.", fix=["3.8.0"])),
+    )
+    session.commit()
+    result = diagnose(session, KAFKA, "3.7.0", "3.9.1", "phrases", PhraseExtractor(), read=10)
+    assert by_key(result)["KAFKA-7"].change == FIXED  # seen on 3.7.0, fixed in 3.8.0
+
+
+def row(summary="A bug", priority="Major", labels=(), components=(), affects=()):
+    """An issue with only the fields read_order looks at."""
+    return SimpleNamespace(
+        summary=summary,
+        priority=priority,
+        labels=list(labels),
+        components=[SimpleNamespace(component=c) for c in components],
+        versions=[SimpleNamespace(kind="affects", name=v) for v in affects],
+        created_at=datetime(2020, 1, 1),
+    )
+
+
+def order(issue, target_settled=False):
+    scheme = KAFKA.scheme
+    return read_order(
+        issue,
+        target_settled=target_settled,
+        low=scheme.parse("3.8.0"),
+        high=scheme.parse("3.9.1"),
+        scheme=scheme,
+        recent_since=None,
+    )
+
+
+def test_read_order_puts_what_may_affect_the_target_first():
+    rows = {
+        "settled target": (row(priority="Blocker"), True),
+        "flaky": (row(summary="Flaky test FooTest"), False),
+        "docs only": (row(components=["documentation"]), False),
+        "in range": (row(affects=["3.9.0"]), False),
+        "critical": (row(priority="Critical"), False),
+        "minor": (row(priority="Minor"), False),
+    }
+    ranked = sorted(rows, key=lambda name: order(*rows[name]))
+    assert ranked == ["in range", "critical", "minor", "flaky", "docs only", "settled target"]

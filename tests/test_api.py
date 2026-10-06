@@ -403,7 +403,8 @@ def test_upgrade_reports_fixes_from_fix_versions(client):
     result = job["result"]
     assert result["direction"] == "upgrade"
     deadlock = next(i for i in result["items"] if i["issue_key"] == "KAFKA-100")
-    assert (deadlock["change"], deadlock["decided_by"]) == ("fixed", "fix_versions")
+    # Unread: the target has the fix, whether 3.6.0 has the bug isn't known.
+    assert (deadlock["change"], deadlock["decided_by"]) == ("fix_included", "fix_versions")
     assert deadlock["target"] == "not_affected"
 
 

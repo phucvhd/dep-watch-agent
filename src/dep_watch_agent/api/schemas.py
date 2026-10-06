@@ -298,7 +298,7 @@ class ScanResponse(BaseModel):
 
 # --- upgrade -----------------------------------------------------------------------------
 
-Change = Literal["new_risk", "exposed", "remains", "inconclusive", "fixed"]
+Change = Literal["new_risk", "remains", "exposed", "fixed", "inconclusive", "fix_included"]
 
 
 class UpgradeRequest(BaseModel):
@@ -310,7 +310,8 @@ class UpgradeRequest(BaseModel):
         ge=0,
         le=500,
         description="Read at most this many issues without stored facts (each a model call), "
-        "first those JIRA reports between the two versions. 0: stored facts and fix versions only",
+        "those that may affect the target first (upgrade.read_order). 0: stored facts and fix "
+        "versions only",
     )
     system: str | None = Field(None, description="Default: the first registered system")
 
@@ -334,8 +335,8 @@ class UpgradeItemOut(BaseModel):
 
 
 class UpgradeResponse(BaseModel):
-    """The ``result`` of a finished upgrade job. Items: new_risk, exposed, remains,
-    inconclusive, then fixed; newest first within each. Issues not affected at either version
+    """The ``result`` of a finished upgrade job. Items: new_risk, remains, exposed, fixed,
+    inconclusive, then fix_included; newest first within each. Issues not affected at either version
     are only counted (``unchanged``), as are those never read (``unchecked``)."""
 
     project: str

@@ -13,13 +13,14 @@ import { ErrorNote, Fields, JobLine, PageIntro, type Tone } from '../components/
 import { ANSWER_TEXT, plural } from '../format'
 import { isActive, message, useJob, useLoad, type WatchItem } from '../hooks'
 
-const CHANGES: Change[] = ['new_risk', 'exposed', 'remains', 'inconclusive', 'fixed']
+// The bugs at the target first, then the bugs you have now that it fixes, then the unknowns.
+const CHANGES: Change[] = ['new_risk', 'remains', 'exposed', 'fixed', 'inconclusive', 'fix_included']
 
 /** What each change means, in the direction of the move. */
 function changeText(change: Change, direction: UpgradeResponse['direction']): string {
   switch (change) {
     case 'new_risk':
-      return 'New risks'
+      return 'New at target'
     case 'exposed':
       return direction === 'downgrade' ? 'Fixes given up' : 'No longer ruled out'
     case 'remains':
@@ -28,6 +29,8 @@ function changeText(change: Change, direction: UpgradeResponse['direction']): st
       return 'Inconclusive'
     case 'fixed':
       return direction === 'downgrade' ? 'Fixed by downgrading' : 'Fixed by upgrading'
+    case 'fix_included':
+      return 'Fixes included'
   }
 }
 

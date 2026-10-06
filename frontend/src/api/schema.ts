@@ -1479,7 +1479,7 @@ export interface components {
              * Change
              * @enum {string}
              */
-            change: "new_risk" | "exposed" | "remains" | "inconclusive" | "fixed";
+            change: "new_risk" | "remains" | "exposed" | "fixed" | "inconclusive" | "fix_included";
             /**
              * Decided By
              * @description The system, when its facts were used; else fix_versions
@@ -1515,7 +1515,7 @@ export interface components {
             to_version: string;
             /**
              * Read
-             * @description Read at most this many issues without stored facts (each a model call), first those JIRA reports between the two versions. 0: stored facts and fix versions only
+             * @description Read at most this many issues without stored facts (each a model call), those that may affect the target first (upgrade.read_order). 0: stored facts and fix versions only
              * @default 0
              */
             read?: number;
@@ -1527,8 +1527,8 @@ export interface components {
         };
         /**
          * UpgradeResponse
-         * @description The ``result`` of a finished upgrade job. Items: new_risk, exposed, remains,
-         *     inconclusive, then fixed; newest first within each. Issues not affected at either version
+         * @description The ``result`` of a finished upgrade job. Items: new_risk, remains, exposed, fixed,
+         *     inconclusive, then fix_included; newest first within each. Issues not affected at either version
          *     are only counted (``unchanged``), as are those never read (``unchecked``).
          */
         UpgradeResponse: {
