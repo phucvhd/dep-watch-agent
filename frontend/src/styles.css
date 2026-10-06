@@ -3,9 +3,10 @@
    (issue keys, dates, versions, counts). Color means something: the strip under each page
    title is warm when a bug affects you and cool when none does; answers wear tinted chips; and one
    accent marks what you can act on or where you are (primary buttons, the current page and
-   step, the selected card, focus) and the measure a chart is about. The accent is the
-   gradient's orange (#f26522) made deep enough for text, so the page and its header share one
-   palette. Affected is red, not orange, so an answer never reads as a button. */
+   step, the selected card, focus) and the measure a chart is about. The accent is lime (hue
+   85), clear of the hues that carry meaning: red, amber and blue for the answers, violet, aqua
+   and ochre for the sources. Lime is light, so it comes in two steps: a bright fill with dark
+   text for buttons and badges, and a deep lime for text, marks and focus. */
 
 :root {
   --bg: #ffffff;
@@ -20,31 +21,37 @@
   --ink-3: #6b6b6b; /* 4.8-5.3:1 */
   --mark-muted: #c2c2c2; /* de-emphasized chart marks: not text, so it stays light */
 
-  /* Answer colors, validated as a categorical set (dataviz validate_palette.js), all pairs:
-     red, blue, amber. */
-  --hit: #d92d20; /* affected: red, apart from the orange accent */
-  --hit-text: #b42318; /* 5.8:1 on its chip tint, 6.6:1 on white */
+  /* Answer colors, from Radix Colors' ruby, cyan and amber: with the lime accent, ruby and
+     cyan close a triad (85, 195 and 330 degrees), and amber, the caution color, sits beside
+     lime. Validated as a categorical set, all pairs, light and dark (dataviz
+     validate_palette.js); each text color clears 4.5:1 on white, the canvas and its chip. */
+  --hit: #e54666; /* affected */
+  --hit-text: #ca244d; /* 4.7:1 on its chip tint, 5.4:1 on white */
   --unknown: #eda100; /* inconclusive: below 3:1 on white, so charts carry labels and a table */
   --unknown-text: #8f6000;
-  --clear: #2a78d6; /* doesn't affect you */
-  --clear-text: #1f5fae;
+  --clear: #00a2c7; /* not affected: below 3:1 on white, so it always carries a label */
+  --clear-text: #0c6f8a; /* 5.1:1 on its chip tint */
   /* Chip tints behind answer text; each text color clears 4.5:1 on its tint. */
-  --hit-soft: #fdecea;
+  --hit-soft: #feeaed;
   --unknown-soft: #fdf3d9;
-  --clear-soft: #e8f1fc;
-  /* The accent, from the hero gradient's orange: 5.6:1 on white either way round. */
-  --accent: #b93d0c;
-  --accent-soft: #fdeee6;
-  --accent-light: #f6d9a6; /* the gradient's sand: the second mark in a chart beside the accent */
-  --accent-ink: #ffffff; /* text on the accent */
-  /* Source slots, by the API's dependency order (sources.ts), validated all-pairs: a donut puts
-     every pair side by side. Three slots; further sources are gray and fold into "Other". */
-  --src-1: #4a3aa7; /* violet */
-  --src-2: #1baf7a; /* aqua: below 3:1 on white, so the legend carries the values */
-  --src-3: #8c5e00; /* ochre */
+  --clear-soft: #def7f9;
+  /* The accent. Text and marks: 5.2:1 on white, 4.6:1 on its own tint. Fill: dark text on it
+     at 9.7:1; it is light on white (1.5:1), so a filled button has a deep lime edge. */
+  --accent: #4a7a0c;
+  --accent-fill: #a3e635;
+  --accent-soft: #eef7d9;
+  --accent-light: #cde89b; /* the second mark in a chart beside the accent */
+  --accent-ink: #1a2e05; /* text on the fill */
+  /* Source slots, by the catalog order (sources.ts): indigo, teal and orchid from Radix Colors,
+     clear of the accent (lime) and the answers (ruby, cyan, amber). Validated all-pairs, since a
+     donut puts every pair side by side: the closest pair is 7.4 under deuteranopia, in the band
+     that needs secondary encoding, which the donut has (2px gaps, a labeled legend with shares).
+     Three slots; further sources are gray and fold into "Other". */
+  --src-1: #3e63dd; /* indigo */
+  --src-2: #0e9f84; /* teal */
+  --src-3: #c050b0; /* orchid */
   --grid: #e9e9e6;
   --pin: #0e0e0e; /* the version you run */
-  --highlight: rgb(251 193 99 / 0.45);
 
   --font: 'Geist', system-ui, -apple-system, sans-serif;
   --mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
@@ -70,25 +77,25 @@
   --ink-2: #b8b8b8; /* 9-10:1 */
   --ink-3: #9c9c9c; /* 6.7-7.3:1; the old #737373 was 3.9-4.2:1 */
   --mark-muted: #4a4a4a;
-  --hit: #e5484d;
-  --hit-text: #ff8a80;
+  --hit: #e54666;
+  --hit-text: #ff949d;
   --unknown: #c98500;
   --unknown-text: #f5bd5c;
-  --clear: #3987e5;
-  --clear-text: #8fb8f0;
-  --hit-soft: #2b1110;
+  --clear: #0797b9;
+  --clear-text: #4ccce6;
+  --hit-soft: #3a141e;
   --unknown-soft: #2a210c;
-  --clear-soft: #0f1c2c;
-  --accent: #f7923a; /* the gradient's orange itself: 8.5:1 on the dark surfaces */
-  --accent-soft: #2a160d;
-  --accent-light: #6b4a1f;
+  --clear-soft: #082c36;
+  --accent: #a3e635; /* 12.9:1 on the dark surfaces */
+  --accent-fill: #a3e635;
+  --accent-soft: #1a2a08;
+  --accent-light: #3f5f17;
   --accent-ink: #0d0d0d;
-  --src-1: #9085e9;
-  --src-2: #199e70;
-  --src-3: #a87a1a;
+  --src-1: #3e63dd;
+  --src-2: #0e9f84;
+  --src-3: #c050b0;
   --grid: #232323;
   --pin: #f2f2f2;
-  --highlight: rgb(241 171 58 / 0.32);
   color-scheme: dark;
 }
 
@@ -113,6 +120,11 @@ h2,
 h3 {
   margin: 0;
   font-weight: 500;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink);
 }
 
 a {
@@ -211,7 +223,7 @@ a.button {
 
 button.primary,
 a.button.primary {
-  background: var(--accent);
+  background: var(--accent-fill);
   border-color: var(--accent);
   color: var(--accent-ink);
 }
@@ -352,7 +364,7 @@ button:disabled {
 }
 
 .theme-switch button[aria-pressed='true'] {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--accent-ink);
 }
 
@@ -426,7 +438,7 @@ button:disabled {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #3fae6a;
+  background: var(--accent); /* the model is ready */
   flex: none;
 }
 
@@ -458,18 +470,19 @@ main {
   background-color: #c9d4d9;
 }
 
-/* The status strip under a page title, from the old gradient's colors: warm when a bug affects
-   you, cool when none does, neutral before there is an answer. */
+/* The status strip under a page title. Every strip starts from the accent's lime and ends in
+   the status's answer color: through amber to ruby when a bug affects you, to cyan when none
+   does, to slate before there is an answer. */
 .hero-hit {
-  --strip: linear-gradient(90deg, #b2c6d1 0%, #fbbe5e 55%, #f26522 100%);
+  --strip: linear-gradient(90deg, #a3e635 0%, #fbbe5e 55%, #e54666 100%);
 }
 
 .hero-calm {
-  --strip: linear-gradient(90deg, #dfe7eb 0%, #8fb0c6 100%);
+  --strip: linear-gradient(90deg, #a3e635 0%, #00a2c7 100%);
 }
 
 .hero-idle {
-  --strip: linear-gradient(90deg, #c3d1d8 0%, #f6d9a6 100%);
+  --strip: linear-gradient(90deg, #cde89b 0%, #c3d1d8 100%);
 }
 
 .hero-line,
@@ -608,7 +621,7 @@ main {
   width: 14px;
   height: 14px;
   border: 2px solid var(--line);
-  border-top-color: var(--ink);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
   flex: none;
@@ -1429,10 +1442,15 @@ th {
   white-space: nowrap;
 }
 
+/* A small bordered label, e.g. Provisional on an eval run: amber, since its scores are not final. */
 .tag {
   margin-left: 8px;
-  font-size: 13px;
+  padding: 1px 6px;
+  border: 1px solid var(--unknown);
+  border-radius: var(--radius);
+  font-size: 12px;
   color: var(--unknown-text);
+  background: var(--unknown-soft);
 }
 
 .job-succeeded {
@@ -1443,7 +1461,7 @@ th {
 }
 .job-running,
 .job-queued {
-  color: var(--ink);
+  color: var(--accent);
 }
 
 /* --- dashboards: a grid of widgets on a quiet canvas --------------------------------- */
@@ -1803,6 +1821,12 @@ main {
   padding: 12px 16px;
 }
 
+/* In a padded widget the message sits on the widget's own padding. */
+.widget:not(.list-widget):not(.detail-widget) > .list-empty,
+.widget:not(.list-widget):not(.detail-widget) > section > .list-empty {
+  padding: 8px 0 0;
+}
+
 .list-widget .list-empty {
   padding: 18px 20px;
 }
@@ -1939,7 +1963,7 @@ button.btn-sm {
   height: 24px;
   padding: 0 6px;
   border-radius: var(--radius);
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--accent-ink);
   font-size: 12px;
   font-weight: 500;
