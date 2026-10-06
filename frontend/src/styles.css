@@ -1,13 +1,17 @@
-/* dep-watch, in the manner of an editorial brand guide: white, flat, hairlines that run edge
-   to edge, a large grotesk, grey supporting text, superscript numbers. The one splash of color
-   is the hero gradient, and it means something: warm when a bug affects you, cool when none
-   does. Answer colors are taken from that same gradient. */
+/* DWatcher, in the manner of an editorial brand guide: white, flat, a large grotesk, grey
+   supporting text, superscript numbers. Color means something: the hero gradient is warm when
+   a bug affects you and cool when none does; answers wear their own tinted chips; and one
+   accent marks what you can act on or where you are (primary buttons, the current page and
+   step, the selected card, focus) and the measure a chart is about. The accent is the
+   gradient's orange (#f26522) made deep enough for text, so the page and its header share one
+   palette. Affected is red, not orange, so an answer never reads as a button. */
 
 :root {
   --bg: #ffffff;
   --bg-soft: #f8f8f6;
   --canvas: #f3f3f0; /* behind widgets */
-  --line: #e6e6e3;
+  --line: #dcdcd6; /* hairlines inside a widget */
+  --line-strong: #c9c9c2; /* the edge of a widget, an input or a button */
   --ink: #0e0e0e;
   /* Supporting text. Both clear WCAG AA (4.5:1) on every surface they sit on: white tiles,
      --bg-soft rows and the --canvas behind tiles. The old #9a9a9a was 2.5-2.8:1. */
@@ -15,14 +19,23 @@
   --ink-3: #6b6b6b; /* 4.8-5.3:1 */
   --mark-muted: #c2c2c2; /* de-emphasized chart marks: not text, so it stays light */
 
-  /* Answer colors, validated as a categorical set (dataviz validate_palette.js) in the order
-     affected, not_affected, insufficient: orange and amber are never adjacent in a chart. */
-  --hit: #eb6834; /* affects you */
-  --hit-text: #c4470a;
-  --unknown: #eda100; /* can't tell: below 3:1 on white, so charts carry labels and a table */
+  /* Answer colors, validated as a categorical set (dataviz validate_palette.js), all pairs:
+     red, blue, amber. */
+  --hit: #d92d20; /* affected: red, apart from the orange accent */
+  --hit-text: #b42318; /* 5.8:1 on its chip tint, 6.6:1 on white */
+  --unknown: #eda100; /* inconclusive: below 3:1 on white, so charts carry labels and a table */
   --unknown-text: #8f6000;
   --clear: #2a78d6; /* doesn't affect you */
   --clear-text: #1f5fae;
+  /* Chip tints behind answer text; each text color clears 4.5:1 on its tint. */
+  --hit-soft: #fdecea;
+  --unknown-soft: #fdf3d9;
+  --clear-soft: #e8f1fc;
+  /* The accent, from the hero gradient's orange: 5.6:1 on white either way round. */
+  --accent: #b93d0c;
+  --accent-soft: #fdeee6;
+  --accent-light: #f6d9a6; /* the gradient's sand: the second mark in a chart beside the accent */
+  --accent-ink: #ffffff; /* text on the accent */
   /* Source slots, by the API's dependency order (sources.ts), validated all-pairs: a donut puts
      every pair side by side. Three slots; further sources are gray and fold into "Other". */
   --src-1: #4a3aa7; /* violet */
@@ -39,30 +52,38 @@
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0d0d0d;
-    --bg-soft: #151515;
-    --canvas: #080808;
-    --line: #262626;
-    --ink: #f2f2f2;
-    --ink-2: #b8b8b8; /* 9-10:1 */
-    --ink-3: #9c9c9c; /* 6.7-7.3:1; the old #737373 was 3.9-4.2:1 */
-    --mark-muted: #4a4a4a;
-    --hit: #d95926;
-    --hit-text: #ff8a50;
-    --unknown: #c98500;
-    --unknown-text: #f5bd5c;
-    --clear: #3987e5;
-    --clear-text: #8fb8f0;
-    --src-1: #9085e9;
-    --src-2: #199e70;
-    --src-3: #a87a1a;
-    --grid: #232323;
-    --pin: #f2f2f2;
-    --highlight: rgb(241 171 58 / 0.32);
-    color-scheme: dark;
-  }
+/* Dark tokens, applied by the theme (index.html sets data-theme before the first paint:
+   the saved choice, else the system's). */
+:root[data-theme='dark'] {
+  --bg: #0d0d0d;
+  --bg-soft: #151515;
+  --canvas: #080808;
+  --line: #2c2c2c;
+  --line-strong: #3d3d3d;
+  --ink: #f2f2f2;
+  --ink-2: #b8b8b8; /* 9-10:1 */
+  --ink-3: #9c9c9c; /* 6.7-7.3:1; the old #737373 was 3.9-4.2:1 */
+  --mark-muted: #4a4a4a;
+  --hit: #e5484d;
+  --hit-text: #ff8a80;
+  --unknown: #c98500;
+  --unknown-text: #f5bd5c;
+  --clear: #3987e5;
+  --clear-text: #8fb8f0;
+  --hit-soft: #2b1110;
+  --unknown-soft: #2a210c;
+  --clear-soft: #0f1c2c;
+  --accent: #f7923a; /* the gradient's orange itself: 8.5:1 on the dark surfaces */
+  --accent-soft: #2a160d;
+  --accent-light: #6b4a1f;
+  --accent-ink: #0d0d0d;
+  --src-1: #9085e9;
+  --src-2: #199e70;
+  --src-3: #a87a1a;
+  --grid: #232323;
+  --pin: #f2f2f2;
+  --highlight: rgb(241 171 58 / 0.32);
+  color-scheme: dark;
 }
 
 *,
@@ -98,7 +119,7 @@ a:hover {
 }
 
 :focus-visible {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 
@@ -142,7 +163,7 @@ input,
 select {
   height: 40px;
   background: var(--bg);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   padding: 0 12px;
   min-width: 0;
@@ -161,7 +182,7 @@ button {
   height: 40px;
   padding: 0 20px;
   border-radius: 999px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   background: var(--bg);
   font-weight: 500;
   cursor: pointer;
@@ -177,16 +198,16 @@ a.button {
   height: 40px;
   padding: 0 20px;
   border-radius: 999px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   font-weight: 500;
   text-decoration: none;
 }
 
 button.primary,
 a.button.primary {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
 }
 
 a.button.primary:hover,
@@ -255,30 +276,10 @@ button:disabled {
 }
 
 .brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   font-weight: 600;
   font-size: 19px;
   letter-spacing: -0.03em;
   text-decoration: none;
-}
-
-.brand-mark {
-  width: 20px;
-  height: 20px;
-  fill: none;
-  stroke: var(--ink);
-  stroke-width: 2.2;
-  stroke-linecap: round;
-}
-.brand-mark circle {
-  fill: var(--ink);
-  stroke: none;
-}
-.brand-mark .brand-pin {
-  stroke: var(--hit);
-  stroke-width: 3;
 }
 
 .nav {
@@ -294,18 +295,59 @@ button:disabled {
   width: fit-content;
 }
 
-.nav a:hover,
-.nav a[aria-current='page'] {
+.nav a:hover {
   color: var(--ink);
 }
 
 .nav a[aria-current='page'] {
+  color: var(--accent);
   font-weight: 500;
 }
 
 .nav sup {
   color: var(--hit-text);
   font-weight: 600;
+}
+
+/* Theme: a segmented control, the current choice filled. */
+.theme {
+  margin-top: auto; /* with the status below it, at the foot of the sidebar */
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+
+.theme + .status {
+  margin-top: 0;
+  border-top: 0;
+}
+
+.theme-switch {
+  display: inline-flex;
+  gap: 2px;
+  margin-top: 8px;
+  padding: 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+}
+
+.theme-switch button {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  background: transparent;
+}
+
+.theme-switch button:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.theme-switch button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* The repository in the sidebar: its name and Change. Versions show in Scan's step 1. */
@@ -639,7 +681,7 @@ main {
   top: 0;
   bottom: 0;
   width: 3px;
-  background: var(--ink);
+  background: var(--accent);
 }
 
 .row-key {
@@ -719,11 +761,15 @@ main {
   max-width: 26ch;
 }
 
+/* An answer as a chip: its dot, its text color and a tint of the same hue. */
 .verdict {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  width: fit-content;
   margin: 0 0 14px;
+  padding: 4px 12px 4px 10px;
+  border-radius: 999px;
   font-size: 14px;
   font-weight: 500;
 }
@@ -737,18 +783,21 @@ main {
 
 .verdict-affected {
   color: var(--hit-text);
+  background: var(--hit-soft);
 }
 .verdict-affected::before {
   background: var(--hit);
 }
 .verdict-insufficient_information {
   color: var(--unknown-text);
+  background: var(--unknown-soft);
 }
 .verdict-insufficient_information::before {
   background: var(--unknown);
 }
 .verdict-not_affected {
   color: var(--clear-text);
+  background: var(--clear-soft);
 }
 .verdict-not_affected::before {
   background: var(--clear);
@@ -1080,7 +1129,7 @@ main {
   position: absolute;
   inset: 0 0 auto 0;
   height: 3px;
-  background: linear-gradient(90deg, transparent, var(--hit), var(--unknown), transparent);
+  background: linear-gradient(90deg, transparent, var(--accent), var(--accent-light), transparent);
   background-size: 50% 100%;
   background-repeat: no-repeat;
   animation: sweep 1.4s ease-in-out infinite;
@@ -1127,7 +1176,7 @@ main {
   height: 9px;
   margin-right: 10px;
   border-radius: 50%;
-  background: var(--hit);
+  background: var(--accent);
   vertical-align: 0.12em;
   animation: pulse 1s ease-in-out infinite alternate;
 }
@@ -1386,7 +1435,7 @@ th {
 }
 
 .job-succeeded {
-  color: var(--clear-text);
+  color: var(--ink-2); /* success is the expected case; blue means Not affected */
 }
 .job-failed {
   color: var(--hit-text);
@@ -1433,7 +1482,7 @@ main {
 .widget {
   /* background-color only, so a tile's gradient (background-image) survives. */
   background-color: var(--bg);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 18px;
   padding: 22px 24px;
   min-width: 0;
@@ -1595,6 +1644,23 @@ main {
   color: var(--ink-2);
 }
 
+.count-label-split {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.widget-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.count-period {
+  color: var(--ink-3);
+}
+
 .count-value {
   font-variant-numeric: proportional-nums;
   font-size: 52px;
@@ -1642,6 +1708,73 @@ main {
 
 .list-widget .list-empty {
   padding: 18px 20px;
+}
+
+/* A card's answer and its action, at the card's bottom right, beside the card's button so
+   clicking them doesn't select the card. */
+.row-item {
+  position: relative;
+}
+
+.card-check {
+  position: absolute;
+  right: 20px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-check-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.card-check-error {
+  color: var(--hit-text);
+}
+
+.card-check .spinner {
+  width: 12px;
+  height: 12px;
+}
+
+.verdict-sm {
+  margin: 0;
+  padding: 2px 10px 2px 8px;
+  font-size: 13px;
+  gap: 6px;
+}
+
+.verdict-sm::before {
+  width: 8px;
+  height: 8px;
+}
+
+button.btn-sm {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.widget-sub {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.verdict-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.verdict-row .verdict {
+  margin: 0;
 }
 
 .detail-widget {
@@ -1708,8 +1841,8 @@ main {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--ink);
-  color: var(--bg);
+  background: var(--accent);
+  color: var(--accent-ink);
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0;
@@ -2013,35 +2146,170 @@ main {
   border-radius: 1px;
 }
 
-.source-list {
+/* --- sources: pick a tracker, sync it, see what is new ------------------------------- */
+.source-head-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.source-title {
+  margin: 0;
+  font-size: 28px;
+  letter-spacing: -0.03em;
+  font-weight: 500;
+}
+
+.stale-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .source-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Labeled values in a row: a status or summary as data, not a sentence. */
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 36px;
+  margin: 0;
+}
+
+/* The source's numbers in aligned columns, the last sync below its counts. */
+/* Text for screen readers only, e.g. a header for a column of buttons. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Step 2 of the scan: each watched dependency's sync and what a scan would still read. */
+.sync-window {
+  margin-top: 6px;
+}
+
+.sync-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.sync-name {
+  font-weight: 500;
+}
+
+/* One line per header, all on the same baseline, so the numbers line up under them. */
+.sync-step th {
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.sync-step td {
+  vertical-align: top;
+}
+
+.sync-unchecked {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.source-select {
+  width: min(360px, 100%);
+}
+
+.source-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 20px 0 0;
+}
+
+.timestamp-ago {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.fields dt {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+
+.fields dd {
+  margin: 2px 0 0;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.with-spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.confirm {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.confirm p {
+  margin: 0;
+  max-width: 64ch;
+}
+
+/* Magnitude in one hue: types are compared by length, not told apart by color. */
+.type-bars {
   list-style: none;
-  margin: 6px 0 0;
+  margin: 14px 0 0;
   padding: 0;
   display: grid;
   gap: 12px;
 }
 
-.source-list li {
+.type-bars li {
   display: grid;
-  grid-template-columns: 10px 1fr auto;
-  align-items: center;
-  column-gap: 10px;
+  grid-template-columns: 1fr auto;
+  row-gap: 4px;
+  font-size: 14px;
 }
 
-.source-name {
-  font-size: 15px;
+.type-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
 }
 
-.source-list button {
-  height: 30px;
-  padding: 0 14px;
-  font-size: 13px;
+.type-bar {
+  grid-column: 1 / -1;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-soft);
+  overflow: hidden;
 }
 
-.source-meta {
-  grid-column: 2 / -1;
-  font-size: 12.5px;
-  color: var(--ink-3);
+.type-bar span {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 4px;
+  background: var(--accent);
 }
 
 .donut {

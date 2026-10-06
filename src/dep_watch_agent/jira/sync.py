@@ -12,6 +12,9 @@ How it stays correct:
 - JQL date filters have minute precision and use the server's time zone, which is UTC for
   Apache JIRA. Each run looks back ``overlap`` before the watermark to absorb that rounding
   and any clock skew between this machine and the server.
+
+Every run, finished or failed, is recorded in ``sync_runs`` with the issues it fetched and how
+many of them were new to the database.
 """
 
 from collections.abc import Callable
@@ -24,6 +27,7 @@ from dep_watch_agent.jira.client import JiraClient
 from dep_watch_agent.jira.models import comments_truncated, parse_issue
 from dep_watch_agent.jira.store import (
     load_watermark,
+    record_sync_run,
     save_watermark,
     upsert_issue,
     upsert_versions,
@@ -54,6 +58,7 @@ class SyncResult:
     source: str
     since: datetime | None
     issues_synced: int
+    new_issues: int
     versions_synced: int
     watermark: datetime
 
@@ -82,30 +87,51 @@ def sync_project(
     """
     source = f"jira:{project}"
     started_at = now()
-    # One small request; always synced in full so release flags and dates stay current.
-    versions_synced = upsert_versions(session, project, client.project_versions(project))
-    session.commit()
+    count = new = 0
 
-    watermark = None if full else load_watermark(session, source)
-    session.commit()
-    since = watermark - overlap if watermark is not None else None
-
-    count = 0
-    for raw in client.search(build_jql(project, since), FIELDS):
-        if comments_truncated(raw):
-            raw["fields"]["comment"]["comments"] = client.comments(raw["key"])
-        upsert_issue(session, parse_issue(raw))
+    def record(status: str, error: str | None = None) -> None:
+        record_sync_run(
+            session,
+            source=source,
+            full=full,
+            started_at=started_at,
+            finished_at=now(),
+            status=status,
+            fetched=count,
+            new_issues=new,
+            error=error,
+        )
         session.commit()
-        count += 1
-        if on_issue is not None:
-            on_issue(count)
+
+    try:
+        # One small request; always synced in full so release flags and dates stay current.
+        versions_synced = upsert_versions(session, project, client.project_versions(project))
+        session.commit()
+
+        watermark = None if full else load_watermark(session, source)
+        session.commit()
+        since = watermark - overlap if watermark is not None else None
+
+        for raw in client.search(build_jql(project, since), FIELDS):
+            if comments_truncated(raw):
+                raw["fields"]["comment"]["comments"] = client.comments(raw["key"])
+            new += upsert_issue(session, parse_issue(raw))
+            session.commit()
+            count += 1
+            if on_issue is not None:
+                on_issue(count)
+    except Exception as exc:
+        session.rollback()
+        record("failed", f"{type(exc).__name__}: {exc}")
+        raise
 
     save_watermark(session, source, started_at)
-    session.commit()
+    record("succeeded")
     return SyncResult(
         source=source,
         since=since,
         issues_synced=count,
+        new_issues=new,
         versions_synced=versions_synced,
         watermark=started_at,
     )

@@ -1,13 +1,57 @@
 """Scan synced issues for one pinned version: the alerting flow, as a background job."""
 
-from fastapi import APIRouter, HTTPException, status
+from datetime import datetime
+from typing import Annotated
 
-from dep_watch_agent.api.deps import JobsDep, SessionsDep, SystemsDep, pick_system
+from fastapi import APIRouter, HTTPException, Query, status
+
+from dep_watch_agent.api.deps import JobsDep, SessionDep, SessionsDep, SystemsDep, pick_system
 from dep_watch_agent.api.routes.issues import dropped_out, evidence_out, sorted_versions
-from dep_watch_agent.api.schemas import JobOut, ScanItemOut, ScanRequest, ScanResponse
+from dep_watch_agent.api.schemas import (
+    JobOut,
+    ProjectKey,
+    ScanBacklog,
+    ScanItemOut,
+    ScanRequest,
+    ScanResponse,
+)
 from dep_watch_agent.check import NotAnswerable, answerable
 
 router = APIRouter(tags=["scan"])
+
+
+@router.get("/scan/backlog", response_model=ScanBacklog, responses={422: {}})
+def scan_backlog(
+    session: SessionDep,
+    systems: SystemsDep,
+    project: ProjectKey,
+    version: Annotated[str, Query(examples=["3.9.1"])],
+    since: datetime | None = None,
+    system: str | None = None,
+) -> ScanBacklog:
+    """What a scan with the same filters would find, without calling the model: how many
+    candidates the fix versions settle, how many have stored facts, and how many are not
+    checked yet (each a model call)."""
+    from dep_watch_agent.scan import backlog
+
+    try:
+        dependency = answerable(project, version)
+    except NotAnswerable as exc:
+        raise HTTPException(422, str(exc)) from None
+    name = pick_system(systems, system) if systems else None
+    counts = backlog(
+        session, dependency, version, name, systems[name]() if name else None, since=since
+    )
+    return ScanBacklog(
+        project=project,
+        version=version,
+        since=since,
+        system=name,
+        candidates=counts.candidates,
+        settled=counts.settled,
+        checked=counts.checked,
+        unchecked=counts.unchecked,
+    )
 
 
 @router.post(

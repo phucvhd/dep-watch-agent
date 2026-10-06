@@ -1,9 +1,9 @@
 import type { Answer } from './api/client'
 
 export const ANSWER_TEXT: Record<Answer, string> = {
-  affected: 'Affects you',
-  insufficient_information: "Can't tell",
-  not_affected: "Doesn't affect you",
+  affected: 'Affected',
+  insufficient_information: 'Inconclusive',
+  not_affected: 'Not affected',
 }
 
 export function formatDate(value: string | null | undefined): string {
@@ -50,6 +50,16 @@ export function formatAgoShort(value: string, now = Date.now()): string {
   if (minutes < 60) return `${minutes}m ago`
   if (minutes < 60 * 24) return `${Math.round(minutes / 60)}h ago`
   return `${Math.round(minutes / 60 / 24)}d ago`
+}
+
+/** The UTC calendar day ``days`` ago, as a date input's value (``2026-09-28``). */
+export function daysAgo(days: number, now = Date.now()): string {
+  return new Date(now - days * 24 * 3600 * 1000).toISOString().slice(0, 10)
+}
+
+/** A date input's day as the instant a scan filter means: midnight UTC. Null when empty. */
+export function dayStart(day: string): string | null {
+  return day ? new Date(`${day}T00:00:00Z`).toISOString() : null
 }
 
 export const plural = (n: number, one: string, many = `${one}s`) =>

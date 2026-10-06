@@ -5,7 +5,7 @@ import pytest
 from dep_watch_agent.dependencies import DEPENDENCIES
 from dep_watch_agent.jira.models import parse_issue
 from dep_watch_agent.jira.store import upsert_issue
-from dep_watch_agent.scan import scan_version
+from dep_watch_agent.scan import Backlog, backlog, scan_version
 from dep_watch_agent.verdict import Evidence, Extraction, IssueText
 from tests.jira_factory import raw_issue
 
@@ -111,7 +111,7 @@ def test_a_failed_issue_is_reported_not_dropped(session):
     result = scan_version(session, KAFKA, "3.9.1", "phrases", PhraseExtractor(fail_on="vague"))
     failed = next(i for i in result.items if i.issue_key == "KAFKA-3")
     assert failed.answer == "insufficient_information"
-    assert failed.error == "ConnectionError: model server down"
+    assert failed.error == "phrases could not read the issue: model server down"
     assert result.errors == 1
     assert len(result.items) == 4  # the others are still answered
 
@@ -138,3 +138,26 @@ def test_rescans_and_other_versions_reuse_stored_facts(session):
     regression = next(i for i in upgrade.items if i.issue_key == "KAFKA-2")
     assert regression.answer == "not_affected"  # 3.8.0 is before "Regression in 3.9.0"
     assert regression.cached is True
+
+
+def test_backlog_counts_what_a_scan_would_read(session):
+    extractor = VersionedPhraseExtractor()
+    # Four candidates: KAFKA-1's fix versions settle it; the other three need the model.
+    assert backlog(session, KAFKA, "3.9.1", "phrases", extractor) == Backlog(4, 1, 0, 3)
+
+    scan_version(session, KAFKA, "3.9.1", "phrases", extractor, limit=2)  # reads KAFKA-3, KAFKA-2
+    assert backlog(session, KAFKA, "3.9.1", "phrases", extractor) == Backlog(4, 1, 2, 1)
+    assert extractor.seen == ["vague", "new regression"]  # counting never calls the model
+
+    # Stored facts answer any version, but at 3.7.0 KAFKA-1's fix (3.8.0) no longer settles it,
+    # and it was never read.
+    assert backlog(session, KAFKA, "3.7.0", "phrases", extractor) == Backlog(4, 0, 2, 2)
+
+    since = datetime(2026, 9, 10, tzinfo=UTC)
+    assert backlog(session, KAFKA, "3.9.1", "phrases", extractor, since=since) == Backlog(
+        2, 0, 2, 0
+    )
+
+
+def test_backlog_without_a_system_counts_only_what_code_settles(session):
+    assert backlog(session, KAFKA, "3.9.1", None, None) == Backlog(4, 1, 0, 3)

@@ -82,7 +82,7 @@ def test_extractors_without_a_version_are_never_stored(db, issue_id):
 
 
 def test_a_failed_extraction_is_not_stored(db, issue_id):
-    with pytest.raises(ConnectionError):
+    with pytest.raises(extractions.ExtractionFailed, match="sys could not read the issue"):
         extractions.extract(db, issue_id, TEXT, "sys", CountingExtractor(fail=True))
     assert stored(db) == 0
 
@@ -93,3 +93,18 @@ def test_text_hash_covers_only_what_the_system_sees():
     assert len(extractions.text_hash(TEXT)) == 64
     other = IssueText("Hang!", TEXT.description, TEXT.comments, TEXT.fix_versions)
     assert extractions.text_hash(other) != extractions.text_hash(TEXT)
+
+
+def test_refresh_reads_again_and_replaces_the_stored_facts(db, issue_id):
+    extractions.extract(db, issue_id, TEXT, "sys", CountingExtractor())
+
+    class Different(CountingExtractor):
+        def extract(self, issue: IssueText) -> Extraction:
+            self.calls += 1
+            return Extraction([])
+
+    extractor = Different()
+    again = extractions.extract(db, issue_id, TEXT, "sys", extractor, refresh=True)
+    assert (again.cached, extractor.calls) == (False, 1)
+    assert stored(db) == 1  # replaced, not added
+    assert extractions.stored(db, issue_id, TEXT, "sys", extractor) == Extraction([])

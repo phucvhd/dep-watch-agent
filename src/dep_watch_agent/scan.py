@@ -16,17 +16,22 @@ from datetime import datetime
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from dep_watch_agent import extractions
 from dep_watch_agent.check import Answered, answer_issue, issue_text, issue_url
 from dep_watch_agent.dependencies import Dependency
 from dep_watch_agent.eval.runner import Extractor
+from dep_watch_agent.extractions import ExtractionFailed
 from dep_watch_agent.orm import JiraIssueRow
 from dep_watch_agent.verdict import (
     AFFECTED,
     ANSWERS,
     INSUFFICIENT_INFORMATION,
+    NOT_AFFECTED,
     Decision,
     DroppedEvidence,
     Evidence,
+    Extraction,
+    decide,
 )
 
 BUG_TYPES = ("Bug",)
@@ -142,7 +147,9 @@ def scan_version(
         except Exception as exc:  # one failed issue must not lose the others
             session.rollback()
             answered = Answered(Decision(INSUFFICIENT_INFORMATION, [], []), system)
-            error = f"{type(exc).__name__}: {exc}"
+            error = (
+                str(exc) if isinstance(exc, ExtractionFailed) else f"{type(exc).__name__}: {exc}"
+            )
         decision = answered.decision
         items.append(
             ScanItem(
@@ -160,3 +167,45 @@ def scan_version(
 
     items.sort(key=lambda i: REPORT_ORDER.get(i.answer, 2))  # stable: newest first within
     return ScanResult(version, system, since, total, items)
+
+
+@dataclass(frozen=True)
+class Backlog:
+    """What a scan of ``version`` would find, by what answers each candidate."""
+
+    candidates: int
+    settled: int  # the fix versions answer it: no model call
+    checked: int  # the system's facts are stored for its current text
+    unchecked: int  # a scan would have the system read it
+
+
+def backlog(
+    session: Session,
+    dependency: Dependency,
+    version: str,
+    system: str | None,
+    extractor: Extractor | None,
+    *,
+    since: datetime | None = None,
+) -> Backlog:
+    """Count the candidates a scan would answer, without calling the system: those the fix
+    versions settle, those with stored facts, and the rest, which would each take a model call.
+    ``version`` must already be validated (``check.answerable``)."""
+    issues = session.scalars(
+        candidates_query(dependency.project, since).options(
+            selectinload(JiraIssueRow.versions), selectinload(JiraIssueRow.comments)
+        )
+    ).all()
+    stored = (
+        extractions.stored_texts(session, [i.id for i in issues], system, extractor)
+        if system and extractor
+        else set()
+    )
+    settled = checked = 0
+    for issue in issues:
+        text = issue_text(issue)
+        if decide(text, version, Extraction([]), dependency.scheme).answer == NOT_AFFECTED:
+            settled += 1
+        elif (issue.id, extractions.text_hash(text)) in stored:
+            checked += 1
+    return Backlog(len(issues), settled, checked, len(issues) - settled - checked)

@@ -11,13 +11,16 @@ from dep_watch_agent.api.schemas import (
     CheckResponse,
     DroppedEvidenceOut,
     EvidenceOut,
+    IssueAnswer,
     IssueDetail,
+    IssueKey,
     IssuePage,
     IssueStats,
     IssueSummary,
     ProjectKey,
     ReleaseVersion,
     StoredAnswer,
+    StoredAnswers,
 )
 from dep_watch_agent.check import (
     CheckResult,
@@ -28,6 +31,7 @@ from dep_watch_agent.check import (
     load_issue,
 )
 from dep_watch_agent.dependencies import scheme_for_project
+from dep_watch_agent.extractions import ExtractionFailed
 from dep_watch_agent.orm import (
     ExtractionRow,
     JiraIssueComponentRow,
@@ -123,18 +127,23 @@ def list_versions(
     return sorted(rows, key=lambda r: order[r.name])
 
 
-@router.post("/check", response_model=CheckResponse, responses={404: {}, 422: {}, 503: {}})
+@router.post("/check", response_model=CheckResponse, responses={404: {}, 422: {}, 502: {}, 503: {}})
 def check(body: CheckRequest, session: SessionDep, systems: SystemsDep) -> CheckResponse:
     """Is ``version`` affected by the issue? Decided by code from cited facts; the answer may be
     ``insufficient_information``. 422 when the issue's dependency isn't answered or the version
-    isn't one of its releases; 503 until a system is registered."""
+    isn't one of its releases; 502 when the system fails to read the issue (e.g. its model
+    server is down); 503 until a system is registered."""
     name = pick_system(systems, body.system)
     try:
-        result = check_issue(session, body.issue_key, body.version, name, systems[name]())
+        result = check_issue(
+            session, body.issue_key, body.version, name, systems[name](), refresh=body.refresh
+        )
     except IssueNotFound:
         raise HTTPException(404, f"issue {body.issue_key} not synced") from None
     except NotAnswerable as exc:
         raise HTTPException(422, str(exc)) from None
+    except ExtractionFailed as exc:
+        raise HTTPException(502, str(exc)) from None
     assert result is not None  # read=True always answers
     return check_response(result)
 
@@ -162,6 +171,37 @@ def stored_answer(
     if result is None:
         return StoredAnswer(answered=False, system=name)
     return StoredAnswer(answered=True, system=name, result=check_response(result))
+
+
+@router.get("/answers", response_model=StoredAnswers, responses={422: {}})
+def stored_answers(
+    session: SessionDep,
+    systems: SystemsDep,
+    version: Annotated[str, Query(examples=["3.9.1"])],
+    key: Annotated[list[IssueKey], Query(max_length=100, description="Issue keys")],
+    system: str | None = None,
+) -> StoredAnswers:
+    """``/issues/{key}/answer`` for a page of issues at once: each answered only from the fix
+    versions or stored facts, never by calling the model. An issue that isn't synced is
+    returned unanswered."""
+    name = pick_system(systems, system) if systems else None
+    extractor = systems[name]() if name else None
+    items = []
+    for issue_key in key:
+        try:
+            result = check_issue(session, issue_key, version, name, extractor, read=False)
+        except IssueNotFound:
+            result = None
+        except NotAnswerable as exc:
+            raise HTTPException(422, f"{issue_key}: {exc}") from None
+        items.append(
+            IssueAnswer(
+                issue_key=issue_key,
+                answered=result is not None,
+                result=check_response(result) if result else None,
+            )
+        )
+    return StoredAnswers(version=version, system=name, items=items)
 
 
 @router.get("/stats/issues", response_model=IssueStats)

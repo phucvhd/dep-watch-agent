@@ -1,9 +1,10 @@
 """The dependencies the system knows about.
 
-``DEPENDENCIES`` are the ones whose issues are synced, each with the scheme its releases are
-numbered in. Only ``watchable`` ones are answered (scans, checks, the eval): the prompt and the
-ground truth are Kafka's so far. Spark and Hadoop are synced for the overview only, a scope
-decision of 2026-10-04.
+``DEPENDENCIES`` is the catalog of sources: dependencies whose issues can be synced, each with
+the scheme its releases are numbered in. A user adds one by syncing it (``added`` in the API).
+Only ``watchable`` ones are answered (scans, checks, the eval): the prompt and the ground truth
+are Kafka's so far. The others are synced for the overview only, a scope decision of 2026-10-04.
+Catalog order fixes each source's color in the UI, so new entries go at the end.
 
 ``FAMILIES`` names the artifacts a repository scan recognizes, so a scan can say "Apache Spark
 3.5.1" instead of listing ``org.apache.spark:spark-core_2.12`` and its siblings. A family is
@@ -46,6 +47,25 @@ DEPENDENCIES = (
         project="HADOOP",  # Hadoop Common; HDFS, YARN and MapReduce are projects of their own
         tracker_url="https://issues.apache.org/jira/projects/HADOOP",
         watchable=False,
+    ),
+    # Apache projects still tracked in JIRA (checked 2026-10-05). Parquet and Beam moved their
+    # issues to GitHub, so their JIRA projects are frozen and left out.
+    *(
+        Dependency(
+            id=project.lower(),
+            name=name,
+            project=project,
+            tracker_url=f"https://issues.apache.org/jira/projects/{project}",
+            watchable=False,
+        )
+        for project, name in (
+            ("FLINK", "Apache Flink"),
+            ("ZOOKEEPER", "Apache ZooKeeper"),
+            ("CASSANDRA", "Apache Cassandra"),
+            ("HIVE", "Apache Hive"),
+            ("HBASE", "Apache HBase"),
+            ("AVRO", "Apache Avro"),
+        )
     ),
 )
 

@@ -1,31 +1,43 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { api, type Dependency, type EvalRunSummary, type Job } from '../api/client'
 import { ColumnChart } from '../components/charts'
-import { sourceColor } from '../sources'
-import { ErrorNote, JobLine, PageIntro } from '../components/common'
-import { formatAgo, formatDate, plural } from '../format'
-import { isActive, message, useJob, useLoad } from '../hooks'
+import { ErrorNote, Fields, JobLine, PageIntro } from '../components/common'
+import { formatDate } from '../format'
+import { message, useJob, useLoad } from '../hooks'
 
 const METRICS: [string, string][] = [
   ['macro_f1', 'Macro F1'],
   ['accuracy', 'Accuracy'],
   ['precision', 'Precision'],
   ['recall', 'Recall'],
-  ['abstention_rate', 'Abstains'],
-  ['citation_validity', 'Valid quotes'],
+  ['abstention_rate', 'Abstention rate'],
+  ['citation_validity', 'Citation validity'],
 ]
+
+const JOB_TEXT: Record<string, string> = {
+  'sync-jira': 'JIRA sync',
+  scan: 'Scan',
+  'eval-run': 'Evaluation',
+}
+
+const STATUS_TEXT: Record<Job['status'], string> = {
+  queued: 'Queued',
+  running: 'Running',
+  succeeded: 'Succeeded',
+  failed: 'Failed',
+}
 
 interface Props {
   dependency: Dependency
   systems: string[]
-  onSynced: () => void
 }
 
-export function Operations({ dependency, systems, onSynced }: Props) {
+/** The models that read issues: how many issues they have read, how long it takes, and how
+ * they score on the ground truth. */
+export function Operations({ dependency, systems }: Props) {
   return (
     <div className="dash">
-      <PageIntro title="Data and models" />
-      <Sync onSynced={onSynced} />
+      <PageIntro title="Models" />
       <Models systems={systems} />
       <Facts dependency={dependency} />
       <ReadingTimeChart dependency={dependency} />
@@ -35,90 +47,18 @@ export function Operations({ dependency, systems, onSynced }: Props) {
   )
 }
 
-/** Every synced source: its issues, when it was last synced, and a sync of its own. */
-function Sync({ onSynced }: { onSynced: () => void }) {
-  const sources = useLoad(() => api.sources(), [])
-  const jobs = useLoad(() => api.jobs('sync-jira'), [])
-  const [error, setError] = useState<string>()
-  const running = (project: string) =>
-    jobs.data?.find((j) => j.params.project === project && isActive(j))
-
-  // While a sync runs, follow it; when it ends, refresh the counts.
-  const anyRunning = jobs.data?.some(isActive) ?? false
-  const reloadJobs = jobs.reload
-  const reloadSources = sources.reload
-  useEffect(() => {
-    if (!anyRunning) return
-    const timer = window.setInterval(() => {
-      reloadJobs()
-      reloadSources()
-    }, 4000)
-    return () => window.clearInterval(timer)
-  }, [anyRunning, reloadJobs, reloadSources])
-  const wasRunning = useRef(false)
-  useEffect(() => {
-    if (wasRunning.current && !anyRunning) onSynced()
-    wasRunning.current = anyRunning
-  }, [anyRunning, onSynced])
-
-  async function start(project: string) {
-    setError(undefined)
-    try {
-      await api.startSync(project)
-      jobs.reload()
-    } catch (e) {
-      setError(message(e))
-    }
-  }
-
-  return (
-    <section className="widget w-4" aria-labelledby="sync-title">
-      <h2 id="sync-title" className="widget-title">
-        Issue trackers
-      </h2>
-      <ul className="source-list">
-        {sources.data?.map((src, index) => {
-          const job = running(src.project)
-          return (
-            <li key={src.dependency}>
-              <span
-                className="legend-swatch"
-                style={{ background: sourceColor(index) }}
-                aria-hidden="true"
-              />
-              <span className="source-name">{src.name}</span>
-              <button onClick={() => start(src.project)} disabled={Boolean(job)}>
-                {job ? 'Syncing…' : 'Sync'}
-              </button>
-              <span className="source-meta">
-                {src.issues.toLocaleString()} issues
-                {job
-                  ? `, ${plural(job.progress, 'issue')} synced so far`
-                  : src.synced_at
-                    ? `, synced ${formatAgo(src.synced_at)}`
-                    : src.issues > 0
-                      ? ', sync incomplete'
-                      : ', not synced yet'}
-              </span>
-            </li>
-          )
-        })}
-      </ul>
-      <ErrorNote>{error ?? sources.error}</ErrorNote>
-    </section>
-  )
-}
-
 function Facts({ dependency }: { dependency: Dependency }) {
   const stats = useLoad(() => api.issueStats(dependency.project), [dependency.project])
   const s = stats.data
   return (
     <section className="widget w-4 stat-tile" aria-labelledby="facts-title">
       <h2 id="facts-title" className="widget-title">
-        Stored facts
+        Checked bugs
       </h2>
       <span className="count-value">{s ? s.read.toLocaleString() : '…'}</span>
-      <span className="count-hint">{s ? `of ${s.bugs.toLocaleString()} bugs read` : ''}</span>
+      <span className="count-hint">
+        {s ? `of ${s.bugs.toLocaleString()} ${dependency.name} bugs` : ''}
+      </span>
     </section>
   )
 }
@@ -127,15 +67,24 @@ function ReadingTimeChart({ dependency }: { dependency: Dependency }) {
   const reading = useLoad(() => api.readingTime(dependency.project), [dependency.project])
   const r = reading.data
   if (!r || r.count === 0) return null
-  const seconds = (ms: number | null | undefined) => (ms == null ? 'n/a' : `${Math.round(ms / 1000)} s`)
+  const seconds = (ms: number | null | undefined) => (ms == null ? 'N/A' : `${Math.round(ms / 1000)} s`)
   return (
     <section className="widget w-12">
       <ColumnChart
-        title={`Reading time per issue (median ${seconds(r.median_ms)}, 90% under ${seconds(r.p90_ms)})`}
+        title="Reading time per issue"
+        note={
+          <Fields
+            items={[
+              ['Median', seconds(r.median_ms)],
+              ['90th percentile', seconds(r.p90_ms)],
+              ['Issues', r.count.toLocaleString()],
+            ]}
+          />
+        }
         categories={r.bins.map((b) => (b.to_s == null ? `${b.from_s} s+` : `${b.from_s}–${b.to_s} s`))}
         categoryLabel="Reading time"
         series={[
-          { key: 'issues', label: 'Issues', color: 'var(--ink-2)', values: r.bins.map((b) => b.count) },
+          { key: 'issues', label: 'Issues', color: 'var(--accent)', values: r.bins.map((b) => b.count) },
         ]}
         height={170}
       />
@@ -150,7 +99,7 @@ function Models({ systems }: { systems: string[] }) {
         Models
       </h2>
       {systems.length === 0 ? (
-        <p className="pane-lead">None configured. Set DEP_WATCH_LLM_MODEL.</p>
+        <p className="pane-lead">No model configured. Set DEP_WATCH_LLM_MODEL and restart the API.</p>
       ) : (
         <>
           <ul className="model-list">
@@ -158,7 +107,7 @@ function Models({ systems }: { systems: string[] }) {
               <li key={s}>
                 <span className="status-dot" aria-hidden="true" />
                 {s}
-                {i === 0 && <span className="muted">default</span>}
+                {i === 0 && <span className="muted">Default</span>}
               </li>
             ))}
           </ul>
@@ -172,7 +121,8 @@ function Evaluation({ systems }: { systems: string[] }) {
   const runs = useLoad(() => api.runs(), [])
   const datasets = useLoad(() => api.datasets(), [])
   const [chosenDataset, setDataset] = useState<string>()
-  const dataset = chosenDataset ?? datasets.data?.[0]?.name ?? ''
+  // Datasets are versioned by name (-v1, -v2); the newest supersedes the others.
+  const dataset = chosenDataset ?? datasets.data?.map((d) => d.name).sort().at(-1) ?? ''
   const [system, setSystem] = useState(systems[0] ?? '')
   const [jobId, setJobId] = useState<string>()
   const [error, setError] = useState<string>()
@@ -228,14 +178,16 @@ function Evaluation({ systems }: { systems: string[] }) {
         <JobLine
           job={job}
           describe={(j: Job) =>
-            j.status === 'succeeded' ? 'Evaluation finished.' : 'Evaluating; this takes a while.'
+            j.status === 'succeeded'
+              ? 'Evaluation completed'
+              : 'Evaluation running (over 1 hour with a local model)'
           }
         />
       )}
       {runs.data && runs.data.length > 0 ? (
         <RunsTable runs={runs.data} />
       ) : (
-        <p className="list-empty">No runs yet. Run one to compare models here.</p>
+        <p className="list-empty">No evaluation runs</p>
       )}
     </section>
   )
@@ -244,7 +196,7 @@ function Evaluation({ systems }: { systems: string[] }) {
 function RunsTable({ runs }: { runs: EvalRunSummary[] }) {
   const value = (run: EvalRunSummary, key: string) => {
     const v = run.metrics[key]
-    return typeof v === 'number' ? v.toFixed(3) : 'n/a'
+    return typeof v === 'number' ? v.toFixed(3) : 'N/A'
   }
   return (
     <div className="table-wrap">
@@ -265,7 +217,7 @@ function RunsTable({ runs }: { runs: EvalRunSummary[] }) {
             <tr key={`${run.dataset}/${run.run_name}`}>
               <td>
                 {run.run_name}
-                {run.provisional && <span className="tag">provisional</span>}
+                {run.provisional && <span className="tag">Provisional</span>}
               </td>
               <td>{run.system}</td>
               {METRICS.map(([key]) => (
@@ -311,11 +263,12 @@ function Jobs() {
               {jobs.data.map((j) => (
                 <tr key={j.id}>
                   <td>
-                    {j.kind}
+                    {JOB_TEXT[j.kind] ?? j.kind}
+                    {typeof j.params.project === 'string' && ` ${j.params.project}`}
                     {typeof j.params.version === 'string' && ` ${j.params.version}`}
                   </td>
                   <td>
-                    <span className={`job-status job-${j.status}`}>{j.status}</span>
+                    <span className={`job-status job-${j.status}`}>{STATUS_TEXT[j.status]}</span>
                     {j.error && <span className="muted"> {j.error}</span>}
                   </td>
                   <td className="num">{j.progress}</td>
@@ -326,7 +279,7 @@ function Jobs() {
           </table>
         </div>
       ) : (
-        <p className="list-empty">No jobs since the API started.</p>
+        <p className="list-empty">No jobs since the API started</p>
       )}
     </section>
   )

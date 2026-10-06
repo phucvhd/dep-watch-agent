@@ -38,13 +38,13 @@ def answerable(project: str, version: str) -> Dependency:
     """The dependency to answer ``version`` of ``project`` for. Raises ``NotAnswerable``."""
     dependency = dependency_for_project(project)
     if dependency is None:
-        raise NotAnswerable(f"no dependency is synced from project {project}")
+        raise NotAnswerable(f"No dependency is synced from project {project}")
     if not dependency.watchable:
-        raise NotAnswerable(f"{dependency.name} issues are synced, not answered for a version")
+        raise NotAnswerable(f"{dependency.name} is synced but not supported for checks")
     if not dependency.scheme.is_release(version):
         raise NotAnswerable(
-            f"{version!r} is not a specific {dependency.name} release "
-            "(a release line such as 3.7 is not one)"
+            f"{version!r} is not a valid {dependency.name} release; use a full version, not a "
+            "release line"
         )
     return dependency
 
@@ -117,10 +117,12 @@ def answer_issue(
     extractor: Extractor,
     *,
     read: bool = True,
+    refresh: bool = False,
 ) -> Answered | None:
     """The decision and what decided it: the fix versions alone, or ``system``'s facts (stored
-    ones when the text, system and extractor version are unchanged). With ``read=False`` the
-    system is never called: None when neither settles it."""
+    ones when the text, system and extractor version are unchanged, unless ``refresh``). With
+    ``read=False`` the system is never called: None when neither settles it. Code goes first
+    even with ``refresh``: re-reading can't change an answer the fix versions settle."""
     by_fixes = decide(text, version, Extraction([]), scheme)
     if by_fixes.answer == NOT_AFFECTED:
         return Answered(by_fixes, FIX_VERSIONS)
@@ -129,7 +131,7 @@ def answer_issue(
         if known is None:
             return None
         return Answered(decide(text, version, known, scheme), system, cached=True)
-    extracted = extractions.extract(session, issue_id, text, system, extractor)
+    extracted = extractions.extract(session, issue_id, text, system, extractor, refresh=refresh)
     return Answered(decide(text, version, extracted.extraction, scheme), system, extracted.cached)
 
 
@@ -141,9 +143,11 @@ def check_issue(
     extractor: Extractor | None,
     *,
     read: bool = True,
+    refresh: bool = False,
 ) -> CheckResult | None:
     """Decide whether ``version`` is affected by issue ``key``, with ``extractor`` (registered
-    as ``system``). With ``read=False``, None if that would take a model call. With no
+    as ``system``). With ``read=False``, None if that would take a model call; with
+    ``refresh``, the issue is read again rather than answered from stored facts. With no
     extractor, only the fix versions can answer; None if they don't.
 
     Raises ``IssueNotFound``, and ``NotAnswerable`` when the issue's dependency isn't answered
@@ -158,7 +162,7 @@ def check_issue(
         answered = Answered(by_fixes, FIX_VERSIONS) if by_fixes.answer == NOT_AFFECTED else None
     else:
         answered = answer_issue(
-            session, issue.id, text, version, scheme, system, extractor, read=read
+            session, issue.id, text, version, scheme, system, extractor, read=read, refresh=refresh
         )
     if answered is None:
         return None

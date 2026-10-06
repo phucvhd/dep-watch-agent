@@ -24,6 +24,7 @@ class DependencyOut(BaseModel):
     project: str = Field(description="Pass as `project` to /versions, /issues, /scan, /sync/jira")
     tracker_url: str
     watchable: bool = Field(description="Answered for a version; the others are only synced")
+    added: bool = Field(description="Added as a source: some of its issues have been synced")
 
 
 # --- repository scan -----------------------------------------------------------------------
@@ -123,6 +124,11 @@ class CheckRequest(BaseModel):
         examples=["3.6.1"], description="A release, in the scheme of the issue's dependency"
     )
     system: str | None = Field(None, description="Default: the first registered system")
+    refresh: bool = Field(
+        False,
+        description="Re-check: read the issue again and replace its stored facts. Has no "
+        "effect when the fix versions settle the answer.",
+    )
 
 
 class EvidenceOut(BaseModel):
@@ -158,6 +164,18 @@ class StoredAnswer(BaseModel):
     result: CheckResponse | None = None
 
 
+class IssueAnswer(BaseModel):
+    issue_key: str
+    answered: bool = Field(description="False when only a model call (POST /check) can answer")
+    result: CheckResponse | None = None
+
+
+class StoredAnswers(BaseModel):
+    version: str
+    system: str | None
+    items: list[IssueAnswer] = Field(description="In the order the keys were given")
+
+
 class IssueStats(BaseModel):
     total: int
     bugs: int
@@ -171,6 +189,7 @@ class SourceCount(BaseModel):
     dependency: str
     name: str
     project: str
+    added: bool = Field(description="Some of its issues have been synced")
     issues: int
     bugs: int
     open_bugs: int
@@ -181,6 +200,26 @@ class MonthCount(BaseModel):
     month: str = Field(examples=["2026-09"])
     filed: int = Field(description="Bugs created that month")
     fixed: int = Field(description="Bugs resolved as Fixed that month")
+
+
+class DayCount(BaseModel):
+    day: date
+    created: int = Field(description="Issues created that day (UTC)")
+    bugs: int = Field(description="Of those, bugs")
+    resolved: int = Field(description="Issues resolved that day and still resolved")
+
+
+class TypeCount(BaseModel):
+    issue_type: str
+    count: int
+
+
+class Activity(BaseModel):
+    days: list[DayCount] = Field(description="Oldest first, the last ``days`` days up to today")
+    new_24h: int = Field(description="Issues created in the last 24 hours")
+    new_7d: int
+    new_30d: int
+    by_type: list[TypeCount] = Field(description="Issues created over ``days``, most first")
 
 
 class ReadingTimeBin(BaseModel):
@@ -213,6 +252,17 @@ class ScanRequest(BaseModel):
         "fix versions don't settle costs a model call.",
     )
     system: str | None = Field(None, description="Default: the first registered system")
+
+
+class ScanBacklog(BaseModel):
+    project: str
+    version: str
+    since: datetime | None
+    system: str | None = Field(description="The system whose stored facts count as checked")
+    candidates: int = Field(description="Issues a scan would answer, before its limit")
+    settled: int = Field(description="Answered by the fix versions, without a model call")
+    checked: int = Field(description="Answered from the system's stored facts")
+    unchecked: int = Field(description="Not checked yet: each takes a model call in a scan")
 
 
 class ScanItemOut(BaseModel):
@@ -272,6 +322,19 @@ class SyncRequest(BaseModel):
     project: ProjectKey = Field(examples=["KAFKA"])
     full: bool = Field(False, description="Ignore the watermark and re-sync every issue")
     request_delay: float = Field(1.0, ge=0.5, le=60, description="Seconds between JIRA requests")
+
+
+class SyncRun(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    source: str
+    full: bool
+    started_at: datetime
+    finished_at: datetime
+    status: Literal["succeeded", "failed"]
+    fetched: int = Field(description="Issues written, new or updated")
+    new_issues: int = Field(description="Issues the database didn't have before")
+    error: str | None
 
 
 class SyncState(BaseModel):

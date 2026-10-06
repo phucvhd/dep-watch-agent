@@ -8,13 +8,17 @@ import { DonutChart } from './charts'
 export function IssueSources({ onPick, picked }: { onPick?: (id: string) => void; picked?: string }) {
   const sources = useLoad(() => api.sources(), [])
   if (!sources.data) return null
-  const shown = sources.data.slice(0, SOURCE_SLOTS.length)
-  const rest = sources.data.slice(SOURCE_SLOTS.length)
-  const segments = shown.map((s, i) => ({
+  // Only added sources; each keeps the color of its place in the catalog.
+  const added = sources.data
+    .map((s, index) => ({ ...s, color: sourceColor(index) }))
+    .filter((s) => s.added)
+  const shown = added.slice(0, SOURCE_SLOTS.length)
+  const rest = added.slice(SOURCE_SLOTS.length)
+  const segments = shown.map((s) => ({
     key: s.dependency,
     label: s.name,
     value: s.issues,
-    color: sourceColor(i),
+    color: s.color,
     // The watermark is saved when a sync completes: until then the share is a floor.
     detail: s.synced_at ? undefined : 'sync incomplete',
   }))

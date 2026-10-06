@@ -1,5 +1,6 @@
 import type { Answer, DroppedEvidence, Evidence } from '../api/client'
 import { ANSWER_TEXT } from '../format'
+import { Fields } from './common'
 import { MiniRuler, Quote, VersionRuler } from './VersionRuler'
 
 /** What /scan items and /check responses have in common. */
@@ -19,10 +20,18 @@ export interface AnsweredIssue {
 }
 
 const KIND_TEXT: Record<Evidence['kind'], string> = {
-  introduced: 'Bug starts in',
-  affects: 'Bug seen on',
-  unaffected: 'Bug absent on',
+  introduced: 'Introduced in',
+  affects: 'Observed in',
+  unaffected: 'Not present in',
   fix: 'Fixed in',
+}
+
+// Why verdict.decide set a statement aside, in the API's words and in a reader's.
+const DROPPED_TEXT: Record<string, string> = {
+  'citation not found': 'the quote does not appear in the issue',
+  'version not in quote': 'the quote does not mention this version',
+  'release line, not a release': 'names a release line, not a release',
+  'not a version': 'not a version number',
 }
 
 const state = (item: { status?: string | null; resolution?: string | null }) =>
@@ -30,23 +39,23 @@ const state = (item: { status?: string | null; resolution?: string | null }) =>
 
 /** One plain sentence on why the answer came out this way. */
 function reason(item: AnsweredIssue, pinned: string): string {
-  if (item.error) return `This issue couldn't be read: ${item.error}`
+  if (item.error) return `The issue could not be checked: ${item.error}`
   if (item.decided_by === 'fix_versions') {
-    return `JIRA lists the fix in ${item.fix_versions.join(', ')}, which ${pinned} already includes.`
+    return `Fixed in ${item.fix_versions.join(', ')}; ${pinned} includes the fix.`
   }
   const startKnown = item.evidence.some((e) => e.kind === 'introduced')
   switch (item.answer) {
     case 'affected':
-      return `The issue shows the bug at or before ${pinned}, and no fix reaches ${pinned}.`
+      return `The issue reports the bug at or before ${pinned}, and no fix covers ${pinned}.`
     case 'not_affected':
       return startKnown
-        ? `The issue says the bug starts after ${pinned}.`
-        : `The issue says ${pinned} itself doesn't have the bug.`
+        ? `The issue states the bug was introduced after ${pinned}.`
+        : `The issue states that ${pinned} does not have the bug.`
     case 'insufficient_information':
-      if (item.evidence.length === 0) return 'The issue text names no release.'
+      if (item.evidence.length === 0) return 'The issue text does not mention a specific release.'
       return startKnown
-        ? `The issue names releases, but none of them settles ${pinned}.`
-        : `The issue says where the bug was seen, not where it starts, so ${pinned} can't be ruled in or out.`
+        ? `The releases the issue mentions do not determine whether ${pinned} is affected.`
+        : `The issue reports where the bug was observed, not where it was introduced; ${pinned} can be neither confirmed nor ruled out.`
   }
 }
 
@@ -88,7 +97,7 @@ export function IssueDetail({ item, pinned }: { item: AnsweredIssue; pinned: str
             {item.issue_key}
           </a>
           <span>{state(item)}</span>
-          {item.fix_versions.length > 0 && <span>Fix in {item.fix_versions.join(', ')}</span>}
+          {item.fix_versions.length > 0 && <span>Fixed in {item.fix_versions.join(', ')}</span>}
         </p>
       </header>
       <AnswerBody item={item} pinned={pinned} />
@@ -100,8 +109,8 @@ export function IssueDetail({ item, pinned }: { item: AnsweredIssue; pinned: str
 export function AnswerBody({ item, pinned }: { item: AnsweredIssue; pinned: string }) {
   const source =
     item.decided_by === 'fix_versions'
-      ? 'Settled by JIRA fix versions, without reading the text'
-      : `Read by ${item.decided_by}${item.cached ? ' (stored facts)' : ''}`
+      ? 'JIRA fix versions (issue text not read)'
+      : `${item.decided_by}${item.cached ? ' (stored evidence)' : ''}`
   return (
     <>
       <div className="detail-ruler">
@@ -111,7 +120,7 @@ export function AnswerBody({ item, pinned }: { item: AnsweredIssue; pinned: stri
 
       {item.evidence.length > 0 && (
         <section aria-label="Evidence from the issue">
-          <h3>What the issue says</h3>
+          <h3>Evidence from the issue</h3>
           <ul className="facts">
             {item.evidence.map((e, i) => (
               <li key={i}>
@@ -129,14 +138,14 @@ export function AnswerBody({ item, pinned }: { item: AnsweredIssue; pinned: stri
         <details className="dropped">
           <summary>
             {item.dropped.length === 1
-              ? '1 claim set aside'
-              : `${item.dropped.length} claims set aside`}
+              ? '1 statement excluded'
+              : `${item.dropped.length} statements excluded`}
           </summary>
           <ul>
             {item.dropped.map((d, i) => (
               <li key={i}>
                 <span className="fact-kind">
-                  {KIND_TEXT[d.kind] ?? d.kind} {d.version}: {d.reason}
+                  {KIND_TEXT[d.kind] ?? d.kind} {d.version}: {DROPPED_TEXT[d.reason] ?? d.reason}
                 </span>
                 <Quote text={d.quote} />
               </li>
@@ -145,7 +154,7 @@ export function AnswerBody({ item, pinned }: { item: AnsweredIssue; pinned: stri
         </details>
       )}
 
-      <p className="detail-source">{source}.</p>
+      <Fields className="detail-source" items={[['Decided by', source]]} />
     </>
   )
 }

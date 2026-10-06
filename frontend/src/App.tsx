@@ -5,13 +5,17 @@ import { formatAgoShort } from './format'
 import { useLoad, useWatch } from './hooks'
 import { Dashboard } from './pages/Dashboard'
 import { Operations } from './pages/Operations'
+import { Sources } from './pages/Sources'
+import { useTheme, type ThemeChoice } from './theme'
 import { ScanFlow } from './pages/ScanFlow'
 
-// The pages, in the order of the flow: scan your repository, then the database's numbers.
+// The pages, in the order of the flow: scan your repository, the database's numbers, where
+// the issues come from, and the models that read them.
 const PAGES = {
   scan: 'Scan',
   dashboard: 'Dashboard',
-  operations: 'Data and models',
+  sources: 'Sources',
+  operations: 'Models',
 } as const
 type Page = keyof typeof PAGES
 
@@ -42,6 +46,7 @@ export function App() {
   }, [])
 
   const watch = useWatch()
+  const theme = useTheme()
   const dependencies = useLoad(() => api.dependencies(), [])
   const nameOf = (id: string) => dependencies.data?.find((d) => d.id === id)?.name ?? id
   // A watch item without a dependency (a shared link with only a version) means the first one
@@ -85,12 +90,7 @@ export function App() {
         <aside className="sidebar">
           <div className="sb-section sb-brand">
             <a className="brand" href="#/scan">
-              <svg viewBox="0 0 24 24" aria-hidden="true" className="brand-mark">
-                <line x1="2" x2="22" y1="15" y2="15" />
-                <circle cx="7" cy="15" r="2.6" />
-                <line className="brand-pin" x1="15" x2="15" y1="4" y2="20" />
-              </svg>
-              dep-watch
+              DWatcher
             </a>
           </div>
 
@@ -111,19 +111,34 @@ export function App() {
 
           <div className="sb-section watch" aria-label="Your repository">
             <p className="watch-label">
-              {watch.repo ? 'Repository' : watch.items.length ? 'Added by hand' : 'No repository yet'}
+              {watch.repo ? 'Repository' : watch.items.length ? 'Added manually' : 'No repository selected'}
             </p>
             {watch.repo && <p className="watch-repo">{watch.repo}</p>}
             <a className="watch-change" href="#/scan/edit">
-              {watch.items.length ? 'Change' : 'Choose a repository'}
+              {watch.items.length ? 'Change' : 'Select repository'}
             </a>
+          </div>
+
+          <div className="sb-section theme" role="group" aria-label="Theme">
+            <p className="watch-label">Theme</p>
+            <div className="theme-switch">
+              {(['system', 'light', 'dark'] as ThemeChoice[]).map((choice) => (
+                <button
+                  key={choice}
+                  aria-pressed={theme.choice === choice}
+                  onClick={() => theme.choose(choice)}
+                >
+                  {choice === 'system' ? 'System' : choice === 'light' ? 'Light' : 'Dark'}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="sb-section status">
             <p
               title={[
-                model ? `Issues are read with ${model}` : 'No model configured',
-                watermark && `issues synced ${new Date(watermark).toLocaleString()}`,
+                model ? `Model: ${model}` : 'No model configured',
+                watermark && `Last sync: ${new Date(watermark).toLocaleString()}`,
               ]
                 .filter(Boolean)
                 .join('; ')}
@@ -139,7 +154,7 @@ export function App() {
           {apiDown ? (
             <div className="page">
               <div className="empty">
-                <h2>The API isn't answering</h2>
+                <h2>The API is not responding</h2>
                 <p>{dependencies.error}</p>
               </div>
             </div>
@@ -156,6 +171,10 @@ export function App() {
               systems={systems.data ?? []}
               latestScanId={latestScan?.id}
               onScanned={scans.reload}
+              onSynced={() => {
+                sync.reload()
+                dependencies.reload()
+              }}
               editing={route.key === 'edit'}
               tone={affected === undefined ? 'idle' : affected > 0 ? 'hit' : 'calm'}
             />
@@ -165,15 +184,20 @@ export function App() {
               dependencies={dependencies.data}
               watched={watched}
               version={version}
+              repo={watch.repo}
               systems={systems.data ?? []}
               issueKey={route.key}
             />
-          ) : (
-            <Operations
-              dependency={watched ?? dependencies.data[0]}
-              systems={systems.data ?? []}
-              onSynced={sync.reload}
+          ) : route.page === 'sources' ? (
+            <Sources
+              dependencies={dependencies.data}
+              onSynced={() => {
+                sync.reload()
+                dependencies.reload() // a first sync adds a source
+              }}
             />
+          ) : (
+            <Operations dependency={watched ?? dependencies.data[0]} systems={systems.data ?? []} />
           )}
         </main>
       </div>
