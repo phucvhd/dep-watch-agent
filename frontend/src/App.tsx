@@ -92,7 +92,7 @@ export function App() {
         <aside className="sidebar">
           <div className="sb-section sb-brand">
             <a className="brand" href="#/scan">
-              DWatcher
+              snytch
             </a>
           </div>
 

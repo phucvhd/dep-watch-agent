@@ -1,4 +1,4 @@
-// A thin, typed wrapper over the DWatcher API. Types come from the API's OpenAPI schema
+// A thin, typed wrapper over the snytch API. Types come from the API's OpenAPI schema
 // (`npm run gen:api` with the API running), so a change to `schemas.py` shows up here as a
 // type error rather than a runtime surprise.
 import type { components } from './schema'

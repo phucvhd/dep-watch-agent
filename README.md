@@ -1,4 +1,4 @@
-# DWatcher
+# snytch
 
 Watches upstream issue trackers (starting with Apache Kafka's JIRA) for bugs that affect a
 pinned dependency version: data loss, upgrade regressions, deadlocks and other issues that

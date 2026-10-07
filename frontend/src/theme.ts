@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 export type ThemeChoice = 'system' | 'light' | 'dark'
 
-const KEY = 'dwatcher.theme' // read before the first paint by index.html too
+const KEY = 'snytch.theme' // read before the first paint by index.html too
 const SYSTEM_DARK = '(prefers-color-scheme: dark)'
 
 function saved(): ThemeChoice {

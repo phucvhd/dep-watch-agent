@@ -48,7 +48,7 @@ def create_app(
         yield
 
     app = FastAPI(
-        title="DWatcher",
+        title="snytch",
         description="Does an upstream issue affect the version I run?",
         version=__version__,
         lifespan=lifespan,
