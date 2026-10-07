@@ -22,13 +22,13 @@ function changeText(change: Change, direction: UpgradeResponse['direction']): st
     case 'new_risk':
       return 'New at target'
     case 'exposed':
-      return direction === 'downgrade' ? 'Fixes given up' : 'No longer ruled out'
+      return direction === 'downgrade' ? 'Fixes given up' : 'Unverified at target'
     case 'remains':
       return 'Affected at target'
     case 'inconclusive':
       return 'Inconclusive'
     case 'fixed':
-      return direction === 'downgrade' ? 'Fixed by downgrading' : 'Fixed by upgrading'
+      return 'Fixed at target'
     case 'fix_included':
       return 'Fixes included'
   }
@@ -50,7 +50,7 @@ export function Upgrade({ dependencies, items, systems }: Props) {
   const { job } = useJob(jobId)
   const result = job?.status === 'succeeded' ? (job.result as unknown as UpgradeResponse) : undefined
 
-  // Warm when anything would affect you at the target, or can no longer be ruled out there.
+  // Warm when anything would affect you at the target, or is unverified there.
   const atRisk = (['new_risk', 'exposed', 'remains'] as Change[]).some(
     (c) => (result?.counts[c] ?? 0) > 0,
   )
@@ -190,7 +190,7 @@ function UpgradeForm({
           </select>
         </label>
         <label title="Issues without stored evidence to read first; each takes a model call">
-          <span>Model reads</span>
+          <span>Issues</span>
           <input
             type="number"
             min={0}
@@ -250,9 +250,6 @@ function Report({ result }: { result: UpgradeResponse }) {
             ['Read in this run', result.read.toLocaleString()],
           ]}
         />
-        {result.unchecked > 0 && (
-          <p className="widget-sub upgrade-unchecked">Raise Model reads to check the rest.</p>
-        )}
         {result.errors > 0 && (
           <ErrorNote>
             Check failed for {plural(result.errors, 'issue')}; listed as Inconclusive.

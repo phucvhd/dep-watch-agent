@@ -27,10 +27,10 @@ router = APIRouter(tags=["upgrade"])
 )
 def start_upgrade(body: UpgradeRequest, jobs: JobsDep, sessions: SessionsDep, systems: SystemsDep):
     """Compare each candidate issue's answer at ``from_version`` and ``to_version``: fixed by
-    the move, new risks, no longer ruled out, still affected, inconclusive. Poll ``/jobs/{id}``;
-    ``progress`` counts issues read, and ``result`` is an ``UpgradeResponse``. 422 when either
-    version isn't a release of the project's dependency, or both are the same; 503 when
-    ``read`` asks for model calls and no system is registered."""
+    the move, new risks, unverified at the target, still affected, inconclusive. Poll
+    ``/jobs/{id}``; ``progress`` counts issues read, and ``result`` is an ``UpgradeResponse``.
+    422 when either version isn't a release of the project's dependency, or both are the same;
+    503 when ``read`` asks for model calls and no system is registered."""
     from dep_watch_agent.upgrade import diagnose
 
     try:

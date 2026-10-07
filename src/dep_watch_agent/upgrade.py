@@ -8,7 +8,7 @@ versions by ``verdict.decide``, from the same facts, and code compares the two a
   versions settle the target with no model call, while the text doesn't say where the bug
   starts.
 - ``new_risk``: not affected now, affected at the target.
-- ``exposed``: not affected now, but the target can't be ruled out. On a downgrade these are
+- ``exposed``: not affected now, unverified at the target. On a downgrade these are
   mostly the fixes you would give up: the fix versions settle the current version, while the
   text rarely says where the bug starts.
 - ``remains``: affected at the target, and affected (or not known otherwise) now.
