@@ -54,7 +54,7 @@ export function PageIntro({
 export function StepHead({ n, title, muted = false }: { n: number; title: string; muted?: boolean }) {
   return (
     <h2 className={muted ? 'step-head is-muted' : 'step-head'}>
-      <span className="step-n">{n}</span>
+      <span className="step-n">{String(n).padStart(2, '0')}</span>
       {title}
     </h2>
   )

@@ -1,15 +1,17 @@
-/* DWatcher, in the manner of an editorial brand guide: white, flat, a large grotesk, grey
-   supporting text, superscript numbers. Color means something: the hero gradient is warm when
-   a bug affects you and cool when none does; answers wear their own tinted chips; and one
+/* snytch, set like an engineering notebook: an off-white page under a faint diagonal hatch,
+   square frames with crop marks at their corners, Geist for text and Geist Mono for data
+   (issue keys, dates, versions, counts). Color means something: the strip under each page
+   title is warm when a bug affects you and cool when none does; answers wear tinted chips; and one
    accent marks what you can act on or where you are (primary buttons, the current page and
-   step, the selected card, focus) and the measure a chart is about. The accent is the
-   gradient's orange (#f26522) made deep enough for text, so the page and its header share one
-   palette. Affected is red, not orange, so an answer never reads as a button. */
+   step, the selected card, focus) and the measure a chart is about. The accent is lime (hue
+   85), clear of the hues that carry meaning: red, amber and blue for the answers, violet, aqua
+   and ochre for the sources. Lime is light, so it comes in two steps: a bright fill with dark
+   text for buttons and badges, and a deep lime for text, marks and focus. */
 
 :root {
   --bg: #ffffff;
   --bg-soft: #f8f8f6;
-  --canvas: #f3f3f0; /* behind widgets */
+  --canvas: #f4f4ef; /* behind widgets, under the hatch */
   --line: #dcdcd6; /* hairlines inside a widget */
   --line-strong: #c9c9c2; /* the edge of a widget, an input or a button */
   --ink: #0e0e0e;
@@ -19,33 +21,43 @@
   --ink-3: #6b6b6b; /* 4.8-5.3:1 */
   --mark-muted: #c2c2c2; /* de-emphasized chart marks: not text, so it stays light */
 
-  /* Answer colors, validated as a categorical set (dataviz validate_palette.js), all pairs:
-     red, blue, amber. */
-  --hit: #d92d20; /* affected: red, apart from the orange accent */
-  --hit-text: #b42318; /* 5.8:1 on its chip tint, 6.6:1 on white */
+  /* Answer colors, from Radix Colors' ruby, cyan and amber: with the lime accent, ruby and
+     cyan close a triad (85, 195 and 330 degrees), and amber, the caution color, sits beside
+     lime. Validated as a categorical set, all pairs, light and dark (dataviz
+     validate_palette.js); each text color clears 4.5:1 on white, the canvas and its chip. */
+  --hit: #e54666; /* affected */
+  --hit-text: #ca244d; /* 4.7:1 on its chip tint, 5.4:1 on white */
   --unknown: #eda100; /* inconclusive: below 3:1 on white, so charts carry labels and a table */
   --unknown-text: #8f6000;
-  --clear: #2a78d6; /* doesn't affect you */
-  --clear-text: #1f5fae;
+  --clear: #00a2c7; /* not affected: below 3:1 on white, so it always carries a label */
+  --clear-text: #0c6f8a; /* 5.1:1 on its chip tint */
   /* Chip tints behind answer text; each text color clears 4.5:1 on its tint. */
-  --hit-soft: #fdecea;
+  --hit-soft: #feeaed;
   --unknown-soft: #fdf3d9;
-  --clear-soft: #e8f1fc;
-  /* The accent, from the hero gradient's orange: 5.6:1 on white either way round. */
-  --accent: #b93d0c;
-  --accent-soft: #fdeee6;
-  --accent-light: #f6d9a6; /* the gradient's sand: the second mark in a chart beside the accent */
-  --accent-ink: #ffffff; /* text on the accent */
-  /* Source slots, by the API's dependency order (sources.ts), validated all-pairs: a donut puts
-     every pair side by side. Three slots; further sources are gray and fold into "Other". */
-  --src-1: #4a3aa7; /* violet */
-  --src-2: #1baf7a; /* aqua: below 3:1 on white, so the legend carries the values */
-  --src-3: #8c5e00; /* ochre */
+  --clear-soft: #def7f9;
+  /* The accent. Text and marks: 5.2:1 on white, 4.6:1 on its own tint. Fill: dark text on it
+     at 9.7:1; it is light on white (1.5:1), so a filled button has a deep lime edge. */
+  --accent: #4a7a0c;
+  --accent-fill: #a3e635;
+  --accent-soft: #eef7d9;
+  --accent-light: #cde89b; /* the second mark in a chart beside the accent */
+  --accent-ink: #1a2e05; /* text on the fill */
+  /* Source slots, by the catalog order (sources.ts): indigo, teal and orchid from Radix Colors,
+     clear of the accent (lime) and the answers (ruby, cyan, amber). Validated all-pairs, since a
+     donut puts every pair side by side: the closest pair is 7.4 under deuteranopia, in the band
+     that needs secondary encoding, which the donut has (2px gaps, a labeled legend with shares).
+     Three slots; further sources are gray and fold into "Other". */
+  --src-1: #3e63dd; /* indigo */
+  --src-2: #0e9f84; /* teal */
+  --src-3: #c050b0; /* orchid */
   --grid: #e9e9e6;
   --pin: #0e0e0e; /* the version you run */
-  --highlight: rgb(251 193 99 / 0.45);
 
-  --font: 'DM Sans', system-ui, -apple-system, sans-serif;
+  --font: 'Geist', system-ui, -apple-system, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --radius: 3px; /* frames are square; controls and chips barely round */
+  --mark: var(--ink-3); /* crop marks at a frame's corners */
+  --hatch: rgb(0 0 0 / 0.035);
   --gutter: 56px;
   --sidebar: 300px;
 
@@ -58,31 +70,32 @@
   --bg: #0d0d0d;
   --bg-soft: #151515;
   --canvas: #080808;
+  --hatch: rgb(255 255 255 / 0.03);
   --line: #2c2c2c;
   --line-strong: #3d3d3d;
   --ink: #f2f2f2;
   --ink-2: #b8b8b8; /* 9-10:1 */
   --ink-3: #9c9c9c; /* 6.7-7.3:1; the old #737373 was 3.9-4.2:1 */
   --mark-muted: #4a4a4a;
-  --hit: #e5484d;
-  --hit-text: #ff8a80;
+  --hit: #e54666;
+  --hit-text: #ff949d;
   --unknown: #c98500;
   --unknown-text: #f5bd5c;
-  --clear: #3987e5;
-  --clear-text: #8fb8f0;
-  --hit-soft: #2b1110;
+  --clear: #0797b9;
+  --clear-text: #4ccce6;
+  --hit-soft: #3a141e;
   --unknown-soft: #2a210c;
-  --clear-soft: #0f1c2c;
-  --accent: #f7923a; /* the gradient's orange itself: 8.5:1 on the dark surfaces */
-  --accent-soft: #2a160d;
-  --accent-light: #6b4a1f;
+  --clear-soft: #082c36;
+  --accent: #a3e635; /* 12.9:1 on the dark surfaces */
+  --accent-fill: #a3e635;
+  --accent-soft: #1a2a08;
+  --accent-light: #3f5f17;
   --accent-ink: #0d0d0d;
-  --src-1: #9085e9;
-  --src-2: #199e70;
-  --src-3: #a87a1a;
+  --src-1: #3e63dd;
+  --src-2: #0e9f84;
+  --src-3: #c050b0;
   --grid: #232323;
   --pin: #f2f2f2;
-  --highlight: rgb(241 171 58 / 0.32);
   color-scheme: dark;
 }
 
@@ -107,6 +120,11 @@ h2,
 h3 {
   margin: 0;
   font-weight: 500;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink);
 }
 
 a {
@@ -164,7 +182,7 @@ select {
   height: 40px;
   background: var(--bg);
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: 0 12px;
   min-width: 0;
 }
@@ -181,7 +199,7 @@ input[type='number'] {
 button {
   height: 40px;
   padding: 0 20px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   border: 1px solid var(--line-strong);
   background: var(--bg);
   font-weight: 500;
@@ -197,7 +215,7 @@ a.button {
   align-items: center;
   height: 40px;
   padding: 0 20px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   border: 1px solid var(--line-strong);
   font-weight: 500;
   text-decoration: none;
@@ -205,7 +223,7 @@ a.button {
 
 button.primary,
 a.button.primary {
-  background: var(--accent);
+  background: var(--accent-fill);
   border-color: var(--accent);
   color: var(--accent-ink);
 }
@@ -328,7 +346,7 @@ button:disabled {
   margin-top: 8px;
   padding: 3px;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius);
 }
 
 .theme-switch button {
@@ -346,7 +364,7 @@ button:disabled {
 }
 
 .theme-switch button[aria-pressed='true'] {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: var(--accent-ink);
 }
 
@@ -420,7 +438,7 @@ button:disabled {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #3fae6a;
+  background: var(--accent); /* the model is ready */
   flex: none;
 }
 
@@ -452,23 +470,19 @@ main {
   background-color: #c9d4d9;
 }
 
+/* The status strip under a page title. Every strip starts from the accent's lime and ends in
+   the status's answer color: through amber to ruby when a bug affects you, to cyan when none
+   does, to slate before there is an answer. */
 .hero-hit {
-  background:
-    radial-gradient(85% 120% at 78% 105%, #f26522 0%, #f7923a 26%, #fbbe5e 46%, rgb(251 190 94 / 0) 74%),
-    radial-gradient(60% 90% at 40% 120%, #fbc163 0%, rgb(251 193 99 / 0) 70%),
-    linear-gradient(180deg, #b2c6d1 0%, #cbd3d2 100%);
+  --strip: linear-gradient(90deg, #a3e635 0%, #fbbe5e 55%, #e54666 100%);
 }
 
 .hero-calm {
-  background:
-    radial-gradient(85% 120% at 78% 105%, #8fb0c6 0%, #b4cad7 34%, #d6e1e7 58%, rgb(214 225 231 / 0) 80%),
-    linear-gradient(180deg, #dfe7eb 0%, #eef2f3 100%);
+  --strip: linear-gradient(90deg, #a3e635 0%, #00a2c7 100%);
 }
 
 .hero-idle {
-  background:
-    radial-gradient(80% 120% at 80% 110%, #f6d9a6 0%, rgb(246 217 166 / 0) 60%),
-    linear-gradient(180deg, #c3d1d8 0%, #dfe4e3 100%);
+  --strip: linear-gradient(90deg, #cde89b 0%, #c3d1d8 100%);
 }
 
 .hero-line,
@@ -607,7 +621,7 @@ main {
   width: 14px;
   height: 14px;
   border: 2px solid var(--line);
-  border-top-color: var(--ink);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.9s linear infinite;
   flex: none;
@@ -769,7 +783,7 @@ main {
   width: fit-content;
   margin: 0 0 14px;
   padding: 4px 12px 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   font-size: 14px;
   font-weight: 500;
 }
@@ -863,7 +877,7 @@ main {
 }
 
 .quote mark {
-  background: var(--highlight);
+  background: var(--accent-soft);
   color: inherit;
   padding: 0 2px;
 }
@@ -1201,7 +1215,7 @@ main {
   font-size: 12px;
   color: var(--ink-3);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   padding: 1px 8px;
   align-self: center;
 }
@@ -1428,10 +1442,15 @@ th {
   white-space: nowrap;
 }
 
+/* A small bordered label, e.g. Provisional on an eval run: amber, since its scores are not final. */
 .tag {
   margin-left: 8px;
-  font-size: 13px;
+  padding: 1px 6px;
+  border: 1px solid var(--unknown);
+  border-radius: var(--radius);
+  font-size: 12px;
   color: var(--unknown-text);
+  background: var(--unknown-soft);
 }
 
 .job-succeeded {
@@ -1442,13 +1461,14 @@ th {
 }
 .job-running,
 .job-queued {
-  color: var(--ink);
+  color: var(--accent);
 }
 
 /* --- dashboards: a grid of widgets on a quiet canvas --------------------------------- */
 
 main {
-  background: var(--canvas);
+  background-color: var(--canvas);
+  background-image: repeating-linear-gradient(135deg, var(--hatch) 0 1px, transparent 1px 10px);
 }
 
 .page {
@@ -1481,11 +1501,30 @@ main {
 
 .widget {
   /* background-color only, so a tile's gradient (background-image) survives. */
+  position: relative;
   background-color: var(--bg);
   border: 1px solid var(--line-strong);
-  border-radius: 18px;
+  border-radius: var(--radius);
   padding: 22px 24px;
   min-width: 0;
+}
+
+/* Crop marks: an L at each corner of a frame, over its border. */
+.widget::before,
+.dash > .intro::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  background:
+    linear-gradient(var(--mark), var(--mark)) top left / 8px 1px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) top left / 1px 8px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) top right / 8px 1px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) top right / 1px 8px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) bottom left / 8px 1px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) bottom left / 1px 8px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) bottom right / 8px 1px no-repeat,
+    linear-gradient(var(--mark), var(--mark)) bottom right / 1px 8px no-repeat;
 }
 
 /* Tiles in a row share its height, as a grid of widgets should. */
@@ -1536,23 +1575,37 @@ main {
    dark in both themes, for contrast. */
 .dash > .intro {
   grid-column: 1 / -1;
+  position: relative;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px 24px;
-  min-height: 128px;
-  padding: 24px 28px;
-  border: 0;
-  border-radius: 18px;
-  color: #0e0e0e;
+  min-height: 112px;
+  padding: 24px 28px 28px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--ink);
+  /* Flat, under a denser hatch than the canvas. */
+  background-color: var(--bg);
+  background-image: repeating-linear-gradient(135deg, var(--hatch) 0 1px, transparent 1px 6px);
+}
+
+.dash > .intro::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
+  height: 4px;
+  background: var(--strip, var(--line-strong));
 }
 
 .dash > .intro h1 {
   font-size: 40px;
   line-height: 1;
   letter-spacing: -0.04em;
-  color: #0e0e0e;
+  color: var(--ink);
 }
 
 .dash > .intro .source-switch {
@@ -1598,7 +1651,7 @@ main {
   gap: 4px;
   text-align: left;
   height: auto;
-  border-radius: 18px;
+  border-radius: var(--radius);
   padding: 20px 22px;
   font-weight: 400;
 }
@@ -1632,6 +1685,65 @@ main {
 .count-affected::after {
   background: var(--hit);
 }
+/* Upgrade changes: the color of the answer at the target. */
+.change-new_risk::after,
+.change-remains::after {
+  background: var(--hit);
+}
+.change-exposed::after,
+.change-inconclusive::after {
+  background: var(--unknown);
+}
+.change-fixed::after,
+.change-fix_included::after {
+  background: var(--clear);
+}
+
+/* Six changes: one row when there is room, else rows of three, then two. */
+.upgrade-tiles {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+@media (max-width: 1280px) {
+  .upgrade-tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .upgrade-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.upgrade-tiles .count-label {
+  padding-right: 22px; /* clear of the tile's dot */
+}
+
+
+.upgrade-answers {
+  margin: 4px 0 20px;
+}
+
+.upgrade-answers .verdict {
+  margin: 0;
+}
+
+/* A row's two answers: the version you run, then the target. */
+.transition {
+  grid-area: ruler;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.transition-arrow {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
 .count-insufficient_information::after {
   background: var(--unknown);
 }
@@ -1679,7 +1791,6 @@ main {
 .list-widget,
 .detail-widget {
   padding: 0;
-  overflow: hidden;
 }
 
 .list-widget .filter {
@@ -1704,6 +1815,12 @@ main {
 .list-widget .pager {
   border-top: 1px solid var(--line);
   padding: 12px 16px;
+}
+
+/* In a padded widget the message sits on the widget's own padding. */
+.widget:not(.list-widget):not(.detail-widget) > .list-empty,
+.widget:not(.list-widget):not(.detail-widget) > section > .list-empty {
+  padding: 8px 0 0;
 }
 
 .list-widget .list-empty {
@@ -1838,13 +1955,14 @@ button.btn-sm {
 .step-n {
   display: inline-grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--accent);
+  min-width: 32px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: var(--radius);
+  background: var(--accent-fill);
   color: var(--accent-ink);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   letter-spacing: 0;
 }
 
@@ -1926,7 +2044,7 @@ button.btn-sm {
   display: grid;
   height: auto;
   padding: 6px 16px 8px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   text-align: left;
   color: var(--ink-3);
 }
@@ -1942,7 +2060,7 @@ button.btn-sm {
   gap: 2px;
   padding: 3px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: var(--bg);
   align-self: center;
 }
@@ -2113,7 +2231,7 @@ button.btn-sm {
   padding: 8px 12px;
   background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius);
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
   pointer-events: none;
   font-size: 13px;
@@ -2265,7 +2383,7 @@ button.btn-sm {
   margin-top: 18px;
   padding: 16px 18px;
   border: 1px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius);
   display: grid;
   gap: 12px;
 }
@@ -2523,7 +2641,7 @@ button.btn-sm {
   }
   .count-tile {
     padding: 12px 14px;
-    border-radius: 14px;
+    border-radius: var(--radius);
   }
   .count-tile::after {
     top: 14px;
@@ -2586,4 +2704,29 @@ button.btn-sm {
 .scan-widget .job-line {
   flex-basis: 100%;
   margin-top: 4px;
+}
+
+/* Data in Geist Mono: issue keys, dates, versions, counts, step numbers. */
+.row-key,
+.row-date,
+.timestamp-ago,
+.step-n,
+sup,
+.transition-arrow,
+.count-period,
+.dep-version,
+.detail-meta a,
+.chart-toggle,
+.ruler-label,
+.fact-kind strong,
+.status-ago,
+.answer-head input {
+  font-family: var(--mono);
+  letter-spacing: 0;
+}
+
+.row-key,
+.row-date,
+.timestamp-ago {
+  font-size: 12px;
 }

@@ -351,6 +351,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/upgrade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Upgrade
+         * @description Compare each candidate issue's answer at ``from_version`` and ``to_version``: fixed by
+         *     the move, new risks, no longer ruled out, still affected, inconclusive. Poll ``/jobs/{id}``;
+         *     ``progress`` counts issues read, and ``result`` is an ``UpgradeResponse``. 422 when either
+         *     version isn't a release of the project's dependency, or both are the same; 503 when
+         *     ``read`` asks for model calls and no system is registered.
+         */
+        post: operations["start_upgrade_upgrade_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/repo/scan": {
         parameters: {
             query?: never;
@@ -1420,6 +1444,136 @@ export interface components {
             /** Count */
             count: number;
         };
+        /** UpgradeItemOut */
+        UpgradeItemOut: {
+            /** Issue Key */
+            issue_key: string;
+            /** Url */
+            url: string;
+            /** Summary */
+            summary: string;
+            /** Status */
+            status: string | null;
+            /** Resolution */
+            resolution: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Fix Versions */
+            fix_versions: string[];
+            /**
+             * Current
+             * @description The answer at from_version
+             * @enum {string}
+             */
+            current: "affected" | "not_affected" | "insufficient_information";
+            /**
+             * Target
+             * @description The answer at to_version
+             * @enum {string}
+             */
+            target: "affected" | "not_affected" | "insufficient_information";
+            /**
+             * Change
+             * @enum {string}
+             */
+            change: "new_risk" | "remains" | "exposed" | "fixed" | "inconclusive" | "fix_included";
+            /**
+             * Decided By
+             * @description The system, when its facts were used; else fix_versions
+             */
+            decided_by: string;
+            /** Cached */
+            cached: boolean;
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceOut"][];
+            /** Dropped */
+            dropped: components["schemas"]["DroppedEvidenceOut"][];
+            /** Error */
+            error: string | null;
+        };
+        /** UpgradeRequest */
+        UpgradeRequest: {
+            /**
+             * Project
+             * @example KAFKA
+             */
+            project: string;
+            /**
+             * From Version
+             * @description The version you run
+             * @example 3.4.0
+             */
+            from_version: string;
+            /**
+             * To Version
+             * @description The version to move to
+             * @example 3.9.1
+             */
+            to_version: string;
+            /**
+             * Read
+             * @description Read at most this many issues without stored facts (each a model call), those that may affect the target first (upgrade.read_order). 0: stored facts and fix versions only
+             * @default 0
+             */
+            read?: number;
+            /**
+             * System
+             * @description Default: the first registered system
+             */
+            system?: string | null;
+        };
+        /**
+         * UpgradeResponse
+         * @description The ``result`` of a finished upgrade job. Items: new_risk, remains, exposed, fixed,
+         *     inconclusive, then fix_included; newest first within each. Issues not affected at either version
+         *     are only counted (``unchanged``), as are those never read (``unchecked``).
+         */
+        UpgradeResponse: {
+            /** Project */
+            project: string;
+            /** From Version */
+            from_version: string;
+            /** To Version */
+            to_version: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "upgrade" | "downgrade";
+            /** System */
+            system: string | null;
+            /**
+             * Candidates
+             * @description Candidate bugs compared
+             */
+            candidates: number;
+            /**
+             * Releases Between
+             * @description Releases after the lower version, up to the higher
+             */
+            releases_between: number;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /**
+             * Unchecked
+             * @description Inconclusive at the target and never read by the model
+             */
+            unchecked: number;
+            /**
+             * Read
+             * @description Issues the model read in this run
+             */
+            read: number;
+            /** Errors */
+            errors: number;
+            /** Items */
+            items: components["schemas"]["UpgradeItemOut"][];
+        };
         /** UploadResponse */
         UploadResponse: {
             /** Name */
@@ -1987,6 +2141,60 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScanResponse"];
+                };
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    start_upgrade_upgrade_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpgradeRequest"];
+            };
+        };
+        responses: {
+            /** @description Not returned here: the ``result`` of the job once it succeeds */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpgradeResponse"];
                 };
             };
             /** @description Successful Response */

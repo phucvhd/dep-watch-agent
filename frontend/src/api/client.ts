@@ -1,4 +1,4 @@
-// A thin, typed wrapper over the DWatcher API. Types come from the API's OpenAPI schema
+// A thin, typed wrapper over the snytch API. Types come from the API's OpenAPI schema
 // (`npm run gen:api` with the API running), so a change to `schemas.py` shows up here as a
 // type error rather than a runtime surprise.
 import type { components } from './schema'
@@ -23,6 +23,10 @@ export type SourceCount = Schemas['SourceCount']
 export type ReadingTime = Schemas['ReadingTime']
 export type ScanRequest = Schemas['ScanRequest']
 export type ScanBacklog = Schemas['ScanBacklog']
+export type UpgradeRequest = Schemas['UpgradeRequest']
+export type UpgradeResponse = Schemas['UpgradeResponse']
+export type UpgradeItem = Schemas['UpgradeItemOut']
+export type Change = UpgradeItem['change']
 export type ScanResponse = Schemas['ScanResponse']
 export type ScanItem = Schemas['ScanItemOut']
 export type Evidence = Schemas['EvidenceOut']
@@ -127,6 +131,7 @@ export const api = {
   sources: () => request<SourceCount[]>('/stats/sources'),
   readingTime: (project: string) => request<ReadingTime>(`/stats/reading${query({ project })}`),
   startScan: (body: ScanRequest) => post<Job>('/scan', body),
+  startUpgrade: (body: UpgradeRequest) => post<Job>('/upgrade', body),
   /** What a scan with these filters would find; never calls the model. */
   scanBacklog: (project: string, version: string, since: string | null) =>
     request<ScanBacklog>(`/scan/backlog${query({ project, version, since })}`),
