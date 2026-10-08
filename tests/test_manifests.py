@@ -376,9 +376,26 @@ def test_lockfile_versions_replace_ranges_and_families_cover_python():
     }
     assert ("pypi:fastapi", None) not in detected  # the lock gives the version
     fastapi = detected[("pypi:fastapi", "0.141.1")]
-    assert (fastapi.name, fastapi.ecosystem, fastapi.files) == ("fastapi", "pypi", ["uv.lock"])
+    assert (fastapi.name, fastapi.ecosystems, fastapi.files) == ("fastapi", ["pypi"], ["uv.lock"])
     spark = detected[("spark", "3.5.1")]
-    assert (spark.name, spark.ecosystem) == ("Apache Spark", "pypi")
+    assert (spark.name, spark.ecosystems) == ("Apache Spark", ["pypi"])
+
+
+def test_a_dependency_lists_every_ecosystem_that_declares_it():
+    compose = "services:\n  kafka:\n    image: apache/kafka:3.9.1\n"
+    lockfile = "org.apache.kafka:kafka-clients:3.9.1=runtimeClasspath\n"
+    detected = detect(
+        [
+            f("docker-compose.yml", compose),  # read first, listed after Maven
+            f("gradle.lockfile", lockfile),
+            f("requirements.txt", "pyspark==3.5.3\n"),
+            f("build.sbt", '"org.apache.spark" %% "spark-sql" % "3.5.3"\n'),
+        ]
+    )
+    assert {(d.key, d.version): d.ecosystems for d in detected} == {
+        ("kafka", "3.9.1"): ["maven", "image"],
+        ("spark", "3.5.3"): ["maven", "pypi"],
+    }
 
 
 def test_npm_package_json_with_lock():

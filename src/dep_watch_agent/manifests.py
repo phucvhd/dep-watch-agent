@@ -59,6 +59,7 @@ class Declared:
 
 
 ECOSYSTEMS = ("pypi", "npm", "image")
+ECOSYSTEM_ORDER = ("maven", *ECOSYSTEMS)
 
 
 @dataclass(frozen=True)
@@ -69,7 +70,7 @@ class Detected:
     name: str
     version: str | None
     family: str | None
-    ecosystem: str  # maven, pypi, npm or image
+    ecosystems: list[str]  # where it is declared, in ECOSYSTEM_ORDER: maven, pypi, npm, image
     watchable: bool
     reason: str | None  # why it can't be watched, if it can't
     artifacts: list[str] = field(default_factory=list)
@@ -126,11 +127,14 @@ def detect(files: Iterable[ManifestFile]) -> list[Detected]:
                 name=family.name if family else _plain_name(d),
                 version=d.version,
                 family=family.id if family else None,
-                ecosystem=d.ecosystem,
+                ecosystems=[],
                 watchable=watchable,
                 reason=reason,
             )
             groups[(key, d.version)] = entry
+        if d.ecosystem not in entry.ecosystems:
+            entry.ecosystems.append(d.ecosystem)
+            entry.ecosystems.sort(key=ECOSYSTEM_ORDER.index)
         if d.coordinate not in entry.artifacts:
             entry.artifacts.append(d.coordinate)
         if d.file not in entry.files:

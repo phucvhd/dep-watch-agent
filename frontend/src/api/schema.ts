@@ -363,10 +363,10 @@ export interface paths {
         /**
          * Start Upgrade
          * @description Compare each candidate issue's answer at ``from_version`` and ``to_version``: fixed by
-         *     the move, new risks, no longer ruled out, still affected, inconclusive. Poll ``/jobs/{id}``;
-         *     ``progress`` counts issues read, and ``result`` is an ``UpgradeResponse``. 422 when either
-         *     version isn't a release of the project's dependency, or both are the same; 503 when
-         *     ``read`` asks for model calls and no system is registered.
+         *     the move, new risks, unverified at the target, still affected, inconclusive. Poll
+         *     ``/jobs/{id}``; ``progress`` counts issues read, and ``result`` is an ``UpgradeResponse``.
+         *     422 when either version isn't a release of the project's dependency, or both are the same;
+         *     503 when ``read`` asks for model calls and no system is registered.
          */
         post: operations["start_upgrade_upgrade_post"];
         delete?: never;
@@ -779,10 +779,10 @@ export interface components {
              */
             family: string | null;
             /**
-             * Ecosystem
-             * @enum {string}
+             * Ecosystems
+             * @description Where the manifests declare it, e.g. a library and a container image
              */
-            ecosystem: "maven" | "pypi" | "npm" | "image";
+            ecosystems: ("maven" | "pypi" | "npm" | "image")[];
             /**
              * Watchable
              * @description Supported and at a known release: can be watched
