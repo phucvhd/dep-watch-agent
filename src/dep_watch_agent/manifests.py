@@ -202,6 +202,18 @@ def declared(files: list[ManifestFile]) -> list[Declared]:
 # --- Maven -------------------------------------------------------------------------------
 
 _PROPERTY = re.compile(r"\$\{([^}]+)\}")
+# Ranges ("[1.0,2.0)", Gradle's "[1.0, 2.0["), prefixes ("1.+", "+") and keywords ("LATEST",
+# "latest.release") are chosen at build time, so the manifest doesn't say which release is used.
+_DYNAMIC_VERSION = re.compile(r"^[\[\]()]|[\[\]()]$|,|\+$|^latest\.|^(?:LATEST|RELEASE)$")
+_SOLE_VERSION = re.compile(r"\[\s*([^\s,\[\]()]+)\s*\]")  # Maven's "[1.5]": exactly 1.5
+
+
+def _pinned(version: str | None) -> str | None:
+    """A JVM build's version if it names one release; None for a range or dynamic version."""
+    version = (version or "").strip()
+    if sole := _SOLE_VERSION.fullmatch(version):
+        return sole[1]
+    return None if not version or _DYNAMIC_VERSION.search(version) else version
 
 
 def _strip_namespaces(root: ET.Element) -> ET.Element:
@@ -263,7 +275,7 @@ def _resolve(value: str | None, props: dict[str, str]) -> str | None:
         return None
     for _ in range(5):  # properties may refer to properties
         value = _PROPERTY.sub(lambda m: props.get(m.group(1), m.group(0)), value)
-    return None if _PROPERTY.search(value) else value.strip() or None
+    return None if _PROPERTY.search(value) else _pinned(value)
 
 
 def _pom(
@@ -323,10 +335,8 @@ def _gradle_build(f: ManifestFile, props: dict[str, str]) -> list[Declared]:
     variables = {**props, **dict(_GRADLE_ASSIGN.findall(f.content))}
 
     def resolve(version: str) -> str | None:
-        if "$" not in version:
-            return version
         resolved = _GRADLE_VAR.sub(lambda m: variables.get(m.group(1), m.group(0)), version)
-        return None if "$" in resolved else resolved
+        return None if "$" in resolved else _pinned(resolved)
 
     found = []
     for group, artifact, version in _GRADLE_COORD.findall(f.content) + _GRADLE_MAP.findall(
@@ -342,9 +352,11 @@ def _version_catalog(f: ManifestFile) -> list[Declared]:
 
     def version_of(value) -> str | None:
         if isinstance(value, str):
-            return value
+            return _pinned(value)
         if isinstance(value, dict):  # {strictly = "..."} / {require = "..."} / {prefer = "..."}
-            return next((value[k] for k in ("strictly", "require", "prefer") if k in value), None)
+            # A range with a preferred release resolves to that release.
+            pinned = (_pinned(value.get(k)) for k in ("strictly", "require", "prefer"))
+            return next((v for v in pinned if v), None)
         return None
 
     found = []
@@ -352,7 +364,7 @@ def _version_catalog(f: ManifestFile) -> list[Declared]:
         if isinstance(entry, str):
             parts = entry.split(":")
             if len(parts) == 3:
-                found.append(Declared(parts[0], parts[1], parts[2], f.path))
+                found.append(Declared(parts[0], parts[1], _pinned(parts[2]), f.path))
             continue
         if "module" in entry:
             group, _, artifact = entry["module"].partition(":")
@@ -379,7 +391,7 @@ _SBT_VAL = re.compile(r"""\bval\s+(\w+)\s*=\s*"([^"]+)\"""")
 def _sbt(f: ManifestFile) -> list[Declared]:
     values = dict(_SBT_VAL.findall(f.content))
     return [
-        Declared(group, artifact, literal or values.get(name), f.path)
+        Declared(group, artifact, _pinned(literal or values.get(name)), f.path)
         for group, artifact, literal, name in _SBT_DEP.findall(f.content)
     ]
 

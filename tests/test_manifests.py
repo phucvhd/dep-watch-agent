@@ -72,6 +72,80 @@ def test_maven_resolves_properties_across_poms():
     }
 
 
+def test_jvm_ranges_and_dynamic_versions_are_not_versions():
+    pom = """<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <properties><zk.range>[3.8,3.9)</zk.range></properties>
+  <dependencies>
+    <dependency>
+      <groupId>org.apache.parquet</groupId><artifactId>parquet-avro</artifactId>
+      <version>[1.13,1.15)</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.kafka</groupId><artifactId>kafka-clients</artifactId>
+      <version>[3.9.1]</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.zookeeper</groupId><artifactId>zookeeper</artifactId>
+      <version>${zk.range}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.avro</groupId><artifactId>avro</artifactId>
+      <version>LATEST</version>
+    </dependency>
+  </dependencies>
+</project>
+"""
+    gradle = """
+dependencies {
+    implementation 'org.apache.hbase:hbase-client:2.5.+'
+    implementation "org.apache.hive:hive-jdbc:latest.release"
+    implementation group: 'org.apache.flink', name: 'flink-core', version: '[1.19,2.0)'
+}
+"""
+    catalog = """
+[versions]
+spark = { require = "[3.5,4.0[", prefer = "3.5.3" }
+cassandra = { require = "[4.1,5.0)" }
+
+[libraries]
+spark-sql = { module = "org.apache.spark:spark-sql_2.13", version.ref = "spark" }
+cassandra-all = { module = "org.apache.cassandra:cassandra-all", version.ref = "cassandra" }
+hadoop-client = "org.apache.hadoop:hadoop-client:3.+"
+"""
+    sbt = '"org.apache.iceberg" %% "iceberg-core" % "[1.5,1.7)"\n'
+    found = declared(
+        [
+            f("pom.xml", pom),
+            f("build.gradle", gradle),
+            f("gradle/libs.versions.toml", catalog),
+            f("build.sbt", sbt),
+        ]
+    )
+    assert versions(found) == {
+        "org.apache.parquet:parquet-avro": None,
+        "org.apache.kafka:kafka-clients": "3.9.1",  # Maven's [x] is exactly x
+        "org.apache.zookeeper:zookeeper": None,  # a range behind a property
+        "org.apache.avro:avro": None,
+        "org.apache.hbase:hbase-client": None,
+        "org.apache.hive:hive-jdbc": None,
+        "org.apache.flink:flink-core": None,
+        "org.apache.spark:spark-sql_2.13": "3.5.3",  # the release the range prefers
+        "org.apache.cassandra:cassandra-all": None,
+        "org.apache.hadoop:hadoop-client": None,
+        "org.apache.iceberg:iceberg-core": None,
+    }
+
+
+def test_a_lockfile_version_replaces_a_jvm_range():
+    pom = """<project><dependencies><dependency>
+  <groupId>org.apache.hbase</groupId><artifactId>hbase-client</artifactId>
+  <version>[2.5,2.6)</version>
+</dependency></dependencies></project>"""
+    lockfile = "org.apache.hbase:hbase-client:2.5.10=runtimeClasspath\n"
+    detected = detect([f("pom.xml", pom), f("gradle.lockfile", lockfile)])
+    assert [(d.key, d.version) for d in detected] == [("hbase", "2.5.10")]
+
+
 def test_gradle_build_files_with_variables_and_properties():
     groovy = """
 ext.sparkVersion = '3.5.1'
