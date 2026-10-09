@@ -5,7 +5,7 @@ import pytest
 from dep_watch_agent.dependencies import DEPENDENCIES
 from dep_watch_agent.jira.models import parse_issue
 from dep_watch_agent.jira.store import upsert_issue
-from dep_watch_agent.scan import Backlog, backlog, scan_version
+from dep_watch_agent.scan import Backlog, backlog, candidates_query, scan_version
 from dep_watch_agent.verdict import Evidence, Extraction, IssueText
 from tests.jira_factory import raw_issue
 
@@ -161,3 +161,17 @@ def test_backlog_counts_what_a_scan_would_read(session):
 
 def test_backlog_without_a_system_counts_only_what_code_settles(session):
     assert backlog(session, KAFKA, "3.9.1", None, None) == Backlog(4, 1, 0, 3)
+
+
+def test_spark_candidates_leave_out_bugs_only_a_subproject_has(db):
+    spark = next(d for d in DEPENDENCIES if d.id == "spark")
+    for raw in [
+        raw_issue(11, "SPARK-11", fix=["kubernetes-operator-1.0.0"]),  # the operator's bug
+        raw_issue(12, "SPARK-12", affects=["4.0.0"], fix=["connect-swift-0.8.0"]),  # Spark's too
+        raw_issue(13, "SPARK-13", fix=["3.5.2"]),
+        raw_issue(14, "SPARK-14", resolution=None),  # no versions yet: kept
+    ]:
+        upsert_issue(db, parse_issue(raw))
+    db.commit()
+    keys = {issue.key for issue in db.scalars(candidates_query(spark, None))}
+    assert keys == {"SPARK-12", "SPARK-13", "SPARK-14"}

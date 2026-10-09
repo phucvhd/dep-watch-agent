@@ -260,17 +260,14 @@ def test_detect_groups_by_family_and_version():
     assert kafka.files == ["pom.xml", "app/pom.xml", "docker-compose.yml"]
 
     spark = detected[("spark", "3.5.1")]
-    assert (spark.name, spark.watchable, spark.reason) == (
-        "Apache Spark",
-        False,
-        "Not supported yet",
-    )
+    assert (spark.name, spark.watchable, spark.reason) == ("Apache Spark", True, None)
 
     unknown = detected[("org.slf4j:slf4j-api", None)]
     assert (unknown.family, unknown.watchable) == (None, False)
 
     # Watchable first, then known families, then the rest.
-    assert [d.key for d in detect(files)][:2] == ["kafka", "spark"]
+    hadoop = f("build.sbt", '"org.apache.hadoop" % "hadoop-aws" % "3.4.1"\n')
+    assert [d.key for d in detect([*files, hadoop])][:3] == ["kafka", "spark", "hadoop"]
 
 
 def test_a_watched_family_needs_a_release_version():

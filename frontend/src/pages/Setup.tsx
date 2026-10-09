@@ -198,6 +198,7 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
                     <DependencyRow
                       key={rowKey(d)}
                       d={d}
+                      experimental={dependencies.some((x) => x.id === d.family && x.experimental)}
                       checked={checked.has(rowKey(d))}
                       onToggle={() => toggle(d)}
                     />
@@ -226,9 +227,7 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
 
           <div className="detected-actions button-row">
             <button className="primary" onClick={watch} disabled={selected.length === 0}>
-              {selected.length === 0
-                ? 'Select a dependency'
-                : `Watch ${selected.map((d) => `${d.name} ${d.version}`).join(', ')}`}
+              {selected.length === 0 ? 'Select a dependency' : 'Watch'}
             </button>
             {onCancel && <button onClick={onCancel}>Cancel</button>}
           </div>
@@ -274,10 +273,12 @@ function Progress({ stage }: { stage: Stage }) {
 
 function DependencyRow({
   d,
+  experimental = false,
   checked,
   onToggle,
 }: {
   d: DetectedDependency
+  experimental?: boolean // answered, but its answers aren't measured yet
   checked: boolean
   onToggle: () => void
 }) {
@@ -303,6 +304,7 @@ function DependencyRow({
         </span>
       </label>
       <span className="dep-meta">
+        {experimental && 'Experimental, not evaluated yet. '}
         {d.notes.length > 0 ? d.notes.join('; ') : (d.reason ?? plural(d.artifacts.length, 'artifact'))}
         <span className="dep-files">{d.files.join(', ')}</span>
       </span>

@@ -21,6 +21,7 @@ from dep_watch_agent.dependencies import Dependency, dependency_for_project
 from dep_watch_agent.eval.runner import Extractor
 from dep_watch_agent.eval.sampling import EXCLUDED_COMMENT_AUTHORS, JIRA_BROWSE_URL
 from dep_watch_agent.orm import JiraIssueRow
+from dep_watch_agent.systems import SystemFactory
 from dep_watch_agent.verdict import NOT_AFFECTED, Decision, Extraction, IssueText, decide
 from dep_watch_agent.versions import VersionScheme
 
@@ -140,27 +141,30 @@ def check_issue(
     key: str,
     version: str,
     system: str | None,
-    extractor: Extractor | None,
+    factory: SystemFactory | None,
     *,
     read: bool = True,
     refresh: bool = False,
 ) -> CheckResult | None:
-    """Decide whether ``version`` is affected by issue ``key``, with ``extractor`` (registered
-    as ``system``). With ``read=False``, None if that would take a model call; with
-    ``refresh``, the issue is read again rather than answered from stored facts. With no
-    extractor, only the fix versions can answer; None if they don't.
+    """Decide whether ``version`` is affected by issue ``key``, with the extractor ``factory``
+    (registered as ``system``) makes for the issue's dependency. With ``read=False``, None if
+    that would take a model call; with ``refresh``, the issue is read again rather than
+    answered from stored facts. With no system, only the fix versions can answer; None if they
+    don't.
 
     Raises ``IssueNotFound``, and ``NotAnswerable`` when the issue's dependency isn't answered
     or ``version`` isn't one of its releases.
     """
     issue = load_issue(session, key)
-    scheme = answerable(issue.project, version).scheme
+    dependency = answerable(issue.project, version)
+    scheme = dependency.scheme
     text = issue_text(issue)
     answered: Answered | None
-    if system is None or extractor is None:
+    if system is None or factory is None:
         by_fixes = decide(text, version, Extraction([]), scheme)
         answered = Answered(by_fixes, FIX_VERSIONS) if by_fixes.answer == NOT_AFFECTED else None
     else:
+        extractor = factory(dependency)
         answered = answer_issue(
             session, issue.id, text, version, scheme, system, extractor, read=read, refresh=refresh
         )

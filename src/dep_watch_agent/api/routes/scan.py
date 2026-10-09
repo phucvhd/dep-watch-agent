@@ -40,7 +40,7 @@ def scan_backlog(
         raise HTTPException(422, str(exc)) from None
     name = pick_system(systems, system) if systems else None
     counts = backlog(
-        session, dependency, version, name, systems[name]() if name else None, since=since
+        session, dependency, version, name, systems[name](dependency) if name else None, since=since
     )
     return ScanBacklog(
         project=project,
@@ -89,7 +89,7 @@ def start_scan(body: ScanRequest, jobs: JobsDep, sessions: SessionsDep, systems:
                 dependency,
                 body.version,
                 name,
-                systems[name](),
+                systems[name](dependency),
                 since=body.since,
                 limit=body.limit,
                 on_issue=progress,

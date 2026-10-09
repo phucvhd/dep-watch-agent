@@ -1,6 +1,7 @@
 import pytest
 from langchain_core.exceptions import OutputParserException
 
+from dep_watch_agent.dependencies import DEPENDENCIES
 from dep_watch_agent.llm.chat import ChatFactModel, LLMConfig
 from dep_watch_agent.llm.extractor import (
     InvalidOutput,
@@ -200,9 +201,16 @@ def test_configured_system_is_named_after_the_model(monkeypatch):
     systems = configured_systems()
 
     assert list(systems) == ["gemma-4-e4b"]
-    extractor = systems["gemma-4-e4b"]()  # builds the client; no request is made
+    kafka, spark, hadoop = DEPENDENCIES[:3]
+    extractor = systems["gemma-4-e4b"](kafka)  # builds the client; no request is made
     assert isinstance(extractor, LLMExtractor)
-    assert systems["gemma-4-e4b"]() is extractor  # one client per process
+    assert systems["gemma-4-e4b"](kafka) is extractor  # one client per dependency and process
+    # Each dependency reads with its adapter's prompt. Kafka's keeps its name, so its stored
+    # extractions stay valid.
+    assert extractor.prompt.name == "extract_facts"
+    assert systems["gemma-4-e4b"](spark).prompt.name == "extract_facts_spark"
+    with pytest.raises(ValueError, match="not supported"):
+        systems["gemma-4-e4b"](hadoop)
 
 
 def test_system_name_override_must_be_a_file_name(monkeypatch):
@@ -225,3 +233,9 @@ def test_extractor_version_changes_with_what_changes_its_output():
     }
     assert len(versions) == 4
     assert LLMExtractor(FakeModel(), prompt=prompt, model_id="m", retries=3).version == base.version
+
+
+@pytest.mark.parametrize("dependency", [d for d in DEPENDENCIES if d.watchable], ids=str)
+def test_every_answered_dependency_has_its_own_prompt(dependency):
+    prompt = load_prompt(dependency.adapter.prompt)
+    assert prompt.text.startswith(f"You read one {dependency.name} JIRA issue")

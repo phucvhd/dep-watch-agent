@@ -24,6 +24,9 @@ class DependencyOut(BaseModel):
     project: str = Field(description="Pass as `project` to /versions, /issues, /scan, /sync/jira")
     tracker_url: str
     watchable: bool = Field(description="Answered for a version; the others are only synced")
+    experimental: bool = Field(
+        description="Answered before it has a ground truth: its answers are not measured yet"
+    )
     added: bool = Field(description="Added as a source: some of its issues have been synced")
 
 

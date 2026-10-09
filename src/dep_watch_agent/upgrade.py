@@ -144,7 +144,7 @@ def diagnose(
     current, target = scheme.parse(from_version), scheme.parse(to_version)
     low, high = sorted((current, target))
     issues = session.scalars(
-        candidates_query(dependency.project, None)
+        candidates_query(dependency, None)
         .order_by(JiraIssueRow.updated_at.desc(), JiraIssueRow.id.desc())
         .options(
             selectinload(JiraIssueRow.versions),

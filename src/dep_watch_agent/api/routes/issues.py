@@ -136,7 +136,7 @@ def check(body: CheckRequest, session: SessionDep, systems: SystemsDep) -> Check
     name = pick_system(systems, body.system)
     try:
         result = check_issue(
-            session, body.issue_key, body.version, name, systems[name](), refresh=body.refresh
+            session, body.issue_key, body.version, name, systems[name], refresh=body.refresh
         )
     except IssueNotFound:
         raise HTTPException(404, f"issue {body.issue_key} not synced") from None
@@ -161,9 +161,7 @@ def stored_answer(
     reads the issue."""
     name = pick_system(systems, system) if systems else None
     try:
-        result = check_issue(
-            session, key, version, name, systems[name]() if name else None, read=False
-        )
+        result = check_issue(session, key, version, name, systems.get(name or ""), read=False)
     except IssueNotFound:
         raise HTTPException(404, f"issue {key} not synced") from None
     except NotAnswerable as exc:
@@ -185,11 +183,11 @@ def stored_answers(
     versions or stored facts, never by calling the model. An issue that isn't synced is
     returned unanswered."""
     name = pick_system(systems, system) if systems else None
-    extractor = systems[name]() if name else None
+    factory = systems.get(name or "")
     items = []
     for issue_key in key:
         try:
-            result = check_issue(session, issue_key, version, name, extractor, read=False)
+            result = check_issue(session, issue_key, version, name, factory, read=False)
         except IssueNotFound:
             result = None
         except NotAnswerable as exc:

@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { api, type Answer, type Dependency, type Job, type ScanResponse } from '../api/client'
 import { IssueDetail, IssueRow } from '../components/IssueResult'
 import { RulerKey } from '../components/VersionRuler'
-import { ErrorNote, JobLine, StepHead } from '../components/common'
+import { ErrorNote, ExperimentalNote, JobLine, StepHead } from '../components/common'
 import { ANSWER_TEXT, dayStart, plural } from '../format'
 import { isActive, message, useJob } from '../hooks'
 
@@ -82,6 +82,7 @@ export function Alerts({
             {running ? 'Scanning…' : 'Scan'}
           </button>
         </form>
+        <ExperimentalNote dependency={dependency} />
         {systems.length === 0 && (
           <ErrorNote>No model is configured. Set DEP_WATCH_LLM_MODEL and restart the API.</ErrorNote>
         )}

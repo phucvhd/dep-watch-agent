@@ -460,3 +460,37 @@ def test_backports_follow_the_scheme_line():
     # A 0.9.1 fix covers 0.9.2 on Spark's 0.9 line; on Kafka's scheme 0.9.2 is another line.
     assert in_affected_range("0.9.2", [], ["0.9.1", "1.0.0"], THREE_PART) is NOT_AFFECTED
     assert in_affected_range("0.9.2", [], ["0.9.1", "1.0.0"], KAFKA) is UNKNOWN
+
+
+# --- Spark (three-part) --------------------------------------------------------------------
+
+# Release names as Spark's JIRA has them (all 126 checked on 2026-10-08), and the products
+# with their own releases in the same tracker.
+SPARK_RELEASES = ["0.5.0", "0.9.1", "1.6.3", "2.4.8", "3.5.1", "4.0.0", "5.0.0"]
+SPARK_SUBPROJECT_VERSIONS = [
+    "kubernetes-operator-1.0.0",
+    "connect-swift-0.8.0",
+    "connect-rust-4.2.0",
+    "connect-gateway-0.1.0",
+]
+
+
+@pytest.mark.parametrize("name", SPARK_RELEASES)
+def test_spark_release_names_are_releases(name):
+    assert THREE_PART.is_release(name)
+
+
+@pytest.mark.parametrize("name", SPARK_SUBPROJECT_VERSIONS)
+def test_spark_subproject_versions_are_not_spark_releases(name):
+    assert not THREE_PART.is_release(name)
+    with pytest.raises(VersionParseError):
+        parse_version(name, THREE_PART)
+
+
+def test_spark_previews_sort_before_release_candidates():
+    names = ["3.5.4", "4.0.0-preview1", "4.0.0-preview2", "4.0.0-rc1", "4.0.0", "4.0.1"]
+    parsed = [parse_version(n, THREE_PART) for n in names]
+    assert parsed == sorted(parsed)
+    assert parse_version("2.0.0-preview", THREE_PART).pre == ("preview", 0)
+    assert THREE_PART.is_release("4.0.0-preview2")  # a pre-release, still not a line
+    assert parse_version("4.0.0-preview2", THREE_PART).line == (4, 0)

@@ -10,8 +10,9 @@ names its own (``dependencies.py``). Every scheme shares the rest:
 - Shorter forms are padded with zeros, so ``3.7 == 3.7.0``. A padded form names a release
   line, not a release (``VersionScheme.is_release``).
 - The last part is the patch: ``3.7.1`` is patch 1 of the ``3.7`` release line.
-- Optional pre-release tag: ``3.7.0-rc1``, ``3.7.0-SNAPSHOT``. A pre-release sorts before
-  its release: ``3.6.2 < 3.7.0-rc0 < 3.7.0-rc1 < 3.7.0``.
+- Optional pre-release tag: ``3.7.0-rc1``, ``3.7.0-SNAPSHOT``, Spark's ``4.0.0-preview2``. A
+  pre-release sorts before its release: ``3.6.2 < 3.7.0-rc0 < 3.7.0-rc1 < 3.7.0``, and a
+  preview before the release candidates: ``4.0.0-preview2 < 4.0.0-rc1``.
 
 Kafka's scheme (``KAFKA``): four parts before 1.0 (``0.10.2.1`` is patch 1 of the ``0.10.2``
 line), three from 1.0 on. Its first releases were written shorter, and JIRA keeps those names:
@@ -30,12 +31,12 @@ from enum import StrEnum
 from functools import total_ordering
 
 # Lowest to highest. A final release ranks above every pre-release tag.
-_PRE_RELEASE_RANK = {"snapshot": 0, "alpha": 1, "beta": 2, "rc": 3}
+_PRE_RELEASE_RANK = {"snapshot": 0, "alpha": 1, "beta": 2, "preview": 3, "rc": 4}
 _RELEASE_RANK = len(_PRE_RELEASE_RANK)
 
 _VERSION_RE = re.compile(
     r"v?(?P<release>\d+(?:\.\d+)+)"
-    r"(?:[-.]?(?P<tag>alpha|beta|rc|snapshot)(?:[-.]?(?P<num>\d+))?)?",
+    r"(?:[-.]?(?P<tag>alpha|beta|preview|rc|snapshot)(?:[-.]?(?P<num>\d+))?)?",
     re.IGNORECASE,
 )
 

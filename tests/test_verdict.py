@@ -11,7 +11,7 @@ from dep_watch_agent.verdict import (
     quote_in_issue,
     version_in_quote,
 )
-from dep_watch_agent.versions import KAFKA
+from dep_watch_agent.versions import KAFKA, THREE_PART
 
 ISSUE = IssueText(
     summary="Consumer hangs after rebalance",
@@ -254,3 +254,11 @@ def test_early_kafka_fix_versions_count():
     assert decide(issue, "0.8.1.1", Extraction([]), KAFKA).answer == NOT_AFFECTED
     seen = Extraction([Evidence("0.8.0", "affects", "Seen on 0.8.0.")])
     assert decide(issue, "0.8.0", seen, KAFKA).answer == AFFECTED
+
+
+def test_a_subproject_fix_version_does_not_settle_spark():
+    # Spark's JIRA lists the Kubernetes Operator's releases too: its 1.0.0 is not Spark's.
+    issue = IssueText(summary="s", description="d", fix_versions=["kubernetes-operator-1.0.0"])
+    assert decide(issue, "3.5.1", Extraction([]), THREE_PART).answer == INSUFFICIENT_INFORMATION
+    fixed = IssueText(summary="s", description="d", fix_versions=["3.5.2", "connect-rust-4.2.0"])
+    assert decide(fixed, "3.5.2", Extraction([]), THREE_PART).answer == NOT_AFFECTED

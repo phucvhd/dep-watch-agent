@@ -9,7 +9,14 @@ import {
 } from '../api/client'
 import { AnswerBody } from '../components/IssueResult'
 import { RulerKey } from '../components/VersionRuler'
-import { ErrorNote, Fields, JobLine, PageIntro, type Tone } from '../components/common'
+import {
+  ErrorNote,
+  ExperimentalNote,
+  Fields,
+  JobLine,
+  PageIntro,
+  type Tone,
+} from '../components/common'
 import { ANSWER_TEXT, plural } from '../format'
 import { isActive, message, useJob, useLoad, type WatchItem } from '../hooks'
 
@@ -173,13 +180,14 @@ function UpgradeForm({
             value={dependency.id}
             onChange={(e) => {
               setDependencyId(e.target.value)
-              setFrom('') // another dependency's releases
+              // Another dependency's releases: from the version you run of it, if watched.
+              setFrom(items.find((i) => i.dependency === e.target.value)?.version ?? '')
               setTo('')
             }}
           >
             {watchable.map((d) => (
               <option key={d.id} value={d.id}>
-                {d.name}
+                {d.experimental ? `${d.name} (experimental)` : d.name}
               </option>
             ))}
             {unsupported.length > 0 && (
@@ -229,6 +237,7 @@ function UpgradeForm({
           {running ? 'Diagnosing…' : 'Diagnose'}
         </button>
       </form>
+      <ExperimentalNote dependency={dependency} />
       <ErrorNote>{error ?? versions.error}</ErrorNote>
     </section>
   )

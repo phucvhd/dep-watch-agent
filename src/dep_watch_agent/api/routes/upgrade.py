@@ -51,7 +51,7 @@ def start_upgrade(body: UpgradeRequest, jobs: JobsDep, sessions: SessionsDep, sy
                 body.from_version,
                 body.to_version,
                 name,
-                systems[name]() if name else None,
+                systems[name](dependency) if name else None,
                 read=body.read,
                 on_issue=progress,
             )

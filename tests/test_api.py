@@ -59,13 +59,17 @@ CPU = raw_issue(
 
 
 class PhraseExtractor:
-    """Cites a fact for each known phrase in the issue text, quoting the field it is in."""
+    """Cites a fact for each known phrase in the issue text, quoting the field it is in. The
+    class is its own system factory: made for a dependency, as a registered system is."""
 
     PHRASES = {
         "Regression in 3.6.0": ("3.6.0", "introduced"),
         "Works fine on 3.5.2": ("3.5.2", "unaffected"),
         "introduced in 3.5.2": ("3.5.2", "introduced"),
     }
+
+    def __init__(self, dependency=None):
+        self.dependency = dependency
 
     def extract(self, issue: IssueText) -> Extraction:
         return Extraction(
@@ -140,8 +144,9 @@ def test_dependencies_are_listed(client):
     catalog = client.get("/dependencies").json()
     kafka, spark, hadoop = catalog[:3]  # the order fixes each source's color
     assert (kafka["id"], kafka["name"], kafka["project"]) == ("kafka", "Apache Kafka", "KAFKA")
-    assert kafka["watchable"]
-    assert (spark["project"], spark["watchable"]) == ("SPARK", False)  # synced, not answered
+    assert (kafka["watchable"], kafka["experimental"]) == (True, False)
+    # Answered without a ground truth yet; Hadoop is synced only.
+    assert (spark["project"], spark["watchable"], spark["experimental"]) == ("SPARK", True, True)
     assert (hadoop["project"], hadoop["watchable"]) == ("HADOOP", False)
     assert {"FLINK", "CASSANDRA"} <= {d["project"] for d in catalog}
     # Only Kafka's issues are in the test database: the rest are in the catalog, not added.
@@ -158,7 +163,10 @@ def test_sources_count_issues_per_dependency(client):
 
 def test_repo_scan_reads_manifests_only(client):
     lockfile = "org.apache.kafka:kafka-clients:3.9.1=runtimeClasspath\n"
-    sbt = '"org.apache.spark" %% "spark-sql" % "3.5.1"\n'
+    sbt = (
+        '"org.apache.spark" %% "spark-sql" % "3.5.1"\n'
+        '"org.apache.hadoop" % "hadoop-aws" % "3.4.1"\n'
+    )
     response = client.post(
         "/repo/scan",
         json={
@@ -172,11 +180,12 @@ def test_repo_scan_reads_manifests_only(client):
     assert response.status_code == 200
     body = response.json()
     assert body["files_read"] == ["gradle.lockfile", "build.sbt"]
-    kafka, spark = body["dependencies"]
+    kafka, spark, hadoop = body["dependencies"]
     assert (kafka["key"], kafka["version"], kafka["watchable"]) == ("kafka", "3.9.1", True)
     assert (kafka["ecosystems"], kafka["notes"]) == (["maven"], [])
-    assert (spark["name"], spark["watchable"], spark["reason"]) == (
-        "Apache Spark",
+    assert (spark["name"], spark["watchable"]) == ("Apache Spark", True)
+    assert (hadoop["name"], hadoop["watchable"], hadoop["reason"]) == (
+        "Apache Hadoop",
         False,
         "Not supported yet",
     )
@@ -431,15 +440,18 @@ def test_upgrade_reads_when_asked(client):
 def test_upgrade_validates_its_request(client, make_client):
     assert upgrade(client, to_version="3.6.0").status_code == 422  # the same version
     assert upgrade(client, to_version="3.9").status_code == 422  # a release line
-    assert upgrade(client, project="SPARK", from_version="3.5.0").status_code == 422
+    assert upgrade(client, project="HADOOP", from_version="3.4.0").status_code == 422
     assert upgrade(make_client(systems={}), read=5).status_code == 503
 
 
 def test_scan_answers_only_watchable_dependencies(client):
-    response = scan(client, project="SPARK", version="3.5.1")
+    response = scan(client, project="HADOOP", version="3.4.1")
     assert response.status_code == 422
     assert "not supported for checks" in response.json()["detail"]
     assert scan(client, project="NOPE").status_code == 422
+    # Spark is answered, experimentally: the scan runs, over no synced Spark issues here.
+    job = wait(client, scan(client, project="SPARK", version="3.5.1").json())
+    assert (job["status"], job["result"]["candidates_total"]) == ("succeeded", 0)
 
 
 def test_scan_validates_its_request(client, make_client):
@@ -696,6 +708,9 @@ def test_stored_answer_never_calls_the_model(make_client):
 
 
 class DownExtractor:
+    def __init__(self, dependency=None):
+        pass
+
     def extract(self, issue):
         raise ConnectionError("Connection error.")
 

@@ -1,7 +1,8 @@
 """Which synced issues affect one pinned version? The alerting flow, end to end.
 
-Tier 1 (SQL, no LLM): bugs whose resolution doesn't say they weren't real, optionally only
-those updated since a date (this week's issues), newest first. Then each issue is answered by
+Tier 1 (SQL, no LLM): bugs whose resolution doesn't say they weren't real, and that aren't only
+a subproject's (``Adapter.subprojects``), optionally only those updated since a date (this
+week's issues), newest first. Then each issue is answered by
 ``check.answer_issue``: code first from the fix versions, the system's cited facts otherwise.
 Every issue gets one of the three answers; one that fails (e.g. the model server is down) is
 reported with its error and answered ``insufficient_information``, so a scan never drops an
@@ -13,7 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, exists, func, not_, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from dep_watch_agent import extractions
@@ -21,7 +22,7 @@ from dep_watch_agent.check import Answered, answer_issue, issue_text, issue_url
 from dep_watch_agent.dependencies import Dependency
 from dep_watch_agent.eval.runner import Extractor
 from dep_watch_agent.extractions import ExtractionFailed
-from dep_watch_agent.orm import JiraIssueRow
+from dep_watch_agent.orm import JiraIssueRow, JiraIssueVersionRow
 from dep_watch_agent.verdict import (
     AFFECTED,
     ANSWERS,
@@ -90,15 +91,29 @@ class ScanResult:
         return sum(item.cached for item in self.items)
 
 
-def candidates_query(project: str, since: datetime | None):
+def candidates_query(dependency: Dependency, since: datetime | None):
     stmt = select(JiraIssueRow).where(
-        JiraIssueRow.project == project,
+        JiraIssueRow.project == dependency.project,
         JiraIssueRow.issue_type.in_(BUG_TYPES),
         or_(
             JiraIssueRow.resolution.is_(None),
             JiraIssueRow.resolution.not_in(NOT_A_BUG_RESOLUTIONS),
         ),
     )
+    subprojects = dependency.adapter.subprojects if dependency.adapter else ()
+    if subprojects:
+        # Versions, and none of them the dependency's own: another product's bug. An issue
+        # without versions stays (unreleased fixes, open bugs).
+        of_issue = JiraIssueVersionRow.issue_id == JiraIssueRow.id
+        theirs = or_(*(JiraIssueVersionRow.name.startswith(p) for p in subprojects))
+        stmt = stmt.where(
+            not_(
+                and_(
+                    exists().where(of_issue, theirs),
+                    ~exists().where(of_issue, not_(theirs)),
+                )
+            )
+        )
     if since is not None:
         stmt = stmt.where(JiraIssueRow.updated_at >= since)
     return stmt
@@ -117,7 +132,7 @@ def scan_version(
 ) -> ScanResult:
     """Answer every candidate issue of ``dependency`` (newest first, at most ``limit``) for
     ``version``, which must already be validated (``check.answerable``)."""
-    stmt = candidates_query(dependency.project, since)
+    stmt = candidates_query(dependency, since)
     total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     issues = session.scalars(
         stmt.order_by(JiraIssueRow.updated_at.desc(), JiraIssueRow.id.desc())
@@ -192,7 +207,7 @@ def backlog(
     versions settle, those with stored facts, and the rest, which would each take a model call.
     ``version`` must already be validated (``check.answerable``)."""
     issues = session.scalars(
-        candidates_query(dependency.project, since).options(
+        candidates_query(dependency, since).options(
             selectinload(JiraIssueRow.versions), selectinload(JiraIssueRow.comments)
         )
     ).all()

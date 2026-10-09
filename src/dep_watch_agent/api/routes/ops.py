@@ -47,6 +47,7 @@ def list_dependencies(session: SessionDep) -> list[DependencyOut]:
             project=d.project,
             tracker_url=d.tracker_url,
             watchable=d.watchable,
+            experimental=d.experimental,
             added=d.project in added,
         )
         for d in DEPENDENCIES

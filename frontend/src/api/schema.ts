@@ -757,6 +757,11 @@ export interface components {
              */
             watchable: boolean;
             /**
+             * Experimental
+             * @description Answered before it has a ground truth: its answers are not measured yet
+             */
+            experimental: boolean;
+            /**
              * Added
              * @description Added as a source: some of its issues have been synced
              */

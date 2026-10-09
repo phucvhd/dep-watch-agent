@@ -32,7 +32,10 @@ from dep_watch_agent.api.schemas import (
     SampleResponse,
     UploadResponse,
 )
+from dep_watch_agent.dependencies import DEPENDENCIES
 from dep_watch_agent.eval import dataset as ds
+
+EVAL_DEPENDENCY = next(d for d in DEPENDENCIES if d.id == "kafka")  # the ground truth is Kafka's
 
 router = APIRouter(prefix="/eval", tags=["eval"])
 
@@ -134,7 +137,7 @@ def start_run(
         from dep_watch_agent.eval.metrics import compute_metrics
         from dep_watch_agent.eval.runner import run_langfuse, run_local
 
-        extractor = systems[body.system]()
+        extractor = systems[body.system](EVAL_DEPENDENCY)
 
         if dataset is None:
             client = langfuse()

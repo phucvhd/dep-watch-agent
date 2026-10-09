@@ -1,7 +1,8 @@
 """The systems that can answer checks and be scored by the eval, by name.
 
-A system is a factory for an extractor (``eval.runner.Extractor``): it turns issue text into
-cited version facts, and ``verdict.decide`` makes the decision. Systems are compared with each
+A system is a factory for an extractor (``eval.runner.Extractor``) for a dependency: it turns
+that dependency's issue text into cited version facts, reading with the prompt its adapter
+names, and ``verdict.decide`` makes the decision. Systems are compared with each
 other on the same metrics; there is no fixed baseline. ``POST /check`` and ``POST /scan`` use
 the first one registered.
 
@@ -14,9 +15,11 @@ import re
 from collections.abc import Callable
 from functools import cache
 
+from dep_watch_agent.dependencies import Dependency
 from dep_watch_agent.eval.runner import Extractor
 
-SystemRegistry = dict[str, Callable[[], Extractor]]
+SystemFactory = Callable[[Dependency], Extractor]
+SystemRegistry = dict[str, SystemFactory]
 
 SYSTEM_NAME_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
@@ -36,12 +39,14 @@ def configured_systems() -> SystemRegistry:
     if not SYSTEM_NAME_PATTERN.match(name):
         raise ValueError(f"DEP_WATCH_LLM_SYSTEM {name!r} must match {SYSTEM_NAME_PATTERN.pattern}")
 
-    @cache  # one client per process; the extractor is stateless between issues
-    def factory() -> Extractor:
+    @cache  # one client per dependency and process; the extractor is stateless between issues
+    def factory(dependency: Dependency) -> Extractor:
         from dep_watch_agent.llm.chat import ChatFactModel
         from dep_watch_agent.llm.extractor import LLMExtractor, load_prompt
 
-        prompt = load_prompt()
+        if dependency.adapter is None:
+            raise ValueError(f"{dependency.name} is synced but not supported for checks")
+        prompt = load_prompt(dependency.adapter.prompt)
         return LLMExtractor(
             ChatFactModel(config, prompt=prompt),
             prompt=prompt,

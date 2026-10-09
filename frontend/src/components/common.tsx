@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { Job } from '../api/client'
+import type { Dependency, Job } from '../api/client'
 import { formatAgo, formatDate } from '../format'
 
 export function ErrorNote({ children }: { children: ReactNode }) {
@@ -12,6 +12,17 @@ export function ErrorNote({ children }: { children: ReactNode }) {
 }
 
 /** A running background job, described in words the page chooses. */
+/** For a dependency answered before it has a ground truth: its answers aren't measured. */
+export function ExperimentalNote({ dependency }: { dependency: Dependency }) {
+  if (!dependency.experimental) return null
+  return (
+    <p className="note">
+      {dependency.name} is experimental: its answers aren't measured against a ground truth yet.
+      Read the cited facts before relying on one.
+    </p>
+  )
+}
+
 export function JobLine({ job, describe }: { job: Job; describe: (job: Job) => string }) {
   if (job.status === 'failed') {
     return (
