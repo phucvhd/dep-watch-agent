@@ -21,14 +21,16 @@ type Stage =
   | { step: 'reading'; found?: number; total?: number }
   | { step: 'finding'; files: number }
 
-const ECOSYSTEMS: [DetectedDependency['ecosystem'], string][] = [
+type Ecosystem = DetectedDependency['ecosystems'][number]
+
+const ECOSYSTEMS: [Ecosystem, string][] = [
   ['maven', 'Java and Scala libraries'],
   ['pypi', 'Python packages'],
   ['npm', 'npm packages'],
   ['image', 'Container images'],
 ]
 
-const ECOSYSTEM_TAG: Record<DetectedDependency['ecosystem'], string> = {
+const ECOSYSTEM_TAG: Record<Ecosystem, string> = {
   maven: 'Maven',
   pypi: 'PyPI',
   npm: 'npm',
@@ -203,7 +205,7 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
                 </ul>
               )}
               {ECOSYSTEMS.map(([ecosystem, label]) => {
-                const rows = others.filter((d) => d.ecosystem === ecosystem)
+                const rows = others.filter((d) => d.ecosystems.includes(ecosystem))
                 if (rows.length === 0) return null
                 return (
                   <details key={ecosystem} className="dep-others">
@@ -292,7 +294,13 @@ function DependencyRow({
       <label htmlFor={id}>
         <span className="dep-name">{d.name}</span>
         <span className="dep-version">{d.version ?? 'Version unknown'}</span>
-        <span className="dep-tag">{ECOSYSTEM_TAG[d.ecosystem]}</span>
+        <span className="dep-tags">
+          {d.ecosystems.map((ecosystem) => (
+            <span key={ecosystem} className="dep-tag">
+              {ECOSYSTEM_TAG[ecosystem]}
+            </span>
+          ))}
+        </span>
       </label>
       <span className="dep-meta">
         {d.notes.length > 0 ? d.notes.join('; ') : (d.reason ?? plural(d.artifacts.length, 'artifact'))}

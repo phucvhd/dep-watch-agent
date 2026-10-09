@@ -46,7 +46,9 @@ class DetectedDependencyOut(BaseModel):
     name: str
     version: str | None = Field(description="None when the manifests don't resolve it")
     family: str | None = Field(description="A known family id, e.g. kafka or spark")
-    ecosystem: Literal["maven", "pypi", "npm", "image"]
+    ecosystems: list[Literal["maven", "pypi", "npm", "image"]] = Field(
+        description="Where the manifests declare it, e.g. a library and a container image"
+    )
     watchable: bool = Field(description="Supported and at a known release: can be watched")
     reason: str | None = Field(description="Why it can't be watched")
     artifacts: list[str]

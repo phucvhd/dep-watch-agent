@@ -66,7 +66,7 @@ export function Upgrade({ dependencies, items, systems }: Props) {
       ) : (
         <UpgradeForm
           key={`form/${job?.id ?? 'new'}`} // starts from the last diagnosis once it loads
-          dependencies={watchable}
+          dependencies={dependencies.filter((d) => d.added || d.watchable)}
           items={items}
           systems={systems}
           lastParams={job?.params}
@@ -99,23 +99,25 @@ function UpgradeForm({
   running,
   onStarted,
 }: {
-  dependencies: Dependency[]
+  dependencies: Dependency[] // the added sources; only the watchable ones can be picked
   items: WatchItem[]
   systems: string[]
   lastParams?: Record<string, unknown>
   running: boolean
   onStarted: (id: string) => void
 }) {
-  const watched = items.find((i) => dependencies.some((d) => d.id === i.dependency))
+  const watchable = dependencies.filter((d) => d.watchable)
+  const unsupported = dependencies.filter((d) => !d.watchable) // synced only: shown, not picked
+  const watched = items.find((i) => watchable.some((d) => d.id === i.dependency))
   // Start from the last diagnosis, else the watched version.
   const str = (key: string) =>
     typeof lastParams?.[key] === 'string' ? (lastParams[key] as string) : undefined
   const [dependencyId, setDependencyId] = useState(
-    dependencies.find((d) => d.project === str('project'))?.id ??
+    watchable.find((d) => d.project === str('project'))?.id ??
       watched?.dependency ??
-      dependencies[0].id,
+      watchable[0].id,
   )
-  const dependency = dependencies.find((d) => d.id === dependencyId) ?? dependencies[0]
+  const dependency = watchable.find((d) => d.id === dependencyId) ?? watchable[0]
   const versions = useLoad(() => api.versions(dependency.project), [dependency.project])
   // Release names only (the API orders them, oldest first); the UI never compares versions.
   const releases = useMemo(
@@ -165,18 +167,32 @@ function UpgradeForm({
         Compare two versions
       </h2>
       <form className="toolbar upgrade-form" onSubmit={submit}>
-        {dependencies.length > 1 && (
-          <label>
-            <span>Dependency</span>
-            <select value={dependency.id} onChange={(e) => setDependencyId(e.target.value)}>
-              {dependencies.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+        <label>
+          <span>Dependency</span>
+          <select
+            value={dependency.id}
+            onChange={(e) => {
+              setDependencyId(e.target.value)
+              setFrom('') // another dependency's releases
+              setTo('')
+            }}
+          >
+            {watchable.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+            {unsupported.length > 0 && (
+              <optgroup label="Not supported yet">
+                {unsupported.map((d) => (
+                  <option key={d.id} value={d.id} disabled>
+                    {d.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        </label>
         <label>
           <span>From</span>
           <select value={fromVersion} onChange={(e) => setFrom(e.target.value)}>
