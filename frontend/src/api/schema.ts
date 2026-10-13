@@ -800,6 +800,11 @@ export interface components {
             reason: string | null;
             /** Artifacts */
             artifacts: string[];
+            /**
+             * References
+             * @description Each declaration as its file writes it, e.g. confluentinc/cp-kafka:7.8.0 for Kafka 3.8.0: what to search the repository for
+             */
+            references: string[];
             /** Files */
             files: string[];
             /**

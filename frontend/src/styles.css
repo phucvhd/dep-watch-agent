@@ -406,6 +406,10 @@ button:disabled {
   font-size: 14px;
 }
 
+.repo-deps .watch-name {
+  white-space: nowrap;
+}
+
 .watch-version {
   font-size: 34px;
   line-height: 1.05;
@@ -2025,6 +2029,52 @@ button.btn-sm {
   flex-wrap: wrap;
 }
 
+/* How the repository declares each watched version, folded under the cards. */
+.watch-details {
+  flex-basis: 100%;
+  border-top: 1px solid var(--line);
+}
+
+.watch-details > summary {
+  cursor: pointer;
+  padding: 14px 0 2px;
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.watch-details .dep {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.watch-details .dep:last-child {
+  border-bottom: 0;
+}
+
+.watch-details .dep-meta {
+  gap: 6px;
+}
+
+.watch-list {
+  margin: 0;
+  padding-left: 18px;
+  list-style: disc; /* .dep-list's none is inherited */
+}
+
+.watch-list code {
+  font-family: var(--mono);
+  font-size: 13px;
+  overflow-wrap: anywhere; /* a long image reference wraps on a phone */
+}
+
+.dep-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+}
+
 .repo-summary-label {
   margin: 0;
   font-size: 13px;
@@ -2040,6 +2090,7 @@ button.btn-sm {
 .repo-deps {
   list-style: none;
   display: flex;
+  flex-wrap: wrap; /* the cards move to the next row before their text breaks */
   gap: 8px;
   margin: 0;
   padding: 0;
@@ -2674,6 +2725,13 @@ button.btn-sm {
   }
   .dep-meta {
     grid-column: 2;
+  }
+  .watch-details .dep {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .watch-details .dep-meta {
+    grid-column: 1;
   }
 }
 

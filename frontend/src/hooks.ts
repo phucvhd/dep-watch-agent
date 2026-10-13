@@ -75,7 +75,10 @@ const WATCH_KEY = 'dep-watch.watch.v2'
 export interface WatchItem {
   dependency: string // a dependency id from GET /dependencies
   version: string
-  files?: string[] // the build files it was found in, if it came from a repository scan
+  // From a repository scan: the build files it was found in, and each declaration as its file
+  // writes it (confluentinc/cp-kafka:7.8.0, org.apache.kafka:kafka-clients:3.9.1).
+  files?: string[]
+  references?: string[]
 }
 
 export interface WatchState {

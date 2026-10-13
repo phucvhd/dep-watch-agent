@@ -55,6 +55,10 @@ class DetectedDependencyOut(BaseModel):
     watchable: bool = Field(description="Supported and at a known release: can be watched")
     reason: str | None = Field(description="Why it can't be watched")
     artifacts: list[str]
+    references: list[str] = Field(
+        description="Each declaration as its file writes it, e.g. confluentinc/cp-kafka:7.8.0 "
+        "for Kafka 3.8.0: what to search the repository for"
+    )
     files: list[str]
     notes: list[str] = Field(description="How a version was read, e.g. from a Confluent image")
 

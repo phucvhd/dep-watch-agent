@@ -68,6 +68,9 @@ export function ScanFlow(props: Props) {
             ))}
           </ul>
           <button onClick={() => setEditing(true)}>Change</button>
+          {items.some((item) => item.references?.length) && (
+            <WatchDetails items={items} nameOf={nameOf} />
+          )}
         </section>
       )}
 
@@ -103,5 +106,36 @@ export function ScanFlow(props: Props) {
         </>
       )}
     </div>
+  )
+}
+
+/** How the repository declares each watched version, folded: two versions of one dependency
+ * look alike on their cards. Written as in the build files, so a search finds them. */
+function WatchDetails({ items, nameOf }: { items: WatchItem[]; nameOf: (id: string) => string }) {
+  return (
+    <details className="watch-details">
+      <summary>Details</summary>
+      <ul className="dep-list dep-list-compact">
+        {items.map((item) => (
+          <li key={`${item.dependency}@${item.version}`} className="dep">
+            <span className="dep-label">
+              <span className="dep-name">{nameOf(item.dependency)}</span>
+              <span className="dep-version">{item.version}</span>
+            </span>
+            <div className="dep-meta">
+              {item.references && item.references.length > 0 && (
+                <ul className="watch-list">
+                  {item.references.map((reference) => (
+                    <li key={reference}>
+                      <code>{reference}</code>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </details>
   )
 }

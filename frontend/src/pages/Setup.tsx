@@ -117,7 +117,12 @@ export function Setup({ dependencies, repo: watchedRepo, current, nameOf, onWatc
   function watch() {
     onWatch(
       repo ?? null,
-      selected.map((d) => ({ dependency: d.family!, version: d.version!, files: d.files })),
+      selected.map((d) => ({
+        dependency: d.family!,
+        version: d.version!,
+        files: d.files,
+        references: d.references,
+      })),
     )
   }
 
