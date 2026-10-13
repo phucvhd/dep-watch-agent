@@ -612,6 +612,25 @@ main {
   color: var(--ink);
 }
 
+.failed-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.failed-note p {
+  margin: 0;
+}
+
+.row-failed {
+  color: var(--hit-text);
+}
+
+.detail-actions {
+  margin-top: 20px;
+}
+
 .job-line {
   display: flex;
   align-items: center;
