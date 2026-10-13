@@ -23,7 +23,7 @@ import re
 import tomllib
 import xml.etree.ElementTree as ET
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import PurePosixPath
 
 from dep_watch_agent.dependencies import Family, family_for, family_for_image
@@ -48,10 +48,25 @@ class Declared:
     version: str | None  # None when the declared version couldn't be resolved
     file: str
     note: str | None = None  # how the version was read, when not as written
+    written: str | None = None  # the declaration's text, when the file writes it another way
 
     @property
     def coordinate(self) -> str:
         return f"{self.group}:{self.artifact}"
+
+    @property
+    def reference(self) -> str:
+        """The declaration as its file writes it, so a search of the repository finds it:
+        ``confluentinc/cp-kafka:7.8.0`` (read as Kafka 3.8.0), ``pyspark==3.5.1``, or the Maven
+        coordinate with its resolved version, ``org.apache.kafka:kafka-clients:3.9.1``."""
+        if self.written:
+            return self.written
+        if self.version is None:
+            return self.artifact if self.ecosystem != "maven" else self.coordinate
+        separator = {"image": ":", "pypi": "==", "npm": "@"}.get(self.ecosystem)
+        if separator:
+            return f"{self.artifact}{separator}{self.version}"
+        return f"{self.coordinate}:{self.version}"
 
     @property
     def ecosystem(self) -> str:
@@ -74,6 +89,7 @@ class Detected:
     watchable: bool
     reason: str | None  # why it can't be watched, if it can't
     artifacts: list[str] = field(default_factory=list)
+    references: list[str] = field(default_factory=list)  # each declaration, as written
     files: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 
@@ -137,6 +153,8 @@ def detect(files: Iterable[ManifestFile]) -> list[Detected]:
             entry.ecosystems.sort(key=ECOSYSTEM_ORDER.index)
         if d.coordinate not in entry.artifacts:
             entry.artifacts.append(d.coordinate)
+        if d.reference not in entry.references:
+            entry.references.append(d.reference)
         if d.file not in entry.files:
             entry.files.append(d.file)
         if d.note and d.note not in entry.notes:
@@ -343,10 +361,12 @@ def _gradle_build(f: ManifestFile, props: dict[str, str]) -> list[Declared]:
         return None if "$" in resolved else _pinned(resolved)
 
     found = []
-    for group, artifact, version in _GRADLE_COORD.findall(f.content) + _GRADLE_MAP.findall(
-        f.content
-    ):
-        found.append(Declared(group, artifact, resolve(version), f.path))
+    # As written: the string without its quotes ("g:a:${v}"), or the whole map notation.
+    coordinates = [(m, m[0][1:-1]) for m in _GRADLE_COORD.finditer(f.content)]
+    maps = [(m, m[0]) for m in _GRADLE_MAP.finditer(f.content)]
+    for match, written in coordinates + maps:
+        group, artifact, version = match.groups()
+        found.append(Declared(group, artifact, resolve(version), f.path, written=written))
     return found
 
 
@@ -394,10 +414,12 @@ _SBT_VAL = re.compile(r"""\bval\s+(\w+)\s*=\s*"([^"]+)\"""")
 
 def _sbt(f: ManifestFile) -> list[Declared]:
     values = dict(_SBT_VAL.findall(f.content))
-    return [
-        Declared(group, artifact, _pinned(literal or values.get(name)), f.path)
-        for group, artifact, literal, name in _SBT_DEP.findall(f.content)
-    ]
+    found = []
+    for match in _SBT_DEP.finditer(f.content):
+        group, artifact, literal, name = match.groups()
+        version = _pinned(literal or values.get(name))
+        found.append(Declared(group, artifact, version, f.path, written=match[0]))
+    return found
 
 
 def _cyclonedx(f: ManifestFile) -> list[Declared]:
@@ -428,17 +450,18 @@ def _image(reference: str, file: str) -> Declared | None:
     """``registry/name:tag`` as a dependency on the image ``name`` at ``tag``."""
     if "$" in reference or reference == "scratch":
         return None
+    written = reference
     reference = reference.split("@", 1)[0]  # a digest pins bytes, not a version
     name, _, tag = (
         reference.rpartition(":") if ":" in reference.split("/")[-1] else (reference, "", "")
     )
     name = name.removeprefix("docker.io/").removeprefix("library/")
     if name in CONFLUENT_KAFKA_IMAGES:
-        return _confluent_kafka(name, tag, file)
+        return replace(_confluent_kafka(name, tag, file), written=written)
     if family_for_image(name):
         match = _LEADING_VERSION.match(tag)  # bitnami tags look like 3.9.1-debian-12-r0
-        return Declared("image", name, match.group(1) if match else None, file)
-    return Declared("image", name, tag or "latest", file)
+        return Declared("image", name, match.group(1) if match else None, file, written=written)
+    return Declared("image", name, tag or "latest", file, written=written)
 
 
 def _confluent_kafka(name: str, tag: str, file: str) -> Declared:
@@ -496,7 +519,8 @@ def _requirement(spec: str, file: str) -> Declared | None:
     if not match:
         return None
     version = match[3] if match[2] and "*" not in (match[3] or "") else None
-    return Declared("pypi", pypi_name(match[1]), version, file)
+    written = spec.split(";", 1)[0].strip()  # without its environment markers
+    return Declared("pypi", pypi_name(match[1]), version, file, written=written)
 
 
 def _requirements(f: ManifestFile) -> list[Declared]:

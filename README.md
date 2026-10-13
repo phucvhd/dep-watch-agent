@@ -33,7 +33,7 @@ versions badly (`3.10.0` vs `3.9.0`) and guesses when the text doesn't say.
 ## Run locally
 
 Requires [uv](https://docs.astral.sh/uv/), Docker, Node.js, and an OpenAI-compatible model
-server (e.g. [LM Studio](https://lmstudio.ai/) serving `google/gemma-4-e4b` on
+server (e.g. [LM Studio](https://lmstudio.ai/) serving `qwen/qwen3-4b-2507` on
 `http://localhost:1234/v1`).
 
 ```bash
@@ -176,10 +176,10 @@ The system that reads issue text is an open model behind an OpenAI-compatible se
 Studio, load a model, start its server (default `http://localhost:1234/v1`) and set in `.env`:
 
 ```bash
-DEP_WATCH_LLM_MODEL=google/gemma-4-e4b   # the model id the server lists at /v1/models
+DEP_WATCH_LLM_MODEL=qwen/qwen3-4b-2507   # the model id the server lists at /v1/models
 ```
 
-It is registered as `gemma-4-e4b` (override with `DEP_WATCH_LLM_SYSTEM`). Without a model,
+It is registered as `qwen3-4b-2507` (override with `DEP_WATCH_LLM_SYSTEM`). Without a model,
 `/check` and `/scan` return 503. The prompt is `src/dep_watch_agent/llm/prompts/extract_facts.md`.
 The model answers in text and the JSON is parsed out of it: reasoning models such as gemma-4
 skip their thinking under schema-constrained decoding and then find no facts at all

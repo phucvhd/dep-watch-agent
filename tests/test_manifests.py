@@ -458,3 +458,63 @@ FROM scratch
     assert ("image:node", "20-alpine") in detected
     assert ("image:redis", "latest") in detected  # a digest is not a version
     assert not any(k.startswith("image:${") or k == "image:build" for k, _ in detected)
+
+
+def test_references_are_written_as_their_files_write_them():
+    compose = (
+        "services:\n"
+        "  a:\n    image: confluentinc/cp-kafka:7.8.0\n"
+        "  b:\n    image: docker.io/bitnami/kafka:3.9.1-debian-12-r0\n"
+    )
+    pom = """<project><properties><kafka.version>3.9.1</kafka.version></properties>
+<dependencies><dependency>
+  <groupId>org.apache.kafka</groupId><artifactId>kafka-clients</artifactId>
+  <version>${kafka.version}</version>
+</dependency></dependencies></project>"""
+    detected = {
+        (d.key, d.version): d.references
+        for d in detect(
+            [
+                f("docker-compose.yml", compose),
+                f("pom.xml", pom),
+                f("requirements.txt", "PySpark==3.5.1 ; python_version >= '3.9'\n"),
+                f("package.json", '{"dependencies": {"kafkajs": "2.2.4"}}'),
+            ]
+        )
+    }
+    # Searchable as written: the Confluent tag, not the Kafka release it is read as.
+    assert detected[("kafka", "3.8.0")] == ["confluentinc/cp-kafka:7.8.0"]
+    assert detected[("kafka", "3.9.1")] == [
+        "docker.io/bitnami/kafka:3.9.1-debian-12-r0",
+        "org.apache.kafka:kafka-clients:3.9.1",  # a pom names no coordinate: its resolved one
+    ]
+    assert detected[("spark", "3.5.1")] == ["PySpark==3.5.1"]  # without the markers
+    assert detected[("npm:kafkajs", "2.2.4")] == ["kafkajs@2.2.4"]
+
+
+def test_jvm_build_references_are_their_text():
+    sbt = 'val sparkVersion = "3.5.1"\n"org.apache.spark" %% "spark-sql" % sparkVersion\n'
+    gradle = """
+dependencies {
+    implementation "org.apache.kafka:kafka-clients:${kafkaVersion}"
+    implementation group: 'org.apache.avro', name: 'avro', version: '1.12.0'
+}
+"""
+    found = declared(
+        [
+            f("build.sbt", sbt),
+            f("gradle.properties", "kafkaVersion=3.9.1\n"),
+            f("build.gradle", gradle),
+        ]
+    )
+    assert {d.coordinate: (d.version, d.reference) for d in found} == {
+        "org.apache.spark:spark-sql": ("3.5.1", '"org.apache.spark" %% "spark-sql" % sparkVersion'),
+        "org.apache.kafka:kafka-clients": (
+            "3.9.1",
+            "org.apache.kafka:kafka-clients:${kafkaVersion}",
+        ),
+        "org.apache.avro:avro": (
+            "1.12.0",
+            "group: 'org.apache.avro', name: 'avro', version: '1.12.0'",
+        ),
+    }

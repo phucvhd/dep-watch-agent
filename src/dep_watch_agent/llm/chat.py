@@ -11,6 +11,10 @@ Two ways to get JSON (``DEP_WATCH_LLM_OUTPUT``):
   reason before answering.
 
 Either way ``extractor.parse_facts`` validates the shape, and invalid output is retried.
+
+LM Studio answers with whatever model is loaded when the requested one isn't, and its facts would
+be stored under this system's name. ``_answered_by`` refuses such a reply; it is switched off for
+now (see the commented lines in ``ChatFactModel.__init__``).
 """
 
 import os
@@ -54,8 +58,13 @@ class LLMConfig:
             )
 
 
+class WrongModel(RuntimeError):
+    """The server answered with another model than the configured one."""
+
+
 class ChatFactModel:
     def __init__(self, config: LLMConfig, *, prompt: Prompt | None = None):
+        # from langchain_core.runnables import RunnableLambda
         from langchain_openai import ChatOpenAI
 
         chat = ChatOpenAI(
@@ -71,10 +80,16 @@ class ChatFactModel:
             self._runnable = chat.with_structured_output(
                 FACTS_SCHEMA, method="json_schema", strict=True
             )
+            # Refuse a reply from another model (switched off for now):
+            # self._runnable = chat.with_structured_output(
+            #     FACTS_SCHEMA, method="json_schema", strict=True, include_raw=True
+            # ) | RunnableLambda(self._structured)
         else:
             from langchain_core.output_parsers import JsonOutputParser
 
             self._runnable = chat | JsonOutputParser()
+            # Refuse a reply from another model (switched off for now):
+            # self._runnable = chat | RunnableLambda(self._answered_by) | JsonOutputParser()
         self._metadata = {"model": config.model, "output": config.output}
         if prompt is not None:
             self._metadata |= {"prompt": prompt.name, "prompt_version": prompt.version}
@@ -95,6 +110,25 @@ class ChatFactModel:
             )
         except OutputParserException as exc:
             raise InvalidOutput(str(exc)[:500]) from exc
+
+    def _answered_by(self, message: Any) -> Any:
+        """The reply, if the configured model wrote it. A server that doesn't name its model
+        can't be checked."""
+        served = message.response_metadata.get("model_name")
+        if served and served != self.config.model:
+            raise WrongModel(
+                f"asked for {self.config.model!r} but {served!r} answered: load it on the "
+                "server or set DEP_WATCH_LLM_MODEL to the model being served"
+            )
+        return message
+
+    def _structured(self, output: dict[str, Any]) -> Any:
+        from langchain_core.exceptions import OutputParserException
+
+        self._answered_by(output["raw"])
+        if output["parsing_error"] is not None:
+            raise OutputParserException(str(output["parsing_error"]))
+        return output["parsed"]
 
 
 def _langfuse_callbacks() -> list[Any]:

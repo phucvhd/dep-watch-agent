@@ -78,7 +78,11 @@ export function IssueRow({
         onClick={onSelect}
       >
         <span className="row-key">{item.issue_key}</span>
-        <span className="row-state">{state(item)}</span>
+        {item.error ? (
+          <span className="row-state row-failed">Check failed</span>
+        ) : (
+          <span className="row-state">{state(item)}</span>
+        )}
         <span className="row-title">{item.summary}</span>
         <MiniRuler pinned={pinned} evidence={item.evidence} fixVersions={item.fix_versions} />
       </button>
