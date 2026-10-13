@@ -28,7 +28,7 @@ def configured_systems() -> SystemRegistry:
     """The LLM system configured in the environment (see ``llm.chat.LLMConfig``), or none.
 
     Its name is ``DEP_WATCH_LLM_SYSTEM``, by default the model id without its publisher, e.g.
-    ``gemma-4-e4b`` for ``google/gemma-4-e4b``.
+    ``qwen3-4b-2507`` for ``qwen/qwen3-4b-2507``.
     """
     from dep_watch_agent.llm.chat import LLMConfig
 
@@ -57,6 +57,6 @@ def configured_systems() -> SystemRegistry:
 
 
 def system_name(model: str) -> str:
-    """A registry name for a model id: ``google/gemma-4-e4b`` -> ``gemma-4-e4b``."""
+    """A registry name for a model id: ``qwen/qwen3-4b-2507`` -> ``qwen3-4b-2507``."""
     name = re.sub(r"[^A-Za-z0-9._-]+", "-", model.rsplit("/", 1)[-1]).strip("-._")
     return name or "llm"

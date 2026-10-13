@@ -2,7 +2,7 @@ import pytest
 from langchain_core.exceptions import OutputParserException
 
 from dep_watch_agent.dependencies import DEPENDENCIES
-from dep_watch_agent.llm.chat import ChatFactModel, LLMConfig
+from dep_watch_agent.llm.chat import ChatFactModel, LLMConfig, WrongModel
 from dep_watch_agent.llm.extractor import (
     InvalidOutput,
     LLMExtractor,
@@ -176,6 +176,37 @@ def test_text_output_is_parsed_out_of_code_fences(monkeypatch):
         model("system", "user")
 
 
+@pytest.mark.parametrize(
+    ("served", "refused"),
+    [("qwen/qwen3-4b-2507", False), (None, False), ("google/gemma-4-e4b", True)],
+)
+@pytest.mark.parametrize("output", ["text", "json_schema"])
+@pytest.mark.skip(reason="the served-model check is switched off in ChatFactModel")
+def test_a_reply_from_another_model_is_refused(monkeypatch, output, served, refused):
+    # LM Studio answers with the loaded model when the requested one isn't loaded.
+    from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+    from langchain_core.messages import AIMessage
+
+    monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
+    config = LLMConfig(base_url="http://localhost:1/v1", model="qwen/qwen3-4b-2507", output=output)
+    model = ChatFactModel(config)
+    message = AIMessage(
+        '{"evidence": []}', response_metadata={"model_name": served} if served else {}
+    )
+    if output == "text":
+        _, check, parse = model._runnable.steps
+        model._runnable = GenericFakeChatModel(messages=iter([message])) | check | parse
+        call = lambda: model("system", "user")  # noqa: E731
+    else:
+        raw = {"raw": message, "parsed": {"evidence": []}, "parsing_error": None}
+        call = lambda: model._structured(raw)  # noqa: E731
+    if refused:
+        with pytest.raises(WrongModel, match="google/gemma-4-e4b"):
+            call()
+    else:
+        assert call() == {"evidence": []}
+
+
 def test_output_mode_is_checked():
     with pytest.raises(ValueError, match="DEP_WATCH_LLM_OUTPUT"):
         LLMConfig(base_url="u", model="m", output="xml")
@@ -183,7 +214,7 @@ def test_output_mode_is_checked():
 
 @pytest.mark.parametrize(
     ("model", "name"),
-    [("google/gemma-4-e4b", "gemma-4-e4b"), ("qwen2.5:7b", "qwen2.5-7b"), ("///", "llm")],
+    [("qwen/qwen3-4b-2507", "qwen3-4b-2507"), ("qwen2.5:7b", "qwen2.5-7b"), ("///", "llm")],
 )
 def test_system_name(model, name):
     assert system_name(model) == name
@@ -195,22 +226,22 @@ def test_no_model_configured_means_no_system(monkeypatch):
 
 
 def test_configured_system_is_named_after_the_model(monkeypatch):
-    monkeypatch.setenv("DEP_WATCH_LLM_MODEL", "google/gemma-4-e4b")
+    monkeypatch.setenv("DEP_WATCH_LLM_MODEL", "qwen/qwen3-4b-2507")
     monkeypatch.delenv("DEP_WATCH_LLM_SYSTEM", raising=False)
     monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
     systems = configured_systems()
 
-    assert list(systems) == ["gemma-4-e4b"]
+    assert list(systems) == ["qwen3-4b-2507"]
     kafka, spark, hadoop = DEPENDENCIES[:3]
-    extractor = systems["gemma-4-e4b"](kafka)  # builds the client; no request is made
+    extractor = systems["qwen3-4b-2507"](kafka)  # builds the client; no request is made
     assert isinstance(extractor, LLMExtractor)
-    assert systems["gemma-4-e4b"](kafka) is extractor  # one client per dependency and process
+    assert systems["qwen3-4b-2507"](kafka) is extractor  # one client per dependency and process
     # Each dependency reads with its adapter's prompt. Kafka's keeps its name, so its stored
     # extractions stay valid.
     assert extractor.prompt.name == "extract_facts"
-    assert systems["gemma-4-e4b"](spark).prompt.name == "extract_facts_spark"
+    assert systems["qwen3-4b-2507"](spark).prompt.name == "extract_facts_spark"
     with pytest.raises(ValueError, match="not supported"):
-        systems["gemma-4-e4b"](hadoop)
+        systems["qwen3-4b-2507"](hadoop)
 
 
 def test_system_name_override_must_be_a_file_name(monkeypatch):
