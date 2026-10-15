@@ -3,7 +3,7 @@
 // segments, 2px lines with ringed end-dots, hairline solid grid, a legend for two or more
 // series, a tooltip on hover and keyboard focus (values first), and a table view for every
 // chart. Colors are CSS variables validated as a set (see styles.css).
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 export interface Series {
   key: string
@@ -219,6 +219,7 @@ export function ColumnChart({
                 <g
                   key={c}
                   className={active ? 'chart-col is-active' : 'chart-col'}
+                  style={{ '--i': i } as CSSProperties} // its place in the draw-in cascade
                   tabIndex={0}
                   aria-label={`${c}: ${series.map((s) => `${s.label} ${fmt(s.values[i] ?? 0)}`).join(', ')}`}
                   onPointerMove={() => setTip({ index: i, x: cx, y: y(totals[i]) })}
@@ -371,6 +372,7 @@ export function LineChart({
               <g key={s.key}>
                 <polyline
                   className="chart-line"
+                  pathLength={1} // so the trace animation needs no measured length
                   points={s.values.map((v, i) => `${x(i)},${y(v)}`).join(' ')}
                   style={{ stroke: s.color }}
                 />

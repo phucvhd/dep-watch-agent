@@ -35,6 +35,11 @@ export function useTheme() {
   }, [choice])
 
   const choose = useCallback((next: ThemeChoice) => {
+    // Crossfade the whole page into the new colors where the browser can and motion is welcome;
+    // the tokens are applied inside the transition so its snapshot shows the new theme.
+    const fade =
+      'startViewTransition' in document && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (fade) document.startViewTransition(() => apply(next))
     setChoice(next)
     try {
       if (next === 'system') localStorage.removeItem(KEY)

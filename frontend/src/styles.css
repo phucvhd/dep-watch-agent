@@ -61,6 +61,13 @@
   --gutter: 56px;
   --sidebar: 300px;
 
+  /* Motion: short and decelerating, so it settles rather than bounces. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 120ms; /* hover and press */
+  --dur: 220ms; /* a detail swapping in */
+  --dur-slow: 420ms; /* a page or a chart arriving */
+  --stagger: 45ms;
+
   color-scheme: light;
 }
 
@@ -2812,4 +2819,196 @@ sup,
 .row-date,
 .timestamp-ago {
   font-size: 12px;
+}
+
+/* --- motion ------------------------------------------------------------------------- */
+
+/* Color changes fade everywhere: they are not movement, so they stay under reduced motion. */
+button,
+a.button,
+input,
+select,
+.nav a,
+.row,
+.answer-tab,
+.count-tile,
+.legend-swatch {
+  transition:
+    color var(--dur-fast) ease,
+    background-color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    opacity var(--dur-fast) ease;
+}
+
+/* Everything that moves is opt-in: none of it runs for someone who asked for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  /* A press sinks a pixel. */
+  button:active:not(:disabled),
+  a.button:active {
+    transform: translateY(1px);
+  }
+  button,
+  a.button {
+    transition:
+      color var(--dur-fast) ease,
+      background-color var(--dur-fast) ease,
+      border-color var(--dur-fast) ease,
+      opacity var(--dur-fast) ease,
+      transform var(--dur-fast) var(--ease-out);
+  }
+
+  /* The current page's link slides in a little from where the cursor came. */
+  .nav a {
+    transition:
+      color var(--dur-fast) ease,
+      translate var(--dur) var(--ease-out);
+  }
+  .nav a[aria-current='page'] {
+    translate: 4px 0;
+  }
+
+  /* The selected row's accent bar grows from its middle. */
+  .row[aria-current='true']::before {
+    animation: grow-y var(--dur) var(--ease-out) backwards;
+  }
+
+  /* A page arrives: a fade and a short rise. Pages remount on navigation, so this runs on
+     each page change, and widgets follow one after another. `backwards` holds the start
+     state only through the delay; afterwards no transform is left on a widget (one is sticky). */
+  .page {
+    animation: fade-in var(--dur-slow) var(--ease-out) backwards;
+  }
+  .dash > * {
+    animation: rise-in var(--dur-slow) var(--ease-out) backwards;
+  }
+  .dash > :nth-child(2) { animation-delay: calc(var(--stagger) * 1); }
+  .dash > :nth-child(3) { animation-delay: calc(var(--stagger) * 2); }
+  .dash > :nth-child(4) { animation-delay: calc(var(--stagger) * 3); }
+  .dash > :nth-child(5) { animation-delay: calc(var(--stagger) * 4); }
+  .dash > :nth-child(6) { animation-delay: calc(var(--stagger) * 5); }
+  .dash > :nth-child(7) { animation-delay: calc(var(--stagger) * 6); }
+  .dash > :nth-child(n + 8) { animation-delay: calc(var(--stagger) * 7); }
+
+  /* The status strip under a title draws from the left, after its frame lands. */
+  .dash > .intro::after {
+    transform-origin: left;
+    animation: grow-x 700ms var(--ease-out) 120ms backwards;
+  }
+
+  /* Issue rows cascade in; past the first dozen they arrive together. */
+  .rows li {
+    animation: rise-in-sm var(--dur) var(--ease-out) backwards;
+  }
+  .rows li:nth-child(2) { animation-delay: 25ms; }
+  .rows li:nth-child(3) { animation-delay: 50ms; }
+  .rows li:nth-child(4) { animation-delay: 75ms; }
+  .rows li:nth-child(5) { animation-delay: 100ms; }
+  .rows li:nth-child(6) { animation-delay: 125ms; }
+  .rows li:nth-child(7) { animation-delay: 150ms; }
+  .rows li:nth-child(8) { animation-delay: 175ms; }
+  .rows li:nth-child(9) { animation-delay: 200ms; }
+  .rows li:nth-child(10) { animation-delay: 225ms; }
+  .rows li:nth-child(11) { animation-delay: 250ms; }
+  .rows li:nth-child(12) { animation-delay: 275ms; }
+  .rows li:nth-child(n + 13) { animation-delay: 300ms; }
+
+  /* A detail is keyed by its issue, so selecting another swaps it in. */
+  .detail {
+    animation: rise-in-sm var(--dur) var(--ease-out) backwards;
+  }
+  .detail .verdict {
+    animation: pop-in var(--dur) var(--ease-out) 60ms backwards;
+  }
+
+  /* Charts draw themselves: bars rise from the baseline one column after another (each column
+     sets --i), lines trace left to right (pathLength 1), donut arcs open from the middle. */
+  .chart-col path,
+  .chart-col rect:not([fill='transparent']) {
+    transform-box: fill-box;
+    transform-origin: bottom;
+    animation: grow-y var(--dur-slow) var(--ease-out) backwards;
+    animation-delay: calc(min(var(--i, 0), 24) * 18ms);
+  }
+  .chart-line {
+    stroke-dasharray: 1;
+    animation: trace 900ms var(--ease-out) backwards;
+  }
+  .chart-dot {
+    animation: fade-in var(--dur) ease 700ms backwards;
+  }
+  .donut-arc {
+    transform-box: view-box;
+    transform-origin: center;
+    animation: open-arc var(--dur-slow) var(--ease-out) backwards;
+  }
+  .donut-total,
+  .donut-sub {
+    animation: fade-in var(--dur-slow) ease 150ms backwards;
+  }
+
+  /* Notes and errors appear rather than snap in. */
+  .note,
+  .card-check-note,
+  .card-check-error {
+    animation: fade-in var(--dur) ease backwards;
+  }
+
+  /* Theme changes crossfade (theme.ts starts a view transition). */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 260ms;
+    animation-timing-function: ease;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes rise-in-sm {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes grow-y {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes trace {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+
+@keyframes open-arc {
+  from {
+    opacity: 0;
+    transform: scale(0.85) rotate(-12deg);
+  }
 }
