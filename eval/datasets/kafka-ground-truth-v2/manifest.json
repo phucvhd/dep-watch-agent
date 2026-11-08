@@ -50,7 +50,12 @@
   },
   "labels": {
     "labeled_by": "claude-opus-5-5 (5 independent agents, one per batch of 20 issues; v2 question: given fix versions)",
-    "human_reviewed": false,
+    "human_reviewed": true,
+    "human_review": {
+      "reviewer": "Phuc Vu",
+      "date": "2026-11-08",
+      "labels_changed": 0
+    },
     "method": "text-only judgment per the labeling guide; every 'yes' cites verbatim quotes, verified programmatically (label_evidence.jsonl)",
     "second_pass": {
       "cases": 39,
