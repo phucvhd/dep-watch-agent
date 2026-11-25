@@ -330,5 +330,17 @@ issues, the contamination split):
 uv run python -m dep_watch_agent.eval.analysis eval/datasets/kafka-ground-truth-v2 eval/runs/kafka-ground-truth-v2/{a,b,c}.json
 ```
 
+The full experiment matrix (four models and their variants, judged faithfulness, then a Langfuse
+replay of every new run) runs from the command line on LM Studio, one model loaded at a time;
+it takes several hours:
+
+```bash
+scripts/eval/run_matrix.sh                  # every model; or name some: qwen/qwen3.5-9b
+```
+
+Its steps also run alone: `scripts/eval/run_variants.py <model> <variants>` scores and saves
+runs locally (`--limit N` for a smoke test), `scripts/eval/judge.py <run.json>...` adds judged
+faithfulness, and `scripts/eval/replay.py <run.json>...` records saved runs in Langfuse.
+
 - `POST /eval/datasets` refuses (409) to overwrite an existing dataset, so labels aren't lost. To change the
   sample, create a new dataset name (e.g. `-v3`).

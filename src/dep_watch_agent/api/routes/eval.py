@@ -162,7 +162,7 @@ def start_run(
         else:
             results = run_local(dataset, system, provisional=body.provisional)
             summary = summarize(results)
-        _save_run(settings.runs_dir, summary, results, langfuse=use_langfuse)
+        save_run(settings.runs_dir, summary, results, langfuse=use_langfuse)
         return _job_result(summary)
 
     params = {**body.model_dump(), "run_name": run_name}
@@ -232,7 +232,9 @@ def run_payload(dataset: ds.Dataset, results: list, **fields) -> dict:
     return {**run_summary(dataset, results, **fields), "results": [r.__dict__ for r in results]}
 
 
-def _save_run(runs_dir: Path, summary: dict, results: list, *, langfuse: bool) -> Path:
+def save_run(runs_dir: Path, summary: dict, results: list, *, langfuse: bool) -> Path:
+    """Write a run to ``runs_dir/<dataset>/<run>.json``; ``langfuse`` says whether it is also a
+    Langfuse experiment."""
     out = runs_dir / summary["dataset"] / f"{summary['run_name']}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     payload = {**summary, "langfuse": langfuse, "results": [r.__dict__ for r in results]}
@@ -289,7 +291,7 @@ def replay_run(
             summarize=summarize, saved=saved,
         )  # fmt: skip
         client.flush()
-        _save_run(settings.runs_dir, {**run, **summary}, results, langfuse=True)
+        save_run(settings.runs_dir, {**run, **summary}, results, langfuse=True)
         return _job_result(summary)
 
     return jobs.submit("eval-replay", replay, params={"dataset": dataset, "run": run_name})
