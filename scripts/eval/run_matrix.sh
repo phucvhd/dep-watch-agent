@@ -17,7 +17,7 @@
 #   scripts/eval/run_matrix.sh --check               # preflight only
 #   scripts/eval/run_matrix.sh --report              # the report only, from saved runs
 #
-# Overrides: ENV_FILE (default .env), LMS (the lms CLI), DATASET, JUDGE, VARIANTS,
+# Overrides: ENV_FILE (default .env), LMS (the lms CLI), DATASET, JUDGE, JUDGE_REASONING, VARIANTS,
 # DEP_WATCH_RUNS_DIR (default eval/runs). Postgres: `docker compose up -d`.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -27,17 +27,21 @@ if [[ -f $ENV_FILE ]]; then set -a; source "$ENV_FILE"; set +a; fi
 LMS=${LMS:-$HOME/.lmstudio/bin/lms}
 DATASET=${DATASET:-kafka-ground-truth-v2}
 JUDGE=${JUDGE:-qwen/qwen3.5-9b}
+JUDGE_REASONING=${JUDGE_REASONING-none}  # the judge answers one field; it needn't think
 EMBED=${DEP_WATCH_EMBED_MODEL:-text-embedding-qwen3-embedding-0.6b}
 export DEP_WATCH_RUNS_DIR=${DEP_WATCH_RUNS_DIR:-eval/runs}
 RUNS=$DEP_WATCH_RUNS_DIR/$DATASET
 CONTEXT=16384
 
-# model | variants | max output tokens (reasoning models think first) | where to download it
+# model | variants | max output tokens | reasoning effort | where to download it
+# Gemma 4 is the matrix's reasoning model: it thinks, with room for it. Qwen3.5-9B thinks by
+# default too, but past 8,192 tokens on most issues and then answers nothing (about 4 minutes a
+# call), so it runs with thinking off, like the Qwen3-4B it is compared with for scale.
 MATRIX=(
-  "qwen/qwen3-4b-2507|zeroshot,fewshot,cot,direct,hybrid||qwen/qwen3-4b-2507"
-  "google/gemma-4-e4b|zeroshot,fewshot,direct|8192|google/gemma-4-e4b"
-  "qwen/qwen3.5-9b|zeroshot,fewshot,direct|8192|qwen/qwen3.5-9b"
-  "meta-llama-3.1-8b-instruct|zeroshot,fewshot,direct||https://huggingface.co/mlx-community/Meta-Llama-3.1-8B-Instruct-4bit"
+  "qwen/qwen3-4b-2507|zeroshot,fewshot,cot,direct,hybrid|||qwen/qwen3-4b-2507"
+  "google/gemma-4-e4b|zeroshot,fewshot,direct|8192||google/gemma-4-e4b"
+  "qwen/qwen3.5-9b|zeroshot,fewshot,direct||none|qwen/qwen3.5-9b"
+  "meta-llama-3.1-8b-instruct|zeroshot,fewshot,direct|||https://huggingface.co/mlx-community/Meta-Llama-3.1-8B-Instruct-4bit"
 )
 EMBED_SOURCE=https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF
 REFERENCE=qwen3-4b-2507
@@ -59,7 +63,7 @@ wanted() {  # true if no model was named, or this one was
 
 run_names() {  # every run of the matrix's selected rows: <model>[-<variant>]
   for row in "${MATRIX[@]}"; do
-    IFS='|' read -r model variants _ _ <<<"$row"
+    IFS='|' read -r model variants _ _ _ <<<"$row"
     wanted "$model" || continue
     local name=${model##*/}
     IFS=',' read -r -a list <<<"${VARIANTS:-$variants}"
@@ -76,8 +80,8 @@ preflight() {
   # which kills any run in progress.
   "$LMS" server status 2>&1 | grep -q "is running" || "$LMS" server start >/dev/null
   downloaded=$("$LMS" ls)
-  for row in "${MATRIX[@]}" "$JUDGE|||$JUDGE" "$EMBED|||$EMBED_SOURCE"; do
-    IFS='|' read -r model _ _ source <<<"$row"
+  for row in "${MATRIX[@]}" "$JUDGE||||$JUDGE" "$EMBED||||$EMBED_SOURCE"; do
+    IFS='|' read -r model _ _ _ source <<<"$row"
     [[ $model == "$JUDGE" || $model == "$EMBED" ]] || wanted "$model" || continue
     if ! grep -qF "$model" <<<"$downloaded"; then
       echo "missing model $model: $LMS get $source"
@@ -115,7 +119,7 @@ started=$(mktemp)
 trap 'rm -f "$started"; "$LMS" unload --all >/dev/null 2>&1 || true' EXIT
 
 for row in "${MATRIX[@]}"; do
-  IFS='|' read -r model variants max_tokens _ <<<"$row"
+  IFS='|' read -r model variants max_tokens reasoning _ <<<"$row"
   wanted "$model" || continue
   variants=${VARIANTS:-$variants}
   echo "### $model: $variants ($(date))"
@@ -126,6 +130,7 @@ for row in "${MATRIX[@]}"; do
     "$LMS" load "$EMBED" --context-length 2048 -y
   fi
   DEP_WATCH_LLM_MAX_TOKENS=${max_tokens:-${DEP_WATCH_LLM_MAX_TOKENS:-2048}} \
+    DEP_WATCH_LLM_REASONING_EFFORT=$reasoning \
     uv run python scripts/eval/run_variants.py "$model" "$variants" \
     --dataset "eval/datasets/$DATASET"
 done
@@ -138,7 +143,8 @@ if ((${#judged[@]})); then
   echo "### judge $JUDGE ($(date))"
   "$LMS" unload --all
   "$LMS" load "$JUDGE" --context-length "$CONTEXT" -y
-  DEP_WATCH_JUDGE_MODEL=$JUDGE uv run python scripts/eval/judge.py "${judged[@]}"
+  DEP_WATCH_JUDGE_MODEL=$JUDGE DEP_WATCH_JUDGE_REASONING_EFFORT=$JUDGE_REASONING \
+    uv run python scripts/eval/judge.py "${judged[@]}"
 fi
 
 if [[ -n ${LANGFUSE_PUBLIC_KEY:-} ]]; then

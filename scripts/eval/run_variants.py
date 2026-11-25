@@ -43,7 +43,11 @@ def main(argv: list[str] | None = None) -> int:
         "--dataset", type=Path, default=ROOT / "eval/datasets/kafka-ground-truth-v2"
     )
     parser.add_argument("--limit", type=int, help="only the first N issues (a smoke test)")
-    parser.add_argument("--suffix", default="", help="appended to every run name")
+    parser.add_argument(
+        "--suffix",
+        default="",
+        help="appended to every run name; write --suffix=-x for one starting with -",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(message)s")
 

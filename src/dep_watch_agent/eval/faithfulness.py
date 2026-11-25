@@ -183,5 +183,6 @@ def judge_from_env() -> tuple[Any, str]:
         output="text",
         # Room for a reasoning judge to think before its one-field answer.
         max_tokens=int(os.environ.get("DEP_WATCH_JUDGE_MAX_TOKENS", "2048")) or None,
+        reasoning_effort=os.environ.get("DEP_WATCH_JUDGE_REASONING_EFFORT", "").strip() or None,
     )
     return ChatFactModel(config, schema=JUDGE_SCHEMA, run_name="judge_faithfulness"), model

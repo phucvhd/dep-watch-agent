@@ -81,6 +81,8 @@ def llm_system(config, variant: str) -> SystemFactory:
         if dependency.adapter is None:
             raise ValueError(f"{dependency.name} is synced but not supported for checks")
         model_id = f"{config.model};output={config.output}"
+        if config.reasoning_effort is not None:
+            model_id += f";reasoning={config.reasoning_effort}"
 
         if variant == "direct":
             from dep_watch_agent.llm.direct import DIRECT_SCHEMA, LLMDirect

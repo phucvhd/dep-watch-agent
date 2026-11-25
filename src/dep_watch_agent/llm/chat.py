@@ -53,13 +53,17 @@ class LLMConfig:
     # generates until the context is full and the call times out. A truncated reply
     # fails to parse and counts as invalid output (retried, then no facts).
     max_tokens: int | None = 2048
+    # Sent as the OpenAI ``reasoning_effort``; "none" turns a thinking model's reasoning off
+    # (LM Studio honors it for Qwen3.5, whose thinking otherwise fills ``max_tokens``). None
+    # sends nothing, leaving the model's default.
+    reasoning_effort: str | None = None
 
     @classmethod
     def from_env(cls) -> "LLMConfig | None":
         """``DEP_WATCH_LLM_MODEL`` (required), ``DEP_WATCH_LLM_BASE_URL``,
         ``DEP_WATCH_LLM_API_KEY``, ``DEP_WATCH_LLM_TIMEOUT``, ``DEP_WATCH_LLM_OUTPUT``,
-        ``DEP_WATCH_LLM_MAX_TOKENS`` (0 for no cap), ``DEP_WATCH_LLM_PROVIDER``. None if no
-        model is set."""
+        ``DEP_WATCH_LLM_MAX_TOKENS`` (0 for no cap), ``DEP_WATCH_LLM_PROVIDER``,
+        ``DEP_WATCH_LLM_REASONING_EFFORT``. None if no model is set."""
         model = os.environ.get("DEP_WATCH_LLM_MODEL", "").strip()
         if not model:
             return None
@@ -71,6 +75,7 @@ class LLMConfig:
             output=os.environ.get("DEP_WATCH_LLM_OUTPUT", "text"),
             max_tokens=int(os.environ.get("DEP_WATCH_LLM_MAX_TOKENS", "2048")) or None,
             provider=os.environ.get("DEP_WATCH_LLM_PROVIDER", "openai"),
+            reasoning_effort=os.environ.get("DEP_WATCH_LLM_REASONING_EFFORT", "").strip() or None,
         )
 
     def __post_init__(self) -> None:
@@ -86,6 +91,8 @@ class LLMConfig:
             # Converse has no OpenAI-style json_schema response format; LangChain would fall
             # back to tool calling, a different path from the one the eval measured.
             raise ValueError("DEP_WATCH_LLM_PROVIDER=bedrock supports DEP_WATCH_LLM_OUTPUT=text")
+        if self.provider == "bedrock" and self.reasoning_effort is not None:
+            raise ValueError("DEP_WATCH_LLM_REASONING_EFFORT is for the openai provider")
 
 
 class WrongModel(RuntimeError):
@@ -117,6 +124,7 @@ def _chat_model(config: LLMConfig) -> Any:
         timeout=config.timeout,
         max_tokens=config.max_tokens,
         max_retries=1,
+        reasoning_effort=config.reasoning_effort,
     )
 
 
