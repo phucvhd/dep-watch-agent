@@ -200,6 +200,11 @@ output is retried, then counts as no facts.
 Issues longer than one chunk (30k characters) are read in chunks, up to six. Calls are traced to
 Langfuse when its keys are set.
 
+On AWS the same system runs on Amazon Bedrock: set `DEP_WATCH_LLM_PROVIDER=bedrock`, `AWS_REGION`
+and a Bedrock model id in `DEP_WATCH_LLM_MODEL`. Credentials come from the AWS chain (an SSO
+profile locally, the instance role on EC2), so no API key is stored. Bedrock reads in `text` mode
+only.
+
 ### Checking an issue
 
 ```bash

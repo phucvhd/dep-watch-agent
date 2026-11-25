@@ -1,5 +1,14 @@
-"""``FactModel`` over an OpenAI-compatible chat server (LM Studio, vLLM, Ollama, llama.cpp), via
-LangChain. Calls are traced to Langfuse when its keys are set in the environment.
+"""``FactModel`` over a chat model, via LangChain. Calls are traced to Langfuse when its keys are
+set in the environment.
+
+Two providers (``DEP_WATCH_LLM_PROVIDER``):
+
+- ``openai`` (default): any OpenAI-compatible chat server (LM Studio, vLLM, Ollama, llama.cpp,
+  Groq), at ``DEP_WATCH_LLM_BASE_URL``.
+- ``bedrock``: Amazon Bedrock's Converse API. Credentials come from the standard AWS chain (an
+  SSO profile on a laptop, the instance role on EC2), never from an API key in the environment;
+  the region from ``AWS_REGION`` / ``AWS_DEFAULT_REGION``. ``DEP_WATCH_LLM_MODEL`` is a Bedrock
+  model id or inference profile id.
 
 Two ways to get JSON (``DEP_WATCH_LLM_OUTPUT``):
 
@@ -24,6 +33,7 @@ from typing import Any
 from dep_watch_agent.llm.extractor import FACTS_SCHEMA, InvalidOutput, Prompt
 
 OUTPUT_MODES = ("text", "json_schema")
+PROVIDERS = ("openai", "bedrock")
 
 
 @dataclass(frozen=True)
@@ -34,6 +44,7 @@ class LLMConfig:
     timeout: float = 600.0
     temperature: float = 0.0
     output: str = "text"  # one of OUTPUT_MODES
+    provider: str = "openai"  # one of PROVIDERS
     # Cap on generated tokens: without it a model that falls into a repetition loop
     # generates until the context is full and the call times out. A truncated reply
     # fails to parse and counts as invalid output (retried, then no facts).
@@ -43,7 +54,8 @@ class LLMConfig:
     def from_env(cls) -> "LLMConfig | None":
         """``DEP_WATCH_LLM_MODEL`` (required), ``DEP_WATCH_LLM_BASE_URL``,
         ``DEP_WATCH_LLM_API_KEY``, ``DEP_WATCH_LLM_TIMEOUT``, ``DEP_WATCH_LLM_OUTPUT``,
-        ``DEP_WATCH_LLM_MAX_TOKENS`` (0 for no cap). None if no model is set."""
+        ``DEP_WATCH_LLM_MAX_TOKENS`` (0 for no cap), ``DEP_WATCH_LLM_PROVIDER``. None if no
+        model is set."""
         model = os.environ.get("DEP_WATCH_LLM_MODEL", "").strip()
         if not model:
             return None
@@ -54,6 +66,7 @@ class LLMConfig:
             timeout=float(os.environ.get("DEP_WATCH_LLM_TIMEOUT", "600")),
             output=os.environ.get("DEP_WATCH_LLM_OUTPUT", "text"),
             max_tokens=int(os.environ.get("DEP_WATCH_LLM_MAX_TOKENS", "2048")) or None,
+            provider=os.environ.get("DEP_WATCH_LLM_PROVIDER", "openai"),
         )
 
     def __post_init__(self) -> None:
@@ -61,26 +74,53 @@ class LLMConfig:
             raise ValueError(
                 f"DEP_WATCH_LLM_OUTPUT must be one of {OUTPUT_MODES}, got {self.output!r}"
             )
+        if self.provider not in PROVIDERS:
+            raise ValueError(
+                f"DEP_WATCH_LLM_PROVIDER must be one of {PROVIDERS}, got {self.provider!r}"
+            )
+        if self.provider == "bedrock" and self.output != "text":
+            # Converse has no OpenAI-style json_schema response format; LangChain would fall
+            # back to tool calling, a different path from the one the eval measured.
+            raise ValueError("DEP_WATCH_LLM_PROVIDER=bedrock supports DEP_WATCH_LLM_OUTPUT=text")
 
 
 class WrongModel(RuntimeError):
     """The server answered with another model than the configured one."""
 
 
+def _chat_model(config: LLMConfig) -> Any:
+    """The LangChain chat model for ``config.provider``. Building it makes no request."""
+    if config.provider == "bedrock":
+        from botocore.config import Config
+        from langchain_aws import ChatBedrockConverse
+
+        return ChatBedrockConverse(
+            model=config.model,
+            region_name=os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION"),
+            temperature=config.temperature,
+            max_tokens=config.max_tokens,
+            # One retry, like the OpenAI client; botocore counts the first attempt.
+            config=Config(read_timeout=config.timeout, retries={"max_attempts": 2}),
+        )
+
+    from langchain_openai import ChatOpenAI
+
+    return ChatOpenAI(
+        base_url=config.base_url,
+        model=config.model,
+        api_key=config.api_key,
+        temperature=config.temperature,
+        timeout=config.timeout,
+        max_tokens=config.max_tokens,
+        max_retries=1,
+    )
+
+
 class ChatFactModel:
     def __init__(self, config: LLMConfig, *, prompt: Prompt | None = None):
         # from langchain_core.runnables import RunnableLambda
-        from langchain_openai import ChatOpenAI
 
-        chat = ChatOpenAI(
-            base_url=config.base_url,
-            model=config.model,
-            api_key=config.api_key,
-            temperature=config.temperature,
-            timeout=config.timeout,
-            max_tokens=config.max_tokens,
-            max_retries=1,
-        )
+        chat = _chat_model(config)
         self.config = config
         if config.output == "json_schema":
             self._runnable = chat.with_structured_output(
