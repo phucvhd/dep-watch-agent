@@ -262,3 +262,14 @@ def test_summary_scores():
     assert scores["gate_passed"]["value"] == 0.0
     assert scores["gate_passed"]["data_type"] == "BOOLEAN"
     assert "recall 0.3 -> 0.2" in scores["gate_passed"]["comment"]
+    assert "faithfulness" not in scores
+
+    summary["faithfulness"] = {
+        "judge": "j",
+        "judged": 4,
+        "faithfulness": 0.75,
+        "by_kind": {},
+        "context_recall": {"recall": 0.5, "quotes": 2, "cases": 2},
+    }
+    scores = {s["name"]: s for s in summary_scores(summary)}
+    assert (scores["faithfulness"]["value"], scores["context_recall"]["value"]) == (0.75, 0.5)

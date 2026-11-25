@@ -273,11 +273,14 @@ def replay_run(
 
     def replay(progress):
         def summarize(results):
-            return run_summary(
+            summary = run_summary(
                 data, results, run_name=run_name, system=run["system"], model=run.get("model"),
                 version=run.get("version"), provisional=False,
                 baselines_dir=settings.baselines_dir,
             )  # fmt: skip
+            if run.get("faithfulness"):  # scored on the same cases, so it still holds
+                summary["faithfulness"] = run["faithfulness"]
+            return summary
 
         client = langfuse()
         _, results, summary = run_langfuse(

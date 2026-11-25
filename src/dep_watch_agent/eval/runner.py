@@ -224,7 +224,8 @@ def summary_scores(summary: dict[str, Any]) -> list[dict[str, Any]]:
     - ``latency_p50_s``, ``latency_p95_s``;
     - ``macro_f1_before_release``, ``macro_f1_after_release`` (and accuracy), the release and
       issue counts in the comment;
-    - ``gate_passed`` (boolean), the failing metrics in the comment.
+    - ``gate_passed`` (boolean), the failing metrics in the comment;
+    - ``faithfulness`` and ``context_recall``, once the run has been judged.
     """
     metrics = summary["metrics"]
     intervals = summary.get("intervals") or {}
@@ -270,4 +271,24 @@ def summary_scores(summary: dict[str, Any]) -> list[dict[str, Any]]:
                 + (f"; failed: {failed}" if failed else ""),
             }
         )
+    judged = summary.get("faithfulness")
+    if judged:
+        if judged.get("faithfulness") is not None:
+            scores.append(
+                {
+                    "name": "faithfulness",
+                    "value": judged["faithfulness"],
+                    "comment": f"judge {judged['judge']}, {judged['judged']} facts",
+                    "metadata": {"by_kind": judged.get("by_kind", {})},
+                }
+            )
+        recall = judged.get("context_recall")
+        if recall:
+            scores.append(
+                {
+                    "name": "context_recall",
+                    "value": recall["recall"],
+                    "comment": f"{recall['quotes']} labeled quotes in {recall['cases']} cases",
+                }
+            )
     return scores
