@@ -18,6 +18,7 @@
 #   scripts/eval/run_matrix.sh --report              # the report only, from saved runs
 #
 # Overrides: ENV_FILE (default .env), LMS (the lms CLI), DATASET, JUDGE, JUDGE_REASONING, VARIANTS,
+# REPLAY=0 (save runs locally only; replay.py records them later),
 # DEP_WATCH_RUNS_DIR (default eval/runs). Postgres: `docker compose up -d`.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -147,7 +148,7 @@ if ((${#judged[@]})); then
     uv run python scripts/eval/judge.py "${judged[@]}"
 fi
 
-if [[ -n ${LANGFUSE_PUBLIC_KEY:-} ]]; then
+if [[ -n ${LANGFUSE_PUBLIC_KEY:-} && ${REPLAY:-1} == 1 ]]; then
   replayed=()
   while IFS= read -r path; do replayed+=("$path"); done \
     < <(find "$RUNS" -name '*.json' -newer "$started" | sort)
