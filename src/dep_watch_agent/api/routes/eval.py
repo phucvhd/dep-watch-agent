@@ -280,8 +280,9 @@ def replay_run(
                 version=run.get("version"), provisional=False,
                 baselines_dir=settings.baselines_dir,
             )  # fmt: skip
-            if run.get("faithfulness"):  # scored on the same cases, so it still holds
-                summary["faithfulness"] = run["faithfulness"]
+            for judged in ("faithfulness", "faithfulness_ragas"):  # same cases, so still holds
+                if run.get(judged):
+                    summary[judged] = run[judged]
             return summary
 
         client = langfuse()

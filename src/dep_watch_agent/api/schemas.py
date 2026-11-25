@@ -479,6 +479,9 @@ class EvalRunSummary(BaseModel):
     )
     gate: dict[str, Any] | None = Field(None, description="Regression gate against the baseline")
     faithfulness: dict[str, Any] | None = Field(None, description="Judge-scored faithfulness")
+    faithfulness_ragas: dict[str, Any] | None = Field(
+        None, description="Faithfulness scored by the RAGAS library"
+    )
     langfuse: bool = Field(False, description="Recorded as a Langfuse experiment")
 
 

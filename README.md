@@ -348,5 +348,15 @@ runs locally (`--limit N` for a smoke test), `scripts/eval/judge.py <run.json>..
 faithfulness, and `scripts/eval/replay.py [--upload] <run.json>...` records saved runs in
 Langfuse.
 
+Faithfulness is also scored by the RAGAS library itself, so the in-house judge can be checked
+against it. RAGAS runs in an overlay environment rather than as a project dependency (its
+`instructor` would hold `openai` back); the judge is any OpenAI-compatible API, set with the
+`DEP_WATCH_RAGAS_*` variables in `.env.example`. `--limit 3` scores three issues without saving,
+to check the judge answers in RAGAS's format first:
+
+```bash
+uv run --with ragas==0.4.4 python scripts/eval/ragas_judge.py eval/runs/kafka-ground-truth-v2/qwen3-4b-2507.json --limit 3
+```
+
 - `POST /eval/datasets` refuses (409) to overwrite an existing dataset, so labels aren't lost. To change the
   sample, create a new dataset name (e.g. `-v3`).

@@ -225,7 +225,8 @@ def summary_scores(summary: dict[str, Any]) -> list[dict[str, Any]]:
     - ``macro_f1_before_release``, ``macro_f1_after_release`` (and accuracy), the release and
       issue counts in the comment;
     - ``gate_passed`` (boolean), the failing metrics in the comment;
-    - ``faithfulness`` and ``context_recall``, once the run has been judged.
+    - ``faithfulness`` and ``context_recall``, once the run has been judged;
+    - ``faithfulness_ragas``, once the RAGAS library has scored it.
     """
     metrics = summary["metrics"]
     intervals = summary.get("intervals") or {}
@@ -291,4 +292,21 @@ def summary_scores(summary: dict[str, Any]) -> list[dict[str, Any]]:
                     "comment": f"{recall['quotes']} labeled quotes in {recall['cases']} cases",
                 }
             )
+    ragas = summary.get("faithfulness_ragas")
+    if ragas and ragas.get("faithfulness") is not None:
+        agreed = ragas.get("agreement_with_inhouse")
+        scores.append(
+            {
+                "name": "faithfulness_ragas",
+                "value": ragas["faithfulness"],
+                "comment": f"{ragas['library']}, judge {ragas['judge']}, mean over "
+                f"{ragas['scored']} of {ragas['samples']} issues"
+                + (
+                    f"; differs from the in-house judge by {agreed['mean_abs_diff']:.2f}"
+                    if agreed
+                    else ""
+                ),
+                "metadata": {"agreement_with_inhouse": agreed},
+            }
+        )
     return scores

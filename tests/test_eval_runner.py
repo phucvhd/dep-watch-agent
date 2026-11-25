@@ -273,3 +273,18 @@ def test_summary_scores():
     }
     scores = {s["name"]: s for s in summary_scores(summary)}
     assert (scores["faithfulness"]["value"], scores["context_recall"]["value"]) == (0.75, 0.5)
+    assert "faithfulness_ragas" not in scores
+
+    summary["faithfulness_ragas"] = {
+        "library": "ragas 0.4.4",
+        "judge": "g",
+        "samples": 3,
+        "scored": 2,
+        "faithfulness": 0.9,
+        "agreement_with_inhouse": {"issues": 2, "mean_abs_diff": 0.1},
+    }
+    ragas = {s["name"]: s for s in summary_scores(summary)}["faithfulness_ragas"]
+    assert ragas["value"] == 0.9
+    assert ragas["comment"] == (
+        "ragas 0.4.4, judge g, mean over 2 of 3 issues; differs from the in-house judge by 0.10"
+    )

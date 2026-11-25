@@ -1014,6 +1014,13 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /**
+             * Faithfulness Ragas
+             * @description Faithfulness scored by the RAGAS library
+             */
+            faithfulness_ragas?: {
+                [key: string]: unknown;
+            } | null;
+            /**
              * Langfuse
              * @description Recorded as a Langfuse experiment
              * @default false
@@ -1095,6 +1102,13 @@ export interface components {
              * @description Judge-scored faithfulness
              */
             faithfulness?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Faithfulness Ragas
+             * @description Faithfulness scored by the RAGAS library
+             */
+            faithfulness_ragas?: {
                 [key: string]: unknown;
             } | null;
             /**

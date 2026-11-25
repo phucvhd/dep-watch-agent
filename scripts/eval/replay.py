@@ -1,6 +1,6 @@
 """Record saved local runs as Langfuse experiments without calling the model again, as
 ``POST /eval/runs/{dataset}/{run}/langfuse`` does. Each run is scored as a new one would be
-(intervals, contamination split, gate) and keeps its judged faithfulness.
+(intervals, contamination split, gate) and keeps its judged faithfulness, in-house and RAGAS.
 
     uv run python scripts/eval/replay.py <run.json>...
 
@@ -51,8 +51,9 @@ def main(argv: list[str] | None = None) -> int:
                 model=run.get("model"), version=run.get("version"), provisional=False,
                 baselines_dir=args.baselines,
             )  # fmt: skip
-            if run.get("faithfulness"):  # scored on the same cases, so it still holds
-                summary["faithfulness"] = run["faithfulness"]
+            for judged in ("faithfulness", "faithfulness_ragas"):  # same cases, so still holds
+                if run.get(judged):
+                    summary[judged] = run[judged]
             return summary
 
         _, results, summary = run_langfuse(
