@@ -31,8 +31,8 @@ chunks the issue text; if the fix versions already settle the answer, code decid
 model call. Otherwise the LLM extractor (`qwen/qwen3-4b-2507` by default) returns cited version
 facts, and the decision code checks each quote and applies the version rules. The verdict goes
 back through FastAPI to the web UI. The eval runs the same extractor and decision code over the
-ground-truth set and records metrics in Langfuse. Retrieval and the direct-verdict control are
-in development.
+ground-truth set and records metrics in Langfuse, alongside the few-shot, chain-of-thought,
+hybrid-retrieval and direct-verdict variants.
 
 ## Data
 
@@ -134,7 +134,7 @@ Pages follow the flow:
   dependency an issue also shows whether it affects your version, from fix versions or stored
   facts, or read on request.
 - **Sources** (`#/sources`): pick an issue tracker, sync it, see what is new in it.
-- **Models** (`#/operations`): models, reading time, eval runs, jobs.
+- **Models** (`#/operations`): models, reading time, jobs. Eval results are in Langfuse.
 
 Old links (`#/alerts`, `#/setup`, `#/issues/KEY`, `#/check/KEY`) are rewritten to the new pages.
 
@@ -266,9 +266,10 @@ release in only ~4% of not-affected cases, so it couldn't tell systems apart.
 | `POST /eval/datasets` `{"name": ...}` | sample 100 issues -> 200 cases (`design` v2 default) |
 | `GET /eval/datasets/{name}/status` | labeling progress and problems |
 | `POST /eval/datasets/{name}/upload` | push to the Langfuse dataset (needs `.env` keys) |
-| `POST /eval/runs` `{"system": ...}` | score a system locally (needs labels); a job |
-| `POST /eval/runs` `{"system": ..., "langfuse": true}` | record a Langfuse experiment |
-| `POST /eval/runs` `{"system": ..., "provisional": true}` | before labeling; not a result |
+| `POST /eval/runs` `{"system": ...}` | score a system (needs labels) as a Langfuse experiment, saved locally too; a job |
+| `POST /eval/runs` `{"system": ..., "langfuse": false}` | score locally only |
+| `POST /eval/runs` `{"system": ..., "provisional": true}` | before labeling; local, not a result |
+| `POST /eval/runs/{dataset}/{run}/langfuse` | record a saved local run as a Langfuse experiment, without calling the model |
 | `GET /eval/runs`, `GET /eval/runs/{dataset}/{run}` | saved local runs and their results |
 
 Every system extracts cited version facts from the issue text; `verdict.decide` drops facts
@@ -292,11 +293,19 @@ of the configured model, named `<model>` for zero-shot and `<model>-<variant>` o
 
 #### What a run reports
 
-Each saved run has the metrics (macro-F1, silent-miss and false-alarm rates, abstention recall,
-citation validity, latency per issue), a 95% bootstrap interval for each rate metric resampling
-issues (`eval/stats.py`), and, when the dataset has `issue_dates.json` and the model's release
-date is known (`eval/contamination.py`, or `DEP_WATCH_LLM_RELEASE_DATE`), the metrics on issues
-created before and after the release.
+Results are read in Langfuse, not in the web UI: each run is an experiment on the uploaded
+dataset, with per-case `correct` and `citation_validity` scores, traces of every model call, and
+the run-level scores below. Upload the dataset again after labels or `issue_dates.json` change
+(`POST /eval/datasets/{name}/upload`; items are updated in place). The saved local file is what
+the gate and the comparison report read.
+
+Each run has the metrics (macro-F1, silent-miss and false-alarm rates, abstention recall,
+citation validity, latency p50/p95 per issue), a 95% bootstrap interval for each rate metric
+resampling issues (`eval/stats.py`; in the Langfuse score's comment), the gate result
+(`gate_passed`) when its system has a baseline, and, when the dataset has `issue_dates.json` and
+the model's release date is known (`eval/contamination.py`, or `DEP_WATCH_LLM_RELEASE_DATE`),
+macro-F1 and accuracy on issues created before and after the release. Dataset items carry the
+issue's `created` date in their metadata.
 
 | Endpoint | Does |
 |---|---|

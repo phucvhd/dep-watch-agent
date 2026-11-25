@@ -86,6 +86,10 @@ class PhraseExtractor:
 SYSTEMS = {"phrases": PhraseExtractor, "phrases-2": PhraseExtractor}
 
 
+def no_langfuse():
+    raise AssertionError("this test must not reach Langfuse")
+
+
 @pytest.fixture
 def sessions(schema):
     migrate(schema.url, schema=schema.name)
@@ -102,6 +106,8 @@ def sessions(schema):
 def make_client(sessions, tmp_path):
     def make(datasets_dir=None, **deps) -> TestClient:
         deps.setdefault("systems", SYSTEMS)
+        # Never the real Langfuse: python-dotenv may find a .env with keys above the checkout.
+        deps.setdefault("langfuse_factory", no_langfuse)
         settings = Settings(
             datasets_dir=datasets_dir or tmp_path / "datasets",
             runs_dir=tmp_path / "runs",
@@ -837,7 +843,8 @@ class DirectPhrases:
 
 def labeled_run(client, written, run_name, system="phrases"):
     fill_labels(written, ALL_YES)
-    response = client.post("/eval/runs", json=run_body(system=system, run_name=run_name))
+    body = run_body(system=system, run_name=run_name, langfuse=False)
+    response = client.post("/eval/runs", json=body)
     job = wait(client, response.json())
     assert job["status"] == "succeeded", job["error"]
     return client.get(f"/eval/runs/test-set/{run_name}").json()
@@ -880,3 +887,51 @@ def test_accepted_baseline_gates_later_runs(make_client, written, tmp_path):
     later = labeled_run(client, written, "later")
     assert later["gate"]["passed"] is True
     assert later["gate"]["baseline_run"] == "base"
+
+
+class FakeExperiments:
+    """A Langfuse client whose dataset runs experiments like tests.test_eval_runner's fake."""
+
+    def __init__(self, items):
+        from tests.test_eval_runner import FakeDataset
+
+        self.dataset = FakeDataset(items)
+
+    def get_dataset(self, name):
+        return self.dataset
+
+    def flush(self):
+        pass
+
+
+def test_runs_are_langfuse_experiments_and_saved_locally(make_client, written):
+    from types import SimpleNamespace
+
+    from dep_watch_agent.eval.dataset import langfuse_items, load_dataset
+
+    fill_labels(written, ALL_YES)
+    fake = FakeExperiments([SimpleNamespace(**i) for i in langfuse_items(load_dataset(written))])
+    client = make_client(datasets_dir=written.parent, langfuse_factory=lambda: fake)
+
+    job = wait(client, client.post("/eval/runs", json=run_body(run_name="lf")).json())
+    assert job["status"] == "succeeded", job["error"]
+    scores = fake.dataset.runs[0]["run_scores"]
+    assert {"macro_f1", "silent_miss_rate", "latency_p50_s"} <= set(scores)
+    saved = client.get("/eval/runs/test-set/lf").json()
+    assert saved["langfuse"] is True and len(saved["results"]) == 4
+
+    # A local-only run can be recorded in Langfuse later without the system.
+    labeled_run(client, written, "local")
+    job = wait(client, client.post("/eval/runs/test-set/local/langfuse").json())
+    assert job["status"] == "succeeded", job["error"]
+    assert fake.dataset.runs[1]["metadata"]["replay"] is True
+    assert client.get("/eval/runs/test-set/local").json()["langfuse"] is True
+
+
+def test_provisional_runs_cannot_be_replayed(eval_client):
+    job = wait(
+        eval_client,
+        eval_client.post("/eval/runs", json=run_body(provisional=True, run_name="p")).json(),
+    )
+    assert job["status"] == "succeeded"
+    assert eval_client.post("/eval/runs/test-set/p/langfuse").status_code == 400

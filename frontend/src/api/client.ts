@@ -36,9 +36,6 @@ export type SyncState = Schemas['SyncState']
 export type SyncRun = Schemas['SyncRun']
 export type Activity = Schemas['Activity']
 export type TypeCount = Schemas['TypeCount']
-export type DatasetSummary = Schemas['DatasetSummary']
-export type EvalRunSummary = Schemas['EvalRunSummary']
-export type EvalRunRequest = Schemas['EvalRunRequest']
 export type Answer = CheckResponse['answer']
 
 const BASE = import.meta.env.VITE_API_URL ?? '/api'
@@ -143,7 +140,4 @@ export const api = {
     request<SyncRun[]>(`/sync/runs${query({ project, limit })}`),
   activity: (project: string, days = 30) =>
     request<Activity>(`/stats/activity${query({ project, days })}`),
-  datasets: () => request<DatasetSummary[]>('/eval/datasets'),
-  runs: () => request<EvalRunSummary[]>('/eval/runs'),
-  startRun: (body: EvalRunRequest) => post<Job>('/eval/runs', body),
 }

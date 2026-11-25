@@ -457,7 +457,11 @@ class EvalRunRequest(BaseModel):
     provisional: bool = Field(
         False, description="Score against JIRA metadata answers; allowed before labeling is done"
     )
-    langfuse: bool = Field(False, description="Run as a Langfuse experiment on the dataset")
+    langfuse: bool | None = Field(
+        None,
+        description="Record as a Langfuse experiment on the dataset (default: yes, unless "
+        "provisional). The run is saved locally either way.",
+    )
 
 
 class EvalRunSummary(BaseModel):
@@ -475,6 +479,7 @@ class EvalRunSummary(BaseModel):
     )
     gate: dict[str, Any] | None = Field(None, description="Regression gate against the baseline")
     faithfulness: dict[str, Any] | None = Field(None, description="Judge-scored faithfulness")
+    langfuse: bool = Field(False, description="Recorded as a Langfuse experiment")
 
 
 class EvalComparison(BaseModel):

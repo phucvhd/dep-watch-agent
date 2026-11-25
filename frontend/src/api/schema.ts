@@ -582,6 +582,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/eval/runs/{dataset}/{run_name}/langfuse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replay Run
+         * @description Record a saved local run as a Langfuse experiment without calling the model again: each
+         *     dataset item's output is the saved one. The run is scored as a new one would be, so a run
+         *     saved before intervals or the gate existed gets them, in Langfuse and in its saved file.
+         */
+        post: operations["replay_run_eval_runs__dataset___run_name__langfuse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/eval/compare": {
         parameters: {
             query?: never;
@@ -991,6 +1013,12 @@ export interface components {
             faithfulness?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Langfuse
+             * @description Recorded as a Langfuse experiment
+             * @default false
+             */
+            langfuse?: boolean;
             /** Results */
             results: {
                 [key: string]: unknown;
@@ -1021,10 +1049,9 @@ export interface components {
             provisional?: boolean;
             /**
              * Langfuse
-             * @description Run as a Langfuse experiment on the dataset
-             * @default false
+             * @description Record as a Langfuse experiment on the dataset (default: yes, unless provisional). The run is saved locally either way.
              */
-            langfuse?: boolean;
+            langfuse?: boolean | null;
         };
         /** EvalRunSummary */
         EvalRunSummary: {
@@ -1070,6 +1097,12 @@ export interface components {
             faithfulness?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Langfuse
+             * @description Recorded as a Langfuse experiment
+             * @default false
+             */
+            langfuse?: boolean;
         };
         /** EvidenceOut */
         EvidenceOut: {
@@ -2799,6 +2832,52 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["EvalRun"];
                 };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replay_run_eval_runs__dataset___run_name__langfuse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset: string;
+                run_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Not Found */
             404: {

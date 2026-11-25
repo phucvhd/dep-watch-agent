@@ -4,7 +4,7 @@ import pytest
 
 from dep_watch_agent.eval.dataset import DatasetError, langfuse_items, load_dataset
 from dep_watch_agent.eval.metrics import CaseResult, compute_metrics, format_metrics
-from dep_watch_agent.eval.runner import run_langfuse, run_local
+from dep_watch_agent.eval.runner import run_langfuse, run_local, summary_scores
 from dep_watch_agent.verdict import (
     AFFECTED,
     INSUFFICIENT_INFORMATION,
@@ -183,9 +183,10 @@ def test_langfuse_run_scores_items_and_run(written):
     fake = FakeDataset(items)
     extractor = CountingExtractor()
 
-    run, metrics = run_langfuse(
+    run, results, summary = run_langfuse(
         FakeLangfuse(fake), "test-set", extractor, system="counting", run_name="r1"
     )
+    metrics = summary["metrics"]
 
     assert run["name"] == "counting"
     assert run["run_name"] == "r1"
@@ -196,6 +197,8 @@ def test_langfuse_run_scores_items_and_run(written):
     assert "abstention_recall" in run["run_scores"]
     assert metrics["accuracy"] == 3 / 4
     assert len(extractor.calls) == 2  # cached per issue
+    assert [r.case_id for r in results] == [i.id for i in items]
+    assert "seconds" not in results[0].output
 
 
 def test_langfuse_run_skips_undefined_metrics(written):
@@ -206,3 +209,56 @@ def test_langfuse_run_skips_undefined_metrics(written):
         FakeLangfuse(fake), "test-set", CountingExtractor(), system="counting", run_name="r1"
     )
     assert "abstention_recall" not in fake.runs[0]["run_scores"]
+
+
+def test_replay_scores_saved_results_without_a_system(written):
+    fill_labels(written, ALL_YES)
+    dataset = load_dataset(written)
+    local = run_local(dataset, CountingExtractor())
+    items = [SimpleNamespace(**i) for i in langfuse_items(dataset)]
+    fake = FakeDataset(items)
+
+    _, results, summary = run_langfuse(
+        FakeLangfuse(fake), "test-set", None, system="counting", run_name="r1",
+        saved={r.case_id: r for r in local},
+    )  # fmt: skip
+    assert [(r.case_id, r.answer) for r in results] == [(r.case_id, r.answer) for r in local]
+    assert summary["metrics"] == compute_metrics(local)
+    assert fake.runs[0]["metadata"] == {"system": "counting", "replay": True}
+
+    with pytest.raises(DatasetError, match="not the saved run"):
+        run_langfuse(FakeLangfuse(fake), "test-set", None, system="c", run_name="r", saved={})
+    with pytest.raises(ValueError):
+        run_langfuse(FakeLangfuse(fake), "test-set", None, system="c", run_name="r")
+
+
+def test_summary_scores():
+    metrics = compute_metrics(
+        [result(AFFECTED, AFFECTED), result(INSUFFICIENT_INFORMATION, INSUFFICIENT_INFORMATION)]
+    )
+    metrics["latency"] = {"p50_s": 1.0, "p95_s": 2.0}
+    summary = {
+        "metrics": metrics,
+        "intervals": {"macro_f1": [0.5, 1.0]},
+        "contamination": {
+            "release": "2025-08-05",
+            "before": {"issues": 3, "macro_f1": 0.7, "accuracy": 0.8},
+            "after": {"issues": 0, "macro_f1": None, "accuracy": None},
+        },
+        "gate": {
+            "passed": False,
+            "baseline_run": "base",
+            "tolerance": 0.02,
+            "failures": [{"metric": "recall", "baseline": 0.3, "current": 0.2}],
+        },
+    }
+    scores = {s["name"]: s for s in summary_scores(summary)}
+    assert scores["macro_f1"]["comment"] == "95% CI [0.500, 1.000] (bootstrap over issues)"
+    assert scores["macro_f1"]["metadata"]["confusion"] == metrics["confusion"]
+    assert "comment" not in scores["accuracy"]
+    assert scores["latency_p95_s"]["value"] == 2.0
+    assert scores["macro_f1_before_release"]["comment"] == "3 issues created before 2025-08-05"
+    assert "macro_f1_after_release" not in scores
+    assert scores["gate_passed"]["value"] == 0.0
+    assert scores["gate_passed"]["data_type"] == "BOOLEAN"
+    assert "recall 0.3 -> 0.2" in scores["gate_passed"]["comment"]

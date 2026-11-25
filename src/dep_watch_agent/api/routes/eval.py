@@ -126,8 +126,9 @@ def start_run(
     pick_system(systems, body.system, direct_ok=True)
     if body.langfuse and body.provisional:
         raise HTTPException(400, "provisional runs are local only; Langfuse holds labeled data")
-    dataset = None if body.langfuse else _load(settings.datasets_dir, body.dataset)
-    if dataset is not None and not body.provisional:
+    use_langfuse = not body.provisional if body.langfuse is None else body.langfuse
+    dataset = _load(settings.datasets_dir, body.dataset)
+    if not body.provisional:
         problems = ds.label_problems(dataset)
         if problems:
             raise HTTPException(
@@ -142,34 +143,27 @@ def start_run(
 
         system = systems[body.system](EVAL_DEPENDENCY)
         model = getattr(system, "model_id", None)
+        version = getattr(system, "version", None)
 
-        if dataset is None:
+        def summarize(results):
+            return run_summary(
+                dataset, results, run_name=run_name, system=body.system, model=model,
+                version=version, provisional=body.provisional,
+                baselines_dir=settings.baselines_dir,
+            )  # fmt: skip
+
+        if use_langfuse:
             client = langfuse()
-            _, metrics = run_langfuse(
-                client,
-                body.dataset,
-                system,
-                system=body.system,
-                run_name=run_name,
-                metadata={"model": model, "version": getattr(system, "version", None)},
-            )
+            _, results, summary = run_langfuse(
+                client, body.dataset, system, system=body.system, run_name=run_name,
+                metadata={"model": model, "version": version}, summarize=summarize,
+            )  # fmt: skip
             client.flush()
-            return {"run_name": run_name, "system": body.system, "metrics": metrics}
-
-        results = run_local(dataset, system, provisional=body.provisional)
-        payload = run_payload(
-            dataset, results, run_name=run_name, system=body.system, model=model,
-            version=getattr(system, "version", None), provisional=body.provisional,
-        )  # fmt: skip
-        if not body.provisional:
-            baseline = gate.read_baseline(settings.baselines_dir, body.dataset, body.system)
-            if baseline is not None:
-                payload["gate"] = gate.check(payload["metrics"], baseline)
-        out = settings.runs_dir / body.dataset / f"{run_name}.json"
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(payload, indent=2) + "\n")
-        return {key: payload[key] for key in ("run_name", "system", "metrics") + _OPTIONAL
-                if key in payload}  # fmt: skip
+        else:
+            results = run_local(dataset, system, provisional=body.provisional)
+            summary = summarize(results)
+        _save_run(settings.runs_dir, summary, results, langfuse=use_langfuse)
+        return _job_result(summary)
 
     params = {**body.model_dump(), "run_name": run_name}
     return jobs.submit("eval-run", run, params=params)
@@ -194,7 +188,7 @@ def get_run(dataset: Name, run_name: Name, settings: SettingsDep) -> dict:
 _OPTIONAL = ("intervals", "contamination", "gate")
 
 
-def run_payload(
+def run_summary(
     dataset: ds.Dataset,
     results: list,
     *,
@@ -203,13 +197,16 @@ def run_payload(
     model: str | None,
     version: str | None,
     provisional: bool,
+    baselines_dir: Path | None = None,
 ) -> dict:
-    """A local run as saved: metrics with bootstrap intervals, the contamination split when the
-    dataset has issue dates and the model's release is known, and every case's result."""
+    """What a run reports besides its cases: metrics with bootstrap intervals, the contamination
+    split when the dataset has issue dates and the model's release is known, and the gate
+    against the system's baseline when there is one. The same summary is saved locally and
+    scored in Langfuse."""
     from dep_watch_agent.eval.metrics import compute_metrics
     from dep_watch_agent.eval.stats import bootstrap_intervals
 
-    payload = {
+    summary = {
         "run_name": run_name,
         "system": system,
         "dataset": dataset.name,
@@ -222,9 +219,77 @@ def run_payload(
     dates = contamination.read_issue_dates(dataset.directory)
     release = contamination.model_release(model or system)
     if dates and release:
-        payload["contamination"] = contamination.split(results, dates, release)
-    payload["results"] = [r.__dict__ for r in results]
-    return payload
+        summary["contamination"] = contamination.split(results, dates, release)
+    if baselines_dir is not None and not provisional:
+        baseline = gate.read_baseline(baselines_dir, dataset.name, system)
+        if baseline is not None:
+            summary["gate"] = gate.check(summary["metrics"], baseline)
+    return summary
+
+
+def run_payload(dataset: ds.Dataset, results: list, **fields) -> dict:
+    """A run as saved: its summary and every case's result."""
+    return {**run_summary(dataset, results, **fields), "results": [r.__dict__ for r in results]}
+
+
+def _save_run(runs_dir: Path, summary: dict, results: list, *, langfuse: bool) -> Path:
+    out = runs_dir / summary["dataset"] / f"{summary['run_name']}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    payload = {**summary, "langfuse": langfuse, "results": [r.__dict__ for r in results]}
+    out.write_text(json.dumps(payload, indent=2) + "\n")
+    return out
+
+
+def _job_result(summary: dict) -> dict:
+    keys = ("run_name", "system", "metrics") + _OPTIONAL
+    return {key: summary[key] for key in keys if key in summary}
+
+
+@router.post(
+    "/runs/{dataset}/{run_name}/langfuse",
+    response_model=JobOut,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={400: {}, 404: {}},
+)
+def replay_run(
+    dataset: Name,
+    run_name: Name,
+    jobs: JobsDep,
+    settings: SettingsDep,
+    langfuse: LangfuseFactoryDep,
+):
+    """Record a saved local run as a Langfuse experiment without calling the model again: each
+    dataset item's output is the saved one. The run is scored as a new one would be, so a run
+    saved before intervals or the gate existed gets them, in Langfuse and in its saved file."""
+    from dep_watch_agent.eval.metrics import CaseResult
+    from dep_watch_agent.eval.runner import run_langfuse
+
+    path = _run_path(settings.runs_dir, dataset, run_name)
+    run = _read_run(path)
+    if run.get("provisional"):
+        raise HTTPException(400, "provisional runs are local only; Langfuse holds labeled data")
+    data = _load(settings.datasets_dir, dataset)
+    saved = {r["case_id"]: CaseResult(**r) for r in run["results"]}
+
+    def replay(progress):
+        def summarize(results):
+            return run_summary(
+                data, results, run_name=run_name, system=run["system"], model=run.get("model"),
+                version=run.get("version"), provisional=False,
+                baselines_dir=settings.baselines_dir,
+            )  # fmt: skip
+
+        client = langfuse()
+        _, results, summary = run_langfuse(
+            client, dataset, None, system=run["system"], run_name=run_name,
+            metadata={"model": run.get("model"), "version": run.get("version")},
+            summarize=summarize, saved=saved,
+        )  # fmt: skip
+        client.flush()
+        _save_run(settings.runs_dir, {**run, **summary}, results, langfuse=True)
+        return _job_result(summary)
+
+    return jobs.submit("eval-replay", replay, params={"dataset": dataset, "run": run_name})
 
 
 @router.get("/compare", response_model=EvalComparison, responses={404: {}, 422: {}})

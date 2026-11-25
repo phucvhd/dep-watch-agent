@@ -245,3 +245,11 @@ def test_sample_dataset_v2(db):
 def test_sample_dataset_rejects_unknown_design(db):
     with pytest.raises(DatasetError, match="unknown design"):
         sample_dataset(db, "x", size=1, seed=1, design="v9")
+
+
+def test_items_carry_the_issue_date_when_known(written):
+    fill_labels(written, ALL_YES)
+    (written / "issue_dates.json").write_text('{"KAFKA-1": "2024-01-02"}')
+    items = {i["id"]: i for i in langfuse_items(load_dataset(written))}
+    assert items["KAFKA-1@3.7.0"]["metadata"]["created"] == "2024-01-02"
+    assert "created" not in items["KAFKA-2@3.7.0"]["metadata"]
