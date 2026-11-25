@@ -582,6 +582,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/eval/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare Runs
+         * @description Two saved runs on the same cases: McNemar's exact test on correctness and a paired
+         *     bootstrap interval for each metric's difference (a - b).
+         */
+        get: operations["compare_runs_eval_compare_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/eval/runs/{dataset}/{run_name}/baseline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Baseline
+         * @description Make a saved run the regression-gate baseline of its system on its dataset. Later runs of
+         *     the system fail the gate when a gated metric is worse by more than ``tolerance``.
+         */
+        post: operations["accept_baseline_eval_runs__dataset___run_name__baseline_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/eval/runs/{dataset}/{run_name}/faithfulness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Faithfulness
+         * @description Score a saved run's facts with the judge model (``DEP_WATCH_JUDGE_MODEL``) and, for a
+         *     retrieval run, the recall of the labeled quotes in the passages read. Saved into the run.
+         */
+        post: operations["start_faithfulness_eval_runs__dataset___run_name__faithfulness_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/eval/datasets/{name}/dates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write Dates
+         * @description Write the dataset's issue creation dates (``issue_dates.json``) from the synced issues,
+         *     for the contamination split.
+         */
+        post: operations["write_dates_eval_datasets__name__dates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -607,6 +691,23 @@ export interface components {
              * @description Issues created over ``days``, most first
              */
             by_type: components["schemas"]["TypeCount"][];
+        };
+        /** BaselineOut */
+        BaselineOut: {
+            /** System */
+            system: string;
+            /** Dataset */
+            dataset: string;
+            /** Run Name */
+            run_name: string;
+            /** Accepted At */
+            accepted_at: string;
+            /** Tolerance */
+            tolerance: number;
+            /** Metrics */
+            metrics: {
+                [key: string]: unknown;
+            };
         };
         /** CheckRequest */
         CheckRequest: {
@@ -827,6 +928,25 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** EvalComparison */
+        EvalComparison: {
+            /** A */
+            a: string;
+            /** B */
+            b: string;
+            /** Cases */
+            cases: number;
+            /** Issues */
+            issues: number;
+            /** Mcnemar */
+            mcnemar: {
+                [key: string]: unknown;
+            };
+            /** Difference */
+            difference: {
+                [key: string]: unknown;
+            };
+        };
         /** EvalRun */
         EvalRun: {
             /** Run Name */
@@ -841,6 +961,36 @@ export interface components {
             metrics: {
                 [key: string]: unknown;
             };
+            /** Model */
+            model?: string | null;
+            /**
+             * Intervals
+             * @description 95% bootstrap interval of each rate metric, resampling issues
+             */
+            intervals?: {
+                [key: string]: number[] | null;
+            } | null;
+            /**
+             * Contamination
+             * @description Metrics on issues created before / after the model's release
+             */
+            contamination?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Gate
+             * @description Regression gate against the baseline
+             */
+            gate?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Faithfulness
+             * @description Judge-scored faithfulness
+             */
+            faithfulness?: {
+                [key: string]: unknown;
+            } | null;
             /** Results */
             results: {
                 [key: string]: unknown;
@@ -890,6 +1040,36 @@ export interface components {
             metrics: {
                 [key: string]: unknown;
             };
+            /** Model */
+            model?: string | null;
+            /**
+             * Intervals
+             * @description 95% bootstrap interval of each rate metric, resampling issues
+             */
+            intervals?: {
+                [key: string]: number[] | null;
+            } | null;
+            /**
+             * Contamination
+             * @description Metrics on issues created before / after the model's release
+             */
+            contamination?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Gate
+             * @description Regression gate against the baseline
+             */
+            gate?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Faithfulness
+             * @description Judge-scored faithfulness
+             */
+            faithfulness?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** EvidenceOut */
         EvidenceOut: {
@@ -930,6 +1110,13 @@ export interface components {
              */
             answered: boolean;
             result?: components["schemas"]["CheckResponse"] | null;
+        };
+        /** IssueDatesOut */
+        IssueDatesOut: {
+            /** Name */
+            name: string;
+            /** Issues */
+            issues: number;
         };
         /** IssueDetail */
         IssueDetail: {
@@ -2611,6 +2798,178 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EvalRun"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_runs_eval_compare_get: {
+        parameters: {
+            query: {
+                dataset: string;
+                /** @description Run name */
+                a: string;
+                /** @description Run name to compare with */
+                b: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvalComparison"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    accept_baseline_eval_runs__dataset___run_name__baseline_post: {
+        parameters: {
+            query?: {
+                tolerance?: number;
+            };
+            header?: never;
+            path: {
+                dataset: string;
+                run_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaselineOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_faithfulness_eval_runs__dataset___run_name__faithfulness_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                dataset: string;
+                run_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    write_dates_eval_datasets__name__dates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssueDatesOut"];
                 };
             };
             /** @description Not Found */

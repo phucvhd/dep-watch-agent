@@ -18,15 +18,49 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     Text,
     UniqueConstraint,
+    cast,
     func,
     text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql.base import ischema_names
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.types import UserDefinedType
 
 Timestamp = DateTime(timezone=True)
+
+
+class Vector(UserDefinedType):
+    """pgvector's ``vector`` without a fixed dimension (each row holds one model's embedding),
+    bound as its text form ``[x,y,...]``. Named with its schema: the extension is installed in
+    public, which isn't on the path of a session pinned to another schema (the tests')."""
+
+    cache_ok = True
+
+    def get_col_spec(self, **_: Any) -> str:
+        return "public.vector"
+
+    def bind_expression(self, bindvalue: Any) -> Any:
+        return cast(bindvalue, self)
+
+    def bind_processor(self, dialect: Any) -> Any:
+        def process(value: list[float] | None) -> str | None:
+            return None if value is None else "[" + ",".join(repr(float(x)) for x in value) + "]"
+
+        return process
+
+    def result_processor(self, dialect: Any, coltype: Any) -> Any:
+        def process(value: str | None) -> list[float] | None:
+            return None if value is None else [float(x) for x in value.strip("[]").split(",")]
+
+        return process
+
+
+# Let reflection (``alembic check``) read the column back as ``Vector``.
+ischema_names["vector"] = ischema_names["public.vector"] = Vector
 
 
 class Base(DeclarativeBase):
@@ -176,4 +210,28 @@ class ExtractionRow(Base):
     text_hash: Mapped[str] = mapped_column(Text)
     evidence: Mapped[list[dict[str, Any]]] = mapped_column(JSONB)
     duration_ms: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(Timestamp, server_default=func.now())
+
+
+class IssuePassageRow(Base):
+    """One passage of an issue's text with its embedding, for hybrid retrieval (``retrieval``).
+
+    Keyed by issue key, embedding model and position. A passage is embedded again only when
+    its text changes (``text_hash``); the lexical side is computed from ``body`` at query time.
+    """
+
+    __tablename__ = "issue_passages"
+    __table_args__ = (
+        UniqueConstraint("issue_key", "embed_model", "position"),
+        Index("ix_issue_passages_issue_key_embed_model", "issue_key", "embed_model"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    issue_key: Mapped[str] = mapped_column(Text)
+    embed_model: Mapped[str] = mapped_column(Text)
+    position: Mapped[int] = mapped_column(Integer)
+    field: Mapped[str] = mapped_column(Text)
+    body: Mapped[str] = mapped_column(Text)
+    text_hash: Mapped[str] = mapped_column(Text)
+    embedding: Mapped[list[float]] = mapped_column(Vector)
     created_at: Mapped[datetime] = mapped_column(Timestamp, server_default=func.now())

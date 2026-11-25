@@ -85,6 +85,9 @@ class Evidence:
 @dataclass(frozen=True)
 class Extraction:
     evidence: list[Evidence]
+    # The passages the system read, when it read a selection of the issue rather than all of
+    # it (retrieval). Kept for scoring the retrieval, never used by ``decide``.
+    context: list[str] | None = None
 
 
 @dataclass(frozen=True)

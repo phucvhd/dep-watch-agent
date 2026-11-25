@@ -11,10 +11,15 @@
 - false_alarm_rate: of the cases not expected ``affected`` (``not_affected`` or
   ``insufficient_information``), how many were answered ``affected``. An alert the text doesn't
   support counts as a false alarm.
+- silent_miss_rate: of the cases not expected ``not_affected`` (``affected`` or
+  ``insufficient_information``), how many were answered ``not_affected``: an all-clear the text
+  doesn't support, the error an operator never hears about. The mirror of the false alarm.
 - abstention_rate: share of all cases answered ``insufficient_information``.
 - abstention_recall: of the cases expected ``insufficient_information``, how many were
   answered that way. None until the dataset is labeled (metadata answers never abstain).
 - citation_validity: share of extracted facts whose quote exists in the issue text.
+- latency: seconds the system spent per issue (its calls for every config of the issue), as
+  mean, p50, p95 and total. None for runs saved before it was measured.
 - always_abstain_accuracy: the accuracy of a system that answers ``insufficient_information``
   to everything, i.e. the share of cases expected to abstain. Not a score of the system; the
   floor its accuracy must beat to mean anything.
@@ -23,11 +28,12 @@ A metric whose denominator is zero is None rather than 0 or 1, so it can't be mi
 result.
 """
 
+import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any
 
-from dep_watch_agent.verdict import AFFECTED, ANSWERS, INSUFFICIENT_INFORMATION
+from dep_watch_agent.verdict import AFFECTED, ANSWERS, INSUFFICIENT_INFORMATION, NOT_AFFECTED
 
 RATE_METRICS = (
     "accuracy",
@@ -36,10 +42,13 @@ RATE_METRICS = (
     "precision",
     "recall",
     "false_alarm_rate",
+    "silent_miss_rate",
     "abstention_rate",
     "abstention_recall",
     "citation_validity",
 )
+# Rate metrics where lower is better; for every other one higher is better.
+LOWER_IS_BETTER = frozenset({"false_alarm_rate", "silent_miss_rate"})
 
 
 @dataclass(frozen=True)
@@ -53,6 +62,7 @@ class CaseResult:
     evidence_total: int
     citations_valid: int
     output: dict[str, Any]
+    seconds: float = 0.0  # time spent answering this case; 0 when it reused its issue's reading
 
     @property
     def correct(self) -> bool:
@@ -64,6 +74,7 @@ def compute_metrics(results: list[CaseResult]) -> dict[str, Any]:
     answered_affected = [r for r in results if r.answer == AFFECTED]
     expected_affected = [r for r in results if r.expected == AFFECTED]
     expected_other = [r for r in results if r.expected != AFFECTED]
+    expected_not_clear = [r for r in results if r.expected != NOT_AFFECTED]
     expected_insufficient = [r for r in results if r.expected == INSUFFICIENT_INFORMATION]
 
     confusion: dict[str, Counter] = {e: Counter() for e in ANSWERS}
@@ -89,6 +100,9 @@ def compute_metrics(results: list[CaseResult]) -> dict[str, Any]:
         "false_alarm_rate": _ratio(
             sum(r.answer == AFFECTED for r in expected_other), len(expected_other)
         ),
+        "silent_miss_rate": _ratio(
+            sum(r.answer == NOT_AFFECTED for r in expected_not_clear), len(expected_not_clear)
+        ),
         "abstention_rate": _ratio(sum(r.answer == INSUFFICIENT_INFORMATION for r in results), n),
         "abstention_recall": _ratio(
             sum(r.answer == INSUFFICIENT_INFORMATION for r in expected_insufficient),
@@ -104,6 +118,28 @@ def compute_metrics(results: list[CaseResult]) -> dict[str, Any]:
             basis: _ratio(sum(r.correct for r in rs), len(rs))
             for basis, rs in sorted(by_basis.items())
         },
+        "latency": latency(results),
+    }
+
+
+def latency(results: list[CaseResult]) -> dict[str, float] | None:
+    """Seconds per issue: mean, p50, p95 (nearest rank) and total. None if nothing was timed."""
+    per_issue: dict[str, float] = defaultdict(float)
+    for r in results:
+        per_issue[r.issue_key] += r.seconds
+    times = sorted(per_issue.values())
+    if not times or not any(times):
+        return None
+
+    def rank(q: float) -> float:
+        return times[min(len(times) - 1, max(0, math.ceil(q * len(times)) - 1))]
+
+    return {
+        "issues": len(times),
+        "mean_s": sum(times) / len(times),
+        "p50_s": rank(0.5),
+        "p95_s": rank(0.95),
+        "total_s": sum(times),
     }
 
 
@@ -127,6 +163,12 @@ def format_metrics(metrics: dict[str, Any]) -> str:
     lines.append("  accuracy by case basis:")
     for basis, value in metrics["accuracy_by_basis"].items():
         lines.append(f"    {basis:<20} {'n/a' if value is None else f'{value:.3f}'}")
+    if metrics.get("latency"):
+        lat = metrics["latency"]
+        lines.append(
+            f"  latency per issue: mean {lat['mean_s']:.1f}s, p50 {lat['p50_s']:.1f}s, "
+            f"p95 {lat['p95_s']:.1f}s, total {lat['total_s']:.0f}s"
+        )
     return "\n".join(lines)
 
 

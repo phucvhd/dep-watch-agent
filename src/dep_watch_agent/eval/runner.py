@@ -1,10 +1,17 @@
 """Run a system over the ground-truth dataset, locally or as a Langfuse experiment.
 
-A system is anything with ``extract(IssueText) -> Extraction``. The runner, not the system,
-turns extractions into answers with ``verdict.decide``, so every system is scored through the
-same decision code. Each issue is extracted once and shared by its configs.
+Two kinds of system:
+
+- an ``Extractor`` (``extract(IssueText) -> Extraction``): the runner, not the system, turns
+  extractions into answers with ``verdict.decide``, so every extractor is scored through the
+  same decision code. Each issue is extracted once and shared by its configs.
+- a ``DirectSystem`` (``answer(IssueText, version) -> Decision``): the direct-verdict control,
+  which answers each config itself and whose citation code only checks (``direct.py``).
+
+Every case records the seconds its system spent on it (``CaseResult.seconds``).
 """
 
+import time
 from dataclasses import asdict
 from typing import Any, Protocol
 
@@ -25,18 +32,54 @@ class Extractor(Protocol):
     def extract(self, issue: IssueText) -> Extraction: ...
 
 
-def decision_output(decision: Decision) -> dict[str, Any]:
-    return {
+class DirectSystem(Protocol):
+    """Answers one config of an issue itself, with its citation checked (``direct.py``)."""
+
+    def answer(self, issue: IssueText, version: str) -> Decision: ...
+
+
+def is_direct(system: Any) -> bool:
+    return callable(getattr(system, "answer", None))
+
+
+class CaseAnswerer:
+    """Answers the configs of a run for one system, reading each issue once if the system is an
+    extractor. Returns the decision, the seconds spent and the passages read (if selected)."""
+
+    def __init__(self, system: Extractor | DirectSystem):
+        self.system = system
+        self._extractions: dict[str, Extraction] = {}
+
+    def __call__(
+        self, key: str, issue: IssueText, version: str
+    ) -> tuple[Decision, float, list[str] | None]:
+        start = time.perf_counter()
+        if is_direct(self.system):
+            decision = self.system.answer(issue, version)  # type: ignore[union-attr]
+            return decision, time.perf_counter() - start, None
+        seconds = 0.0
+        if key not in self._extractions:
+            self._extractions[key] = self.system.extract(issue)  # type: ignore[union-attr]
+            seconds = time.perf_counter() - start
+        extraction = self._extractions[key]
+        return decide(issue, version, extraction, KAFKA), seconds, extraction.context
+
+
+def decision_output(decision: Decision, context: list[str] | None = None) -> dict[str, Any]:
+    output = {
         "answer": decision.answer,
         "evidence": [asdict(e) for e in decision.used],
         "dropped": [{**asdict(d.evidence), "reason": d.reason} for d in decision.dropped],
         "evidence_total": decision.evidence_total,
         "citations_valid": decision.citations_valid,
     }
+    if context is not None:
+        output["context"] = context
+    return output
 
 
 def run_local(
-    dataset: Dataset, extractor: Extractor, *, provisional: bool = False
+    dataset: Dataset, system: Extractor | DirectSystem, *, provisional: bool = False
 ) -> list[CaseResult]:
     """Score ``extractor`` on the dataset files.
 
@@ -52,13 +95,11 @@ def run_local(
                 "Finish labeling or run as provisional."
             )
 
-    extractions: dict[str, Extraction] = {}
+    answer = CaseAnswerer(system)
     results = []
     for case in dataset.cases:
         issue = IssueText.from_dict(dataset.issues[case.issue_key])
-        if case.issue_key not in extractions:
-            extractions[case.issue_key] = extractor.extract(issue)
-        decision = decide(issue, case.version, extractions[case.issue_key], KAFKA)
+        decision, seconds, context = answer(case.issue_key, issue, case.version)
         expected = (
             case.metadata_answer
             if provisional
@@ -74,7 +115,8 @@ def run_local(
                 answer=decision.answer,
                 evidence_total=decision.evidence_total,
                 citations_valid=decision.citations_valid,
-                output=decision_output(decision),
+                output=decision_output(decision, context),
+                seconds=seconds,
             )
         )
     return results
@@ -89,7 +131,7 @@ def item_version(item: Any) -> str:
 def run_langfuse(
     client: Any,
     dataset_name: str,
-    extractor: Extractor,
+    system_impl: Extractor | DirectSystem,
     *,
     system: str,
     run_name: str,
@@ -102,15 +144,13 @@ def run_langfuse(
     """
     from langfuse import Evaluation
 
-    extractions: dict[str, Extraction] = {}
+    answer = CaseAnswerer(system_impl)
     results: list[CaseResult] = []
 
     def task(*, item: Any, **_: Any) -> dict[str, Any]:
         issue = IssueText.from_dict(item.input)
-        key = item.metadata["issue_key"]
-        if key not in extractions:
-            extractions[key] = extractor.extract(issue)
-        return decision_output(decide(issue, item_version(item), extractions[key], KAFKA))
+        decision, seconds, context = answer(item.metadata["issue_key"], issue, item_version(item))
+        return {**decision_output(decision, context), "seconds": seconds}
 
     def per_case(*, output: Any, expected_output: Any, **_: Any) -> list[Any]:
         scores = [
@@ -138,6 +178,7 @@ def run_langfuse(
                     evidence_total=r.output["evidence_total"],
                     citations_valid=r.output["citations_valid"],
                     output=r.output,
+                    seconds=r.output.get("seconds", 0.0),
                 )
             )
         metrics = compute_metrics(results)

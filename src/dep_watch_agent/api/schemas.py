@@ -466,6 +466,38 @@ class EvalRunSummary(BaseModel):
     dataset: str
     provisional: bool
     metrics: dict[str, Any]
+    model: str | None = None
+    intervals: dict[str, list[float] | None] | None = Field(
+        None, description="95% bootstrap interval of each rate metric, resampling issues"
+    )
+    contamination: dict[str, Any] | None = Field(
+        None, description="Metrics on issues created before / after the model's release"
+    )
+    gate: dict[str, Any] | None = Field(None, description="Regression gate against the baseline")
+    faithfulness: dict[str, Any] | None = Field(None, description="Judge-scored faithfulness")
+
+
+class EvalComparison(BaseModel):
+    a: str
+    b: str
+    cases: int
+    issues: int
+    mcnemar: dict[str, Any]
+    difference: dict[str, Any]
+
+
+class BaselineOut(BaseModel):
+    system: str
+    dataset: str
+    run_name: str
+    accepted_at: str
+    tolerance: float
+    metrics: dict[str, Any]
+
+
+class IssueDatesOut(BaseModel):
+    name: str
+    issues: int
 
 
 class EvalRun(EvalRunSummary):

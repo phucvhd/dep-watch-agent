@@ -10,6 +10,8 @@ const METRICS: [string, string][] = [
   ['accuracy', 'Accuracy'],
   ['precision', 'Precision'],
   ['recall', 'Recall'],
+  ['silent_miss_rate', 'Silent misses'],
+  ['false_alarm_rate', 'False alarms'],
   ['abstention_rate', 'Abstention rate'],
   ['citation_validity', 'Citation validity'],
 ]
@@ -198,6 +200,11 @@ function RunsTable({ runs }: { runs: EvalRunSummary[] }) {
     const v = run.metrics[key]
     return typeof v === 'number' ? v.toFixed(3) : 'N/A'
   }
+  // The 95% bootstrap interval, resampling issues, where the run has one.
+  const interval = (run: EvalRunSummary, key: string) => {
+    const ci = run.intervals?.[key]
+    return ci ? `95% interval ${ci[0].toFixed(3)} to ${ci[1].toFixed(3)}` : undefined
+  }
   return (
     <div className="table-wrap">
       <table>
@@ -218,10 +225,11 @@ function RunsTable({ runs }: { runs: EvalRunSummary[] }) {
               <td>
                 {run.run_name}
                 {run.provisional && <span className="tag">Provisional</span>}
+                {run.gate && !run.gate.passed && <span className="tag">Gate failed</span>}
               </td>
               <td>{run.system}</td>
               {METRICS.map(([key]) => (
-                <td key={key} className="num">
+                <td key={key} className="num" title={interval(run, key)}>
                   {value(run, key)}
                 </td>
               ))}

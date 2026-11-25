@@ -19,7 +19,11 @@ Two ways to get JSON (``DEP_WATCH_LLM_OUTPUT``):
 - ``json_schema``: the server constrains decoding to ``FACTS_SCHEMA``. For models that don't
   reason before answering.
 
-Either way ``extractor.parse_facts`` validates the shape, and invalid output is retried.
+Either way ``extractor.parse_facts`` validates the shape, and invalid output is retried. A prompt
+that asks for reasoning before the JSON (chain of thought) names the tag it goes in
+(``reasoning_tag``), and the tagged text is removed before parsing.
+
+The same model serves the direct-verdict control with another schema (``llm.direct``).
 
 LM Studio answers with whatever model is loaded when the requested one isn't, and its facts would
 be stored under this system's name. ``_answered_by`` refuses such a reply; it is switched off for
@@ -117,15 +121,24 @@ def _chat_model(config: LLMConfig) -> Any:
 
 
 class ChatFactModel:
-    def __init__(self, config: LLMConfig, *, prompt: Prompt | None = None):
-        # from langchain_core.runnables import RunnableLambda
+    def __init__(
+        self,
+        config: LLMConfig,
+        *,
+        prompt: Prompt | None = None,
+        schema: dict[str, Any] = FACTS_SCHEMA,
+        reasoning_tag: str | None = None,
+        run_name: str = "extract_facts",
+    ):
+        from langchain_core.runnables import RunnableLambda
 
         chat = _chat_model(config)
         self.config = config
+        self.run_name = run_name
         if config.output == "json_schema":
-            self._runnable = chat.with_structured_output(
-                FACTS_SCHEMA, method="json_schema", strict=True
-            )
+            if reasoning_tag:
+                raise ValueError("a reasoning prompt needs DEP_WATCH_LLM_OUTPUT=text")
+            self._runnable = chat.with_structured_output(schema, method="json_schema", strict=True)
             # Refuse a reply from another model (switched off for now):
             # self._runnable = chat.with_structured_output(
             #     FACTS_SCHEMA, method="json_schema", strict=True, include_raw=True
@@ -133,7 +146,11 @@ class ChatFactModel:
         else:
             from langchain_core.output_parsers import JsonOutputParser
 
-            self._runnable = chat | JsonOutputParser()
+            if reasoning_tag:
+                strip = RunnableLambda(lambda message: strip_tagged(message, reasoning_tag))
+                self._runnable = chat | strip | JsonOutputParser()
+            else:
+                self._runnable = chat | JsonOutputParser()
             # Refuse a reply from another model (switched off for now):
             # self._runnable = chat | RunnableLambda(self._answered_by) | JsonOutputParser()
         self._metadata = {"model": config.model, "output": config.output}
@@ -150,7 +167,7 @@ class ChatFactModel:
                 [SystemMessage(system), HumanMessage(user)],
                 config={
                     "callbacks": self._callbacks,
-                    "run_name": "extract_facts",
+                    "run_name": self.run_name,
                     "metadata": self._metadata,
                 },
             )
@@ -175,6 +192,18 @@ class ChatFactModel:
         if output["parsing_error"] is not None:
             raise OutputParserException(str(output["parsing_error"]))
         return output["parsed"]
+
+
+def strip_tagged(message: Any, tag: str) -> str:
+    """The reply's text without its ``<tag>...</tag>`` blocks. An unclosed block (a reply cut
+    off while reasoning) leaves nothing to parse, which counts as invalid output."""
+    import re
+
+    text = message.content if hasattr(message, "content") else str(message)
+    if isinstance(text, list):  # content blocks
+        text = "".join(b.get("text", "") if isinstance(b, dict) else str(b) for b in text)
+    text = re.sub(rf"<{tag}>.*?</{tag}>", "", text, flags=re.DOTALL)
+    return re.sub(rf"<{tag}>.*", "", text, flags=re.DOTALL).strip()
 
 
 def _langfuse_callbacks() -> list[Any]:

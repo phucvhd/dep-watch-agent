@@ -277,5 +277,49 @@ versions. Systems (models) are registered by name in `systems.SYSTEMS` and compa
 other on the same metrics; there is no fixed baseline. Metric definitions are in
 `eval/metrics.py`.
 
+#### Variants
+
+`DEP_WATCH_LLM_VARIANTS` (comma-separated, default `zeroshot`) registers one system per variant
+of the configured model, named `<model>` for zero-shot and `<model>-<variant>` otherwise:
+
+| Variant | System |
+|---|---|
+| `zeroshot` | `prompts/extract_facts.md` |
+| `fewshot` | plus made-up worked examples (`extract_facts.fewshot.md`; never from the eval set) |
+| `cot` | step-by-step reasoning in `<reasoning>` tags before the JSON (`extract_facts.cot.md`) |
+| `hybrid` | zero-shot over hybrid retrieval on issues longer than `DEP_WATCH_RETRIEVAL_BUDGET` (6,000 characters): passages embedded with `DEP_WATCH_EMBED_MODEL` into pgvector, ranked by cosine distance and `ts_rank`, fused by reciprocal rank |
+| `direct` | the direct-verdict control (RQ1): the model answers each version with one citation, code only checks the citation. Eval only; `/check` and `/scan` use the first other system |
+
+#### What a run reports
+
+Each saved run has the metrics (macro-F1, silent-miss and false-alarm rates, abstention recall,
+citation validity, latency per issue), a 95% bootstrap interval for each rate metric resampling
+issues (`eval/stats.py`), and, when the dataset has `issue_dates.json` and the model's release
+date is known (`eval/contamination.py`, or `DEP_WATCH_LLM_RELEASE_DATE`), the metrics on issues
+created before and after the release.
+
+| Endpoint | Does |
+|---|---|
+| `GET /eval/compare?dataset=&a=&b=` | McNemar's exact test and paired bootstrap differences |
+| `POST /eval/runs/{dataset}/{run}/baseline` | accept a run as its system's gate baseline |
+| `POST /eval/runs/{dataset}/{run}/faithfulness` | judge-scored faithfulness (`DEP_WATCH_JUDGE_MODEL`, never the model under test) and context recall; a job |
+| `POST /eval/datasets/{name}/dates` | write `issue_dates.json` from the synced issues |
+
+The regression gate compares every run with its system's baseline in
+`eval/baselines/<dataset>/<system>.json` (committed). There is no CI, so check a saved run from
+the command line before merging a prompt or model change:
+
+```bash
+uv run python -m dep_watch_agent.eval.gate eval/runs/kafka-ground-truth-v2/<run>.json
+```
+
+It exits 1 when a gated metric is worse than the baseline by more than its tolerance. A side
+by side report of several runs (intervals, McNemar against a reference, error kinds, the long
+issues, the contamination split):
+
+```bash
+uv run python -m dep_watch_agent.eval.analysis eval/datasets/kafka-ground-truth-v2 eval/runs/kafka-ground-truth-v2/{a,b,c}.json
+```
+
 - `POST /eval/datasets` refuses (409) to overwrite an existing dataset, so labels aren't lost. To change the
   sample, create a new dataset name (e.g. `-v3`).

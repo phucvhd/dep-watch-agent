@@ -67,9 +67,40 @@ class Prompt:
         return hashlib.sha256(self.text.encode()).hexdigest()[:12]
 
 
-def load_prompt(name: str = PROMPT_NAME) -> Prompt:
-    text = resources.files("dep_watch_agent.llm").joinpath("prompts", f"{name}.md").read_text()
-    return Prompt(name, text)
+# Prompt variants for RQ2, built on a dependency's extraction prompt ``<name>.md``:
+# - fewshot: worked examples (``<name>.fewshot.md``, made up, never from the eval set) appended;
+# - cot: the closing answer format replaced by ``<name>.cot.md``, which asks for step-by-step
+#   reasoning inside <reasoning> tags before the JSON object.
+PROMPT_VARIANTS = ("zeroshot", "fewshot", "cot")
+ANSWER_FORMAT_MARKER = "Answer with only the JSON object"
+REASONING_TAG = "reasoning"
+
+
+class PromptNotFound(ValueError):
+    """No prompt file for this name or variant."""
+
+
+def load_prompt(name: str = PROMPT_NAME, variant: str = "zeroshot") -> Prompt:
+    """The prompt ``<name>.md`` (zero-shot), or a variant of it. The zero-shot prompt keeps its
+    plain name, so its version is the same as before variants existed."""
+    if variant not in PROMPT_VARIANTS:
+        raise ValueError(f"prompt variant must be one of {PROMPT_VARIANTS}, got {variant!r}")
+    text = _prompt_file(name)
+    if variant == "fewshot":
+        text = text.rstrip() + "\n\n" + _prompt_file(f"{name}.fewshot")
+    elif variant == "cot":
+        head, marker, _ = text.rpartition(ANSWER_FORMAT_MARKER)
+        if not marker:
+            raise PromptNotFound(f"{name}.md has no {ANSWER_FORMAT_MARKER!r} line to replace")
+        text = head.rstrip() + "\n\n" + _prompt_file(f"{name}.cot")
+    return Prompt(name if variant == "zeroshot" else f"{name}+{variant}", text)
+
+
+def _prompt_file(name: str) -> str:
+    path = resources.files("dep_watch_agent.llm").joinpath("prompts", f"{name}.md")
+    if not path.is_file():
+        raise PromptNotFound(f"no prompt llm/prompts/{name}.md")
+    return path.read_text()
 
 
 class LLMExtractor:
