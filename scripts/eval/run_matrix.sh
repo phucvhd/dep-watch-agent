@@ -72,7 +72,9 @@ run_names() {  # every run of the matrix's selected rows: <model>[-<variant>]
 preflight() {
   local missing=0 downloaded
   [[ -x $LMS ]] || { echo "no lms CLI at $LMS (install LM Studio, or set LMS)"; exit 1; }
-  "$LMS" server start >/dev/null
+  # Only start a stopped server: `server start` on a running one drops its open requests,
+  # which kills any run in progress.
+  "$LMS" server status 2>&1 | grep -q "is running" || "$LMS" server start >/dev/null
   downloaded=$("$LMS" ls)
   for row in "${MATRIX[@]}" "$JUDGE|||$JUDGE" "$EMBED|||$EMBED_SOURCE"; do
     IFS='|' read -r model _ _ source <<<"$row"
