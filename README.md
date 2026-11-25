@@ -330,17 +330,23 @@ issues, the contamination split):
 uv run python -m dep_watch_agent.eval.analysis eval/datasets/kafka-ground-truth-v2 eval/runs/kafka-ground-truth-v2/{a,b,c}.json
 ```
 
-The full experiment matrix (four models and their variants, judged faithfulness, then a Langfuse
-replay of every new run) runs from the command line on LM Studio, one model loaded at a time;
-it takes several hours:
+The full experiment matrix for the report runs from the command line on LM Studio, one model
+loaded at a time, and takes several hours: a preflight (models downloaded, database migrated),
+four models and their variants, judged faithfulness for the Qwen3-4B runs, every new run
+recorded in Langfuse (the dataset is uploaded first), and the report above over every run, in
+`eval/runs/<dataset>/report.md`:
 
 ```bash
+scripts/eval/run_matrix.sh --check          # preflight only; prints how to get a missing model
 scripts/eval/run_matrix.sh                  # every model; or name some: qwen/qwen3.5-9b
+VARIANTS=hybrid scripts/eval/run_matrix.sh qwen/qwen3-4b-2507   # one variant again
+scripts/eval/run_matrix.sh --report         # the report only, from the saved runs
 ```
 
 Its steps also run alone: `scripts/eval/run_variants.py <model> <variants>` scores and saves
 runs locally (`--limit N` for a smoke test), `scripts/eval/judge.py <run.json>...` adds judged
-faithfulness, and `scripts/eval/replay.py <run.json>...` records saved runs in Langfuse.
+faithfulness, and `scripts/eval/replay.py [--upload] <run.json>...` records saved runs in
+Langfuse.
 
 - `POST /eval/datasets` refuses (409) to overwrite an existing dataset, so labels aren't lost. To change the
   sample, create a new dataset name (e.g. `-v3`).

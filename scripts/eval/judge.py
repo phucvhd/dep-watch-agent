@@ -24,6 +24,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("runs", type=Path, nargs="+", help="eval/runs/<dataset>/<run>.json")
     parser.add_argument("--datasets", type=Path, default=ROOT / "eval/datasets")
+    parser.add_argument("--force", action="store_true", help="judge runs this judge already did")
     args = parser.parse_args(argv)
 
     judge, judge_model = fa.judge_from_env()
@@ -31,6 +32,9 @@ def main(argv: list[str] | None = None) -> int:
     for path in args.runs:
         run = json.loads(path.read_text())
         fa.check_judge(judge_model, run.get("model") or run["system"])
+        if not args.force and (run.get("faithfulness") or {}).get("judge") == judge_model:
+            print(f"{path.name}: already judged by {judge_model}, skipped", flush=True)
+            continue
         data = load_dataset(args.datasets / run["dataset"])
         results = [CaseResult(**r) for r in run["results"]]
         run["faithfulness"] = {

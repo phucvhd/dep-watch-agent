@@ -4,8 +4,9 @@
 
     uv run python scripts/eval/replay.py <run.json>...
 
-Needs the Langfuse keys in ``.env`` and the dataset uploaded
-(``POST /eval/datasets/{name}/upload``).
+Needs the Langfuse keys in ``.env``. ``--upload`` first creates or updates the runs' datasets
+in Langfuse, as ``POST /eval/datasets/{name}/upload`` does (items are keyed by case id, so it is
+safe to repeat).
 """
 
 import argparse
@@ -16,7 +17,7 @@ from pathlib import Path
 from langfuse import Langfuse
 
 from dep_watch_agent.api.routes.eval import run_summary, save_run
-from dep_watch_agent.eval.dataset import load_dataset
+from dep_watch_agent.eval.dataset import load_dataset, upload
 from dep_watch_agent.eval.metrics import CaseResult
 from dep_watch_agent.eval.runner import run_langfuse
 
@@ -28,9 +29,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("runs", type=Path, nargs="+", help="eval/runs/<dataset>/<run>.json")
     parser.add_argument("--datasets", type=Path, default=ROOT / "eval/datasets")
     parser.add_argument("--baselines", type=Path, default=ROOT / "eval/baselines")
+    parser.add_argument("--upload", action="store_true", help="upload the datasets first")
     args = parser.parse_args(argv)
 
     client = Langfuse()
+    if args.upload:
+        for name in sorted({json.loads(p.read_text())["dataset"] for p in args.runs}):
+            count = upload(load_dataset(args.datasets / name), client)
+            print(f"dataset {name}: {count} items uploaded", flush=True)
     for path in args.runs:
         run = json.loads(path.read_text())
         if run.get("provisional"):
