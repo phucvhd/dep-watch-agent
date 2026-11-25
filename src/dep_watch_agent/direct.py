@@ -6,11 +6,13 @@ version ordering, backports and the rule that the reporter's version is not wher
 is left to the model here.
 
 ``check_answer`` keeps an answer only if it is one of the three answers and, unless it abstains,
-cites either a passage of the issue text (verbatim, whitespace aside) or one of the given fix
-versions. An answer whose citation doesn't check out becomes ``insufficient_information``, as a
-fact without a valid quote is dropped in ``decide``: an uncited claim is not an answer.
+cites either a passage of the issue text (verbatim, whitespace aside) or given fix versions
+(``cited_fixes``). An answer whose citation doesn't check out becomes
+``insufficient_information``, as a fact without a valid quote is dropped in ``decide``: an
+uncited claim is not an answer.
 """
 
+import re
 from collections import Counter
 from dataclasses import dataclass
 
@@ -43,13 +45,21 @@ def check_answer(issue: IssueText, version: str, direct: DirectAnswer) -> Decisi
     cited = Evidence(version, kind, direct.quote)  # type: ignore[arg-type]
     if direct.answer not in ANSWERS:
         reason = f"unknown answer {direct.answer!r}"
-    elif direct.quote.strip() in issue.fix_versions:
+    elif cited_fixes(direct.quote, issue):
         return Decision(direct.answer, [Evidence(version, "fix", direct.quote.strip())], [])
     elif not quote_in_issue(direct.quote, issue):
         reason = "citation not found"
     else:
         return Decision(direct.answer, [cited], [])
     return Decision(INSUFFICIENT_INFORMATION, [], [DroppedEvidence(cited, reason)])
+
+
+def cited_fixes(quote: str, issue: IssueText) -> bool:
+    """True if ``quote`` cites given fix versions: one or several of them, comma-separated,
+    optionally labeled as the field ("fix_versions: 3.7.1", "<fix_versions>3.7.1")."""
+    body = re.sub(r"</?fix_versions>|^\s*fix[_ ]versions?\s*:?", "", quote.strip(), flags=re.I)
+    versions = [v.strip() for v in body.split(",") if v.strip()]
+    return bool(versions) and all(v in issue.fix_versions for v in versions)
 
 
 def combine(decisions: list[Decision]) -> Decision:

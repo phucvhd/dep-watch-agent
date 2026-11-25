@@ -22,9 +22,17 @@ def test_a_cited_answer_is_kept():
     assert d.citations_valid == 1
 
 
-def test_a_fix_version_is_a_citation():
-    d = check_answer(ISSUE, "3.8.0", DirectAnswer(NOT_AFFECTED, "3.7.1"))
+@pytest.mark.parametrize(
+    "quote", ["3.7.1", "fix_versions: 3.7.1", "<fix_versions>3.7.1</fix_versions>"]
+)
+def test_a_fix_version_is_a_citation(quote):
+    d = check_answer(ISSUE, "3.8.0", DirectAnswer(NOT_AFFECTED, quote))
     assert (d.answer, d.used[0].kind) == (NOT_AFFECTED, "fix")
+
+
+def test_a_version_not_given_as_fixed_is_not_a_fix_citation():
+    d = check_answer(ISSUE, "3.8.0", DirectAnswer(NOT_AFFECTED, "fix_versions: 3.7.1, 3.9.0"))
+    assert d.answer == INSUFFICIENT_INFORMATION
 
 
 @pytest.mark.parametrize(
