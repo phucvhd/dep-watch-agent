@@ -56,7 +56,19 @@ Merged to trunk and cherry-picked, so the fix will also be in 3.3.3.
 </comment>
 Answer: {"evidence": [{"version": "3.3.3", "kind": "fix", "quote": "Merged to trunk and cherry-picked, so the fix will also be in 3.3.3."}]}
 
-Example 5: a downgrade sentence.
+Example 5: a bug that started on a release line, and a feature that is not a bug's start.
+<fix_versions>
+2.9.1
+</fix_versions>
+<summary>
+Rebalance loops when a member restarts
+</summary>
+<description>
+Since 2.7 a restarted member triggers a second rebalance. The new heartbeat API was introduced in 2.5, but that is unrelated.
+</description>
+Answer: {"evidence": [{"version": "2.7", "kind": "introduced", "quote": "Since 2.7 a restarted member triggers a second rebalance."}]}
+
+Example 6: a downgrade sentence.
 <fix_versions>
 3.2.1
 </fix_versions>
@@ -68,7 +80,7 @@ Stream threads die during state restoration on 3.2.0. After downgrading to 3.1.1
 </description>
 Answer: {"evidence": [{"version": "3.2.0", "kind": "affects", "quote": "Stream threads die during state restoration on 3.2.0."}, {"version": "3.1.1", "kind": "unaffected", "quote": "After downgrading to 3.1.1 the problem went away."}]}
 
-Example 6: no version facts.
+Example 7: no version facts.
 <fix_versions>
 4.0.0
 </fix_versions>
