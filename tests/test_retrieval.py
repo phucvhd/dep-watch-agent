@@ -110,3 +110,20 @@ def test_hybrid_reads_a_short_issue_whole():
     extraction = hybrid.extract(LONG)
     assert extraction.context is None
     assert "at org.apache.kafka.Foo" in model.users[0]
+
+
+def test_hybrid_counts_an_invalid_reply_of_the_selection():
+    from dep_watch_agent.llm.extractor import InvalidOutput
+
+    class Broken:
+        def __call__(self, system, user):
+            raise InvalidOutput("not json")
+
+    class OnePassage:
+        def rank(self, key, issue):
+            return [Ranked(Passage(0, "description", "Regression in 3.6.0."), 1.0)]
+
+    base = LLMExtractor(Broken(), prompt=load_prompt(), model_id="m", retries=0)
+    extraction = HybridExtractor(base, OnePassage(), budget_chars=100).extract(LONG)  # type: ignore[arg-type]
+    assert (extraction.evidence, extraction.invalid_outputs) == ([], 1)
+    assert extraction.context is not None  # it read the selection, and the reply was lost

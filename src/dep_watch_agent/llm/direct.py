@@ -69,7 +69,7 @@ class LLMDirect:
                 return parse_direct(self.model(self.prompt.text, user))
             except InvalidOutput as exc:
                 log.warning("invalid model output (attempt %d): %s", attempt + 1, exc)
-        return DirectAnswer(INSUFFICIENT_INFORMATION)
+        return DirectAnswer(INSUFFICIENT_INFORMATION, invalid=True)
 
 
 def parse_direct(output: Any) -> DirectAnswer:

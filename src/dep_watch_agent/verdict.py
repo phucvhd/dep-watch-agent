@@ -96,6 +96,9 @@ class Extraction:
     # The passages the system read, when it read a selection of the issue rather than all of
     # it (retrieval). Kept for scoring the retrieval, never used by ``decide``.
     context: list[str] | None = None
+    # Model replies that stayed invalid after the retries (one per chunk read): their facts
+    # are lost, so a miss can be told apart from a reading that found nothing.
+    invalid_outputs: int = 0
 
 
 @dataclass(frozen=True)
@@ -109,6 +112,7 @@ class Decision:
     answer: str
     used: list[Evidence]
     dropped: list[DroppedEvidence]
+    invalid_outputs: int = 0  # passed on from the extraction, or the direct answer
 
     @property
     def evidence_total(self) -> int:
@@ -158,7 +162,7 @@ def decide(
         answer = NOT_AFFECTED
     else:
         answer = INSUFFICIENT_INFORMATION
-    return Decision(answer, used, dropped)
+    return Decision(answer, used, dropped, extraction.invalid_outputs)
 
 
 def _rejection(ev: Evidence, issue: IssueText, scheme: VersionScheme) -> str | None:

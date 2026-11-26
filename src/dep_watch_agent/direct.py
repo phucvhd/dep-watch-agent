@@ -36,11 +36,12 @@ _KIND = {AFFECTED: "affects", NOT_AFFECTED: "unaffected"}
 class DirectAnswer:
     answer: str
     quote: str = ""
+    invalid: bool = False  # the model's output stayed invalid after the retries
 
 
 def check_answer(issue: IssueText, version: str, direct: DirectAnswer) -> Decision:
     if direct.answer == INSUFFICIENT_INFORMATION:
-        return Decision(INSUFFICIENT_INFORMATION, [], [])
+        return Decision(INSUFFICIENT_INFORMATION, [], [], int(direct.invalid))
     kind = _KIND.get(direct.answer, direct.answer)
     cited = Evidence(version, kind, direct.quote)  # type: ignore[arg-type]
     if direct.answer not in ANSWERS:
@@ -69,4 +70,4 @@ def combine(decisions: list[Decision]) -> Decision:
     dropped = [ev for d in decisions for ev in d.dropped]
     answers = Counter(d.answer for d in decisions if d.answer != INSUFFICIENT_INFORMATION)
     answer = next(iter(answers)) if len(answers) == 1 else INSUFFICIENT_INFORMATION
-    return Decision(answer, used, dropped)
+    return Decision(answer, used, dropped, sum(d.invalid_outputs for d in decisions))

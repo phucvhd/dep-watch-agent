@@ -32,6 +32,8 @@ def error_kind(r: CaseResult) -> str | None:
     out = r.output
     used = out.get("evidence", [])
     dropped = out.get("dropped", [])
+    if out.get("invalid_outputs") and not used and not dropped:
+        return "invalid model output: no facts parsed"
     reasons = sorted({d["reason"] for d in dropped})
     if r.expected == AFFECTED and r.answer == INSUFFICIENT_INFORMATION:
         if not used and not dropped:
@@ -108,6 +110,12 @@ def markdown_report(
         ]
         lines.append(f"| {metric} | " + " | ".join(cells) + " |")
     latencies = [r["metrics"].get("latency") for r in runs]
+    invalid = [r["metrics"].get("invalid_output_issues") for r in runs]
+    lines.append(
+        "| issues with invalid model output | "
+        + " | ".join("n/a" if n is None else str(n) for n in invalid)
+        + " |"
+    )
     lines.append(
         "| latency p50 / p95 per issue (s) | "
         + " | ".join(

@@ -73,6 +73,7 @@ def decision_output(decision: Decision, context: list[str] | None = None) -> dic
         "dropped": [{**asdict(d.evidence), "reason": d.reason} for d in decision.dropped],
         "evidence_total": decision.evidence_total,
         "citations_valid": decision.citations_valid,
+        "invalid_outputs": decision.invalid_outputs,
     }
     if context is not None:
         output["context"] = context

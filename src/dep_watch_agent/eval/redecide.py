@@ -15,7 +15,10 @@ from dep_watch_agent.eval.runner import decision_output
 from dep_watch_agent.verdict import Evidence, Extraction, IssueText, decide
 from dep_watch_agent.versions import KAFKA
 
-_DECISION_KEYS = ("answer", "evidence", "dropped", "evidence_total", "citations_valid", "context")
+_DECISION_KEYS = (
+    "answer", "evidence", "dropped", "evidence_total", "citations_valid", "context",
+    "invalid_outputs",
+)  # fmt: skip
 
 
 def is_direct_run(run: dict[str, Any]) -> bool:
@@ -28,12 +31,13 @@ def extraction_of(output: dict[str, Any]) -> Extraction:
     return Extraction(
         [Evidence(f["version"], f["kind"], f["quote"]) for f in facts],
         context=output.get("context"),
+        invalid_outputs=output.get("invalid_outputs", 0),
     )
 
 
 def redecide(results: list[CaseResult], issues: dict[str, dict[str, Any]]) -> list[CaseResult]:
-    """Every case decided again from its saved extraction. The time spent reading is kept, and
-    anything else the output recorded (such as invalid model output) is carried over."""
+    """Every case decided again from its saved extraction. The time spent reading and the
+    invalid model output count are kept, and anything else the output recorded is carried over."""
     out = []
     for r in results:
         extraction = extraction_of(r.output)
