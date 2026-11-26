@@ -300,11 +300,16 @@ class HybridExtractor:
                 *(_tag(p.field, p.body) for p in chosen),
             ]
         )
+        facts = self.base._extract_chunk(user)
         evidence = []
-        for ev in self.base._extract_chunk(user):
+        for ev in facts or []:
             if ev not in evidence:
                 evidence.append(ev)
-        return Extraction(evidence, context=[issue.summary, *(p.body for p in chosen)])
+        return Extraction(
+            evidence,
+            context=[issue.summary, *(p.body for p in chosen)],
+            invalid_outputs=int(facts is None),
+        )
 
 
 def _hash(value: str) -> str:

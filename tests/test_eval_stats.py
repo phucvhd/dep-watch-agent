@@ -260,3 +260,26 @@ def test_context_recall():
     gold = {"a": ["We run 3.6.0 here."], "b": ["Seen on 2.8.0."], "c": ["x"]}
     assert faithfulness.context_recall(results, gold) == {"cases": 2, "quotes": 2, "recall": 0.5}
     assert faithfulness.context_recall(results, {}) is None
+
+
+# --- invalid model output -----------------------------------------------------------------
+
+
+def test_invalid_output_is_counted_by_issue_and_named_as_the_error():
+    broken = {
+        "answer": INSUFFICIENT_INFORMATION,
+        "evidence": [],
+        "dropped": [],
+        "invalid_outputs": 1,
+    }
+    clean = {**broken, "invalid_outputs": 0}
+    results = [
+        result(AFFECTED, INSUFFICIENT_INFORMATION, key="A", output=broken),
+        result(INSUFFICIENT_INFORMATION, INSUFFICIENT_INFORMATION, key="A", output=broken),
+        result(AFFECTED, INSUFFICIENT_INFORMATION, key="B", output=clean),
+    ]
+    assert compute_metrics(results)["invalid_output_issues"] == 1
+    assert analysis.error_kind(results[0]) == "invalid model output: no facts parsed"
+    assert analysis.error_kind(results[2]) == "missed: no facts extracted"
+    # Runs saved before it was recorded say nothing either way.
+    assert compute_metrics([result(AFFECTED, AFFECTED)])["invalid_output_issues"] is None

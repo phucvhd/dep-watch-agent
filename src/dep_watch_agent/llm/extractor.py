@@ -137,21 +137,25 @@ class LLMExtractor:
                 "issue split into %d chunks; reading the first %d", len(chunks), self.max_chunks
             )
         evidence: list[Evidence] = []
+        invalid = 0
         for chunk in chunks[: self.max_chunks]:
-            for ev in self._extract_chunk(chunk):
+            facts = self._extract_chunk(chunk)
+            invalid += facts is None
+            for ev in facts or []:
                 if ev not in evidence:
                     evidence.append(ev)
-        return Extraction(evidence)
+        return Extraction(evidence, invalid_outputs=invalid)
 
-    def _extract_chunk(self, user: str) -> list[Evidence]:
-        """Facts from one chunk. Output that stays invalid after the retries counts as no
-        facts (the decision abstains); errors reaching the model are raised."""
+    def _extract_chunk(self, user: str) -> list[Evidence] | None:
+        """Facts from one chunk, or None if the output stayed invalid after the retries: no
+        facts (the decision abstains), counted as invalid output. Errors reaching the model are
+        raised."""
         for attempt in range(self.retries + 1):
             try:
                 return parse_facts(self.model(self.prompt.text, user))
             except InvalidOutput as exc:
                 log.warning("invalid model output (attempt %d): %s", attempt + 1, exc)
-        return []
+        return None
 
 
 PARSER_VERSION = 2  # 2: a bare list of facts is accepted as the evidence list

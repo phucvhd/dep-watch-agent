@@ -143,8 +143,20 @@ def test_invalid_output_is_retried():
 
 def test_output_invalid_after_retries_means_no_facts():
     model = FakeModel(InvalidOutput("1"), {"evidence": "2"})
-    assert LLMExtractor(model, retries=1).extract(ISSUE).evidence == []
+    extraction = LLMExtractor(model, retries=1).extract(ISSUE)
+    assert extraction.evidence == []
+    assert extraction.invalid_outputs == 1  # told apart from a reading that found nothing
     assert len(model.calls) == 2
+
+
+def test_invalid_output_is_counted_per_chunk():
+    good = {"evidence": [fact("3.6.0", "introduced", "Regression in 3.6.0")]}
+    model = FakeModel(InvalidOutput("1"), InvalidOutput("2"), good, {"evidence": []})
+    issue = IssueText("S", "a\n" * 3_000, comments=["Regression in 3.6.0"])
+    extraction = LLMExtractor(model, chunk_chars=2_000, max_chunks=3, retries=1).extract(issue)
+    assert extraction.invalid_outputs == 1  # the first chunk failed twice; the others parsed
+    assert extraction.evidence == [Evidence("3.6.0", "introduced", "Regression in 3.6.0")]
+    assert LLMExtractor(FakeModel({"evidence": []})).extract(ISSUE).invalid_outputs == 0
 
 
 def test_errors_reaching_the_model_are_raised():

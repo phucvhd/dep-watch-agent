@@ -92,7 +92,8 @@ def test_llm_direct_asks_about_the_version():
 def test_invalid_output_is_retried_then_abstains():
     model = FakeModel(["junk", "junk"])
     system = LLMDirect(model, prompt=load_prompt("direct_verdict"))
-    assert system.answer(ISSUE, "3.6.0").answer == INSUFFICIENT_INFORMATION
+    decision = system.answer(ISSUE, "3.6.0")
+    assert (decision.answer, decision.invalid_outputs) == (INSUFFICIENT_INFORMATION, 1)
     assert len(model.users) == 2
 
 

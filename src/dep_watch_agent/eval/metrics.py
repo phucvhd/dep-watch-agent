@@ -20,6 +20,8 @@
 - citation_validity: share of extracted facts whose quote exists in the issue text.
 - latency: seconds the system spent per issue (its calls for every config of the issue), as
   mean, p50, p95 and total. None for runs saved before it was measured.
+- invalid_output_issues: issues with a model reply that stayed invalid after the retries (its
+  facts are lost; the case abstains). None for runs saved before it was recorded.
 - always_abstain_accuracy: the accuracy of a system that answers ``insufficient_information``
   to everything, i.e. the share of cases expected to abstain. Not a score of the system; the
   floor its accuracy must beat to mean anything.
@@ -119,7 +121,15 @@ def compute_metrics(results: list[CaseResult]) -> dict[str, Any]:
             for basis, rs in sorted(by_basis.items())
         },
         "latency": latency(results),
+        "invalid_output_issues": invalid_output_issues(results),
     }
+
+
+def invalid_output_issues(results: list[CaseResult]) -> int | None:
+    recorded = [r for r in results if "invalid_outputs" in r.output]
+    if not recorded:
+        return None
+    return len({r.issue_key for r in recorded if r.output["invalid_outputs"]})
 
 
 def latency(results: list[CaseResult]) -> dict[str, float] | None:
@@ -163,6 +173,8 @@ def format_metrics(metrics: dict[str, Any]) -> str:
     lines.append("  accuracy by case basis:")
     for basis, value in metrics["accuracy_by_basis"].items():
         lines.append(f"    {basis:<20} {'n/a' if value is None else f'{value:.3f}'}")
+    if metrics.get("invalid_output_issues") is not None:
+        lines.append(f"  issues with invalid model output: {metrics['invalid_output_issues']}")
     if metrics.get("latency"):
         lat = metrics["latency"]
         lines.append(

@@ -1014,6 +1014,11 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /**
+             * Decide Rules
+             * @description Version of the decision rules (verdict.DECIDE_RULES); None before 2
+             */
+            decide_rules?: number | null;
+            /**
              * Faithfulness Ragas
              * @description Faithfulness scored by the RAGAS library
              */
@@ -1104,6 +1109,11 @@ export interface components {
             faithfulness?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Decide Rules
+             * @description Version of the decision rules (verdict.DECIDE_RULES); None before 2
+             */
+            decide_rules?: number | null;
             /**
              * Faithfulness Ragas
              * @description Faithfulness scored by the RAGAS library

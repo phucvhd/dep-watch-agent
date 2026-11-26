@@ -38,6 +38,7 @@ from dep_watch_agent.api.schemas import (
 from dep_watch_agent.dependencies import DEPENDENCIES
 from dep_watch_agent.eval import contamination, gate
 from dep_watch_agent.eval import dataset as ds
+from dep_watch_agent.verdict import DECIDE_RULES
 
 EVAL_DEPENDENCY = next(d for d in DEPENDENCIES if d.id == "kafka")  # the ground truth is Kafka's
 
@@ -213,6 +214,9 @@ def run_summary(
         "model": model,
         "version": version,
         "provisional": provisional,
+        # Answers change with the decision rules even when extractions don't (direct runs
+        # check citations only, but are recorded the same way).
+        "decide_rules": DECIDE_RULES,
         "metrics": compute_metrics(results),
         "intervals": bootstrap_intervals(results),
     }
