@@ -2,6 +2,8 @@
 skip unless it is installed:
 ``uv run --with ragas==0.4.4 python -m pytest tests/test_ragas_judge.py``."""
 
+import time
+
 import pytest
 
 from dep_watch_agent.eval import ragas_judge
@@ -130,6 +132,12 @@ def test_ragas_scores_each_issue_and_averages(fake_llm):
     assert scored["by_issue"] == {"K": 0.5, "L": 1.0}
     assert (scored["samples"], scored["scored"], scored["faithfulness"]) == (2, 2, 0.75)
     assert len(fake_llm.prompts) == 4  # two calls per sample
+
+
+def test_samples_are_spaced_to_a_requests_per_minute_cap(fake_llm):
+    start = time.monotonic()
+    ragas_judge.score(RESULTS, ISSUES, fake_llm, requests_per_minute=600)  # 0.2 s per sample
+    assert time.monotonic() - start >= 0.2  # two samples: one gap between them
 
 
 def test_an_issue_ragas_cant_score_is_left_out(fake_llm):

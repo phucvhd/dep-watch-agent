@@ -13,6 +13,7 @@ a check that the judge answers in RAGAS's format before a whole run is spent on 
 import argparse
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -34,6 +35,10 @@ def main(argv: list[str] | None = None) -> int:
         "--max-context-chars", type=int, default=fa.MAX_CONTEXT_CHARS,
         help="cut an issue's text read whole to this many characters (for token-per-minute caps)",
     )  # fmt: skip
+    parser.add_argument(
+        "--rpm", type=float, default=float(os.environ.get("DEP_WATCH_RAGAS_RPM") or 0) or None,
+        help="the judge's requests-per-minute cap (default DEP_WATCH_RAGAS_RPM; none if unset)",
+    )  # fmt: skip
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -50,7 +55,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.limit is not None:
             keys = list(dict.fromkeys(s.issue_key for s in rj.samples(results, data.issues)))
             results = [r for r in results if r.issue_key in keys[: args.limit]]
-        scored = rj.score(results, data.issues, llm, max_context_chars=args.max_context_chars)
+        scored = rj.score(
+            results, data.issues, llm,
+            max_context_chars=args.max_context_chars, requests_per_minute=args.rpm,
+        )  # fmt: skip
         judged = (run.get("faithfulness") or {}).get("judgments") or []
         out = {
             "judge": judge_model,

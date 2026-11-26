@@ -25,6 +25,7 @@ import asyncio
 import logging
 import math
 import os
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -36,6 +37,7 @@ from dep_watch_agent.verdict import IssueText
 log = logging.getLogger(__name__)
 
 RAGAS = "ragas==0.4.4"
+CALLS_PER_SAMPLE = 2  # RAGAS splits the response into statements, then checks them
 QUESTION = "Which Kafka releases have this bug, according to its bug report?"
 # instructor modes by name. md_json asks for JSON in the reply and needs no response_format
 # support from the server, so it works on any chat endpoint; json uses response_format.
@@ -83,8 +85,11 @@ def score(
     llm: Any,
     *,
     max_context_chars: int = MAX_CONTEXT_CHARS,
+    requests_per_minute: float | None = None,
 ) -> dict[str, Any]:
-    """RAGAS faithfulness of the run's kept facts: the mean over issues, and each issue's."""
+    """RAGAS faithfulness of the run's kept facts: the mean over issues, and each issue's.
+    ``requests_per_minute`` spaces the samples so the judge's calls stay under that rate (a
+    free tier's cap), instead of hitting it and waiting out the retries."""
     import ragas
     from ragas.metrics.collections import Faithfulness
 
@@ -93,7 +98,11 @@ def score(
 
     async def run() -> dict[str, float | None]:
         by_issue: dict[str, float | None] = {}
+        gap = CALLS_PER_SAMPLE * 60 / requests_per_minute if requests_per_minute else 0.0
+        next_start = time.monotonic()
         for sample in todo:  # one at a time: hosted free tiers limit requests per minute
+            await asyncio.sleep(max(0.0, next_start - time.monotonic()))
+            next_start = time.monotonic() + gap
             try:
                 result = await metric.ascore(
                     user_input=QUESTION,
@@ -157,6 +166,8 @@ def judge_from_env() -> tuple[Any, str]:
       with backoff, for rate limits), ``DEP_WATCH_RAGAS_TIMEOUT`` (seconds, default 300),
       ``DEP_WATCH_RAGAS_REASONING_EFFORT`` (``none`` turns a local thinking model's reasoning
       off; unset sends nothing).
+
+    ``DEP_WATCH_RAGAS_RPM`` (``requests_per_minute``) is read by the script, not here.
     """
     import instructor
     from openai import AsyncOpenAI
