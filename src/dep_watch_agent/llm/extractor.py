@@ -96,7 +96,7 @@ class LLMExtractor:
         extractions are reused only while it stays the same."""
         return (
             f"model={self.model_id};prompt={self.prompt.name}@{self.prompt.version};"
-            f"chunks={self.chunk_chars}x{self.max_chunks}"
+            f"chunks={self.chunk_chars}x{self.max_chunks};parser={PARSER_VERSION}"
         )
 
     def extract(self, issue: IssueText) -> Extraction:
@@ -123,13 +123,23 @@ class LLMExtractor:
         return []
 
 
+PARSER_VERSION = 2  # 2: a bare list of facts is accepted as the evidence list
+
+
 def parse_facts(output: Any) -> list[Evidence]:
     """Facts from the model's JSON. Items with missing fields are skipped; an unknown ``kind``
-    is kept so ``verdict.decide`` drops it with a reason."""
-    if not isinstance(output, dict) or not isinstance(output.get("evidence"), list):
+    is kept so ``verdict.decide`` drops it with a reason.
+
+    Small models often drop the ``{"evidence": ...}`` wrapper and return the list itself
+    (``[]`` when they find nothing), so a bare list is read as the evidence list."""
+    if isinstance(output, list):
+        items = output
+    elif isinstance(output, dict) and isinstance(output.get("evidence"), list):
+        items = output["evidence"]
+    else:
         raise InvalidOutput(f"expected {{'evidence': [...]}}, got {str(output)[:200]!r}")
     facts = []
-    for item in output["evidence"]:
+    for item in items:
         if not isinstance(item, dict):
             continue
         values = [item.get(k) for k in ("version", "kind", "quote")]

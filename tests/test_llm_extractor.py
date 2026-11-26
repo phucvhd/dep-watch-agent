@@ -102,7 +102,14 @@ def test_parse_skips_malformed_items_and_keeps_unknown_kinds():
     ]
 
 
-@pytest.mark.parametrize("output", [None, [], {"facts": []}, {"evidence": "none"}])
+def test_parse_reads_a_bare_list_as_the_evidence():
+    assert parse_facts([fact("3.6.0", "affects", "We run 3.6.0")]) == [
+        Evidence("3.6.0", "affects", "We run 3.6.0")
+    ]
+    assert parse_facts([]) == []
+
+
+@pytest.mark.parametrize("output", [None, "[]", {"facts": []}, {"evidence": "none"}])
 def test_parse_rejects_the_wrong_shape(output):
     with pytest.raises(InvalidOutput):
         parse_facts(output)

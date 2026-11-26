@@ -22,6 +22,18 @@ versions badly (`3.10.0` vs `3.9.0`) and guesses when the text doesn't say.
 - JIRA fix versions are used as structured data; when they settle the answer, no model is called.
   Extracted facts are stored and reused for any version.
 
+## Architecture
+
+![System architecture](assets/architecture.png)
+
+JIRA issues are synced into PostgreSQL. For a pinned version, the input builder cleans and
+chunks the issue text; if the fix versions already settle the answer, code decides without a
+model call. Otherwise the LLM extractor (`qwen/qwen3-4b-2507` by default) returns cited version
+facts, and the decision code checks each quote and applies the version rules. The verdict goes
+back through FastAPI to the web UI. The eval runs the same extractor and decision code over the
+ground-truth set and records metrics in Langfuse. Retrieval and the direct-verdict control are
+in development.
+
 ## Data
 
 - **Apache JIRA issues** (`issues.apache.org`, public, read anonymously): text, comments, affected
