@@ -75,6 +75,45 @@ def test_release_line_is_dropped():
     assert decision.citations_valid == 2  # the quote itself was valid
 
 
+LINE_ISSUE = IssueText(
+    summary="Offset syncs published on every commit",
+    description="Since 3.5 this behaviour changed.\nThis is an issue starting with 2.4.x onwards."
+    "\nIt fails on 3.4 too.",
+    fix_versions=["3.7.1"],
+)
+
+
+@pytest.mark.parametrize(
+    ("version", "answer"),
+    [("3.4.2", NOT_AFFECTED), ("3.5.0", AFFECTED), ("3.6.1", AFFECTED), ("3.7.1", NOT_AFFECTED)],
+)
+def test_introduced_on_a_release_line_starts_at_its_first_release(version, answer):
+    since = Evidence("3.5", "introduced", "Since 3.5 this behaviour changed.")
+    decision = decide(LINE_ISSUE, version, Extraction([since]), KAFKA)
+    assert (decision.answer, decision.dropped) == (answer, [])
+
+
+def test_introduced_on_a_wildcard_line():
+    onwards = Evidence("2.4.x", "introduced", "This is an issue starting with 2.4.x onwards.")
+    assert decide(LINE_ISSUE, "2.3.1", Extraction([onwards]), KAFKA).answer == NOT_AFFECTED
+    assert decide(LINE_ISSUE, "2.4.0", Extraction([onwards]), KAFKA).answer == AFFECTED
+
+
+def test_other_facts_on_a_release_line_are_still_dropped():
+    # "fails on 3.4" says only that some 3.4.z has the bug, not that 3.4.0 does.
+    fails = Evidence("3.4", "affects", "It fails on 3.4 too.")
+    decision = decide(LINE_ISSUE, "3.4.1", Extraction([fails]), KAFKA)
+    assert decision.answer == INSUFFICIENT_INFORMATION
+    assert [d.reason for d in decision.dropped] == ["release line, not a release"]
+
+
+def test_a_bare_major_version_is_not_a_line_start():
+    issue = IssueText("s", "Broken since Kafka 3 at least.")
+    major = Evidence("3", "introduced", "Broken since Kafka 3 at least.")
+    decision = decide(issue, "3.0.0", Extraction([major]), KAFKA)
+    assert (decision.answer, decision.used) == (INSUFFICIENT_INFORMATION, [])
+
+
 def test_non_version_and_bad_kind_dropped():
     decision = run(
         "3.6.0",

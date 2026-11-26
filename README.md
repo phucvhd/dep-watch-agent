@@ -348,6 +348,11 @@ runs locally (`--limit N` for a smoke test), `scripts/eval/judge.py <run.json>..
 faithfulness, and `scripts/eval/replay.py [--upload] <run.json>...` records saved runs in
 Langfuse.
 
+A change to the decision rules (`verdict.DECIDE_RULES`, recorded in every run) needs no model
+call: each saved run keeps every fact the model extracted, kept or dropped, so
+`scripts/eval/redecide.py <run.json>...` decides them again and compares each run with the run
+as it was (McNemar, metric deltas), saving the result as `<run>-rules<N>`.
+
 Faithfulness is also scored by the RAGAS library itself, so the in-house judge can be checked
 against it. RAGAS runs in an overlay environment rather than as a project dependency (its
 `instructor` would hold `openai` back); the judge is any OpenAI-compatible API, set with the

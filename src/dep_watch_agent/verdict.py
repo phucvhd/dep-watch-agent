@@ -17,7 +17,10 @@ Evidence kinds, from strongest start-of-bug signal to fix:
 1. drops facts whose quote isn't in the issue text (no valid citation, no fact), whose quote
    doesn't contain the fact's version (the model inferred the version rather than read it),
    and versions that name a release line (``3.7``) rather than a release, in the dependency's
-   version scheme;
+   version scheme. The exception is ``introduced`` on a line, which starts at the line's first
+   release: "since 3.5" is 3.5.0 and "2.4.x onwards" 2.4.0. Other kinds stay dropped: "fails
+   on 3.4" says only that some 3.4.z has the bug, and "merged to the 3.6 branch" names no
+   release;
 2. **not affected** if the version contains a fix, by the version module's backport rules, or
    the text says this exact version is unaffected;
 3. **affected** if the version is at or after a version where the bug exists (``affects`` or
@@ -47,6 +50,11 @@ AFFECTED = "affected"
 NOT_AFFECTED = "not_affected"
 INSUFFICIENT_INFORMATION = "insufficient_information"
 ANSWERS = (AFFECTED, NOT_AFFECTED, INSUFFICIENT_INFORMATION)
+
+# What ``decide`` does beyond the extraction, recorded with every run: a run's answers change
+# with it even when its extractions don't. 1: the rules above without line starts. 2: an
+# ``introduced`` fact on a release line starts at the line's first release.
+DECIDE_RULES = 2
 
 EvidenceKind = Literal["introduced", "affects", "unaffected", "fix"]
 EVIDENCE_KINDS: tuple[str, ...] = ("introduced", "affects", "unaffected", "fix")
@@ -132,7 +140,7 @@ def decide(
             used.append(ev)
 
     def versions(*kinds: str) -> list[Version]:
-        return [scheme.parse(ev.version) for ev in used if ev.kind in kinds]
+        return [_fact_version(ev, scheme) for ev in used if ev.kind in kinds]
 
     target = scheme.parse(version)
     fixes = versions("fix") + [scheme.parse(v) for v in issue.fix_versions if scheme.is_release(v)]
@@ -159,14 +167,33 @@ def _rejection(ev: Evidence, issue: IssueText, scheme: VersionScheme) -> str | N
     if not quote_in_issue(ev.quote, issue):
         return "citation not found"
     try:
-        scheme.parse(ev.version)
+        _fact_version(ev, scheme)
     except VersionParseError:
         return "not a version"
-    if not scheme.is_release(ev.version):
+    if not scheme.is_release(ev.version) and not _line_start(ev):
         return "release line, not a release"
     if not version_in_quote(ev.version, ev.quote):
         return "version not in quote"
     return None
+
+
+# A release line as a fact may write it: two parts or more, optionally with a wildcard patch.
+_LINE = re.compile(r"\d+(?:\.\d+)+(?:\.[xX*])?")
+_WILDCARD = re.compile(r"\.[xX*]$")
+
+
+def _line_start(ev: Evidence) -> bool:
+    """True for an ``introduced`` fact on a release line of two parts or more (``3.5``,
+    ``2.4.x``); a bare major (``3``) is too vague to start at."""
+    return ev.kind == "introduced" and _LINE.fullmatch(ev.version.strip()) is not None
+
+
+def _fact_version(ev: Evidence, scheme: VersionScheme) -> Version:
+    """The version a fact is about. A line start parses to the line's first release (the scheme
+    pads ``3.5`` to 3.5.0), once a wildcard patch is removed."""
+    if _line_start(ev):
+        return scheme.parse(_WILDCARD.sub("", ev.version.strip()))
+    return scheme.parse(ev.version)
 
 
 def version_in_quote(version: str, quote: str) -> bool:
