@@ -157,6 +157,37 @@ def test_sample_tops_up_when_a_stratum_is_scarce():
     assert len(sample) == 100
 
 
+def test_scarce_buckets_are_filled_first_when_one_pass_misses():
+    # As in Kafka: few issues have start language, and nearly all of those mention a version,
+    # so a plain shuffled pass fills mentions_version=True before 50 of them turn up.
+    shapes = [(False, True, 700), (False, False, 700), (True, True, 50), (True, False, 5)]
+    candidates = [
+        candidate(f"KAFKA-{n}-{start}-{mentions}", fixes=("3.8.0",), mentions=mentions, start=start)
+        for start, mentions, count in shapes
+        for n in range(count)
+    ]
+    strata = {
+        "start_language": {True: 0.5, False: 0.5},
+        "mentions_version": {True: 0.5, False: 0.5},
+    }
+    sample = stratified_sample(candidates, 100, seed=1, strata=strata)
+    assert Counter(c.strata["start_language"] for c in sample) == {True: 50, False: 50}
+    assert Counter(c.strata["mentions_version"] for c in sample) == {True: 50, False: 50}
+
+
+def test_sample_never_picks_excluded_issues():
+    candidates = pool()
+    excluded = {c.key for c in stratified_sample(candidates, 50, seed=3)}
+    sample = stratified_sample(candidates, 50, seed=3, exclude=excluded)
+    assert len(sample) == 50
+    assert not excluded & {c.key for c in sample}
+
+
+def test_excluded_issues_do_not_count_toward_the_pool():
+    with pytest.raises(ValueError, match="only 1 candidates"):
+        stratified_sample(pool()[:3], 2, seed=1, exclude={c.key for c in pool()[:2]})
+
+
 def test_sample_larger_than_pool_raises():
     with pytest.raises(ValueError, match="only 3 candidates"):
         stratified_sample(pool()[:3], 10, seed=1)

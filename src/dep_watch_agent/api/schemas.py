@@ -426,6 +426,10 @@ class SampleRequest(BaseModel):
     size: int = Field(100, ge=1, le=1000)
     seed: int = 20260927
     design: Literal["v1", "v2"] = "v2"
+    exclude: list[str] = Field(
+        default_factory=list,
+        description="Issue keys never to sample, e.g. every issue in earlier datasets",
+    )
     force: bool = Field(False, description="Overwrite an existing dataset (loses its labels)")
 
 

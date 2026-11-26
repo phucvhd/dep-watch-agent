@@ -72,7 +72,12 @@ def sample_dataset(body: SampleRequest, session: SessionDep, settings: SettingsD
     if directory.exists() and not body.force:
         raise HTTPException(409, f"dataset {body.name} exists; its labels would be lost")
     manifest, sample, cases = ds.sample_dataset(
-        session, body.name, size=body.size, seed=body.seed, design=body.design
+        session,
+        body.name,
+        size=body.size,
+        seed=body.seed,
+        design=body.design,
+        exclude=body.exclude,
     )
     ds.write_dataset(directory, manifest, sample, cases, force=body.force)
     return SampleResponse(

@@ -261,9 +261,13 @@ the text or not; if not, the expected answer is `insufficient_information`. Desi
 (`kafka-ground-truth-v1`, fix versions masked) is kept for reference: the text named the fix
 release in only ~4% of not-affected cases, so it couldn't tell systems apart.
 
+`kafka-ground-truth-v3` is a held-out v2 set: 100 other issues (`exclude` lists every v1 and v2
+issue), the same strata, labeled the same way. Rules and prompts were tuned on v2 errors, so
+report final numbers on v3, and don't read its errors while tuning.
+
 | Endpoint | Does |
 |---|---|
-| `POST /eval/datasets` `{"name": ...}` | sample 100 issues -> 200 cases (`design` v2 default) |
+| `POST /eval/datasets` `{"name": ...}` | sample 100 issues -> 200 cases (`design` v2 default; `exclude` issue keys for a held-out set) |
 | `GET /eval/datasets/{name}/status` | labeling progress and problems |
 | `POST /eval/datasets/{name}/upload` | push to the Langfuse dataset (needs `.env` keys) |
 | `POST /eval/runs` `{"system": ...}` | score a system (needs labels) as a Langfuse experiment, saved locally too; a job |

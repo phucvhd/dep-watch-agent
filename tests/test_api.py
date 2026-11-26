@@ -1,3 +1,4 @@
+import json
 import threading
 
 import pytest
@@ -592,6 +593,19 @@ def test_missing_dataset(eval_client):
 def test_sampling_refuses_to_overwrite_labels(eval_client):
     response = eval_client.post("/eval/datasets", json={"name": "test-set"})
     assert response.status_code == 409
+
+
+def test_sampling_excludes_issues(make_client, tmp_path):
+    client = make_client()
+    body = {"name": "held-out", "size": 1, "exclude": ["KAFKA-7"]}
+    assert client.post("/eval/datasets", json=body).status_code == 201
+    manifest = json.loads((tmp_path / "datasets" / "held-out" / "manifest.json").read_text())
+    assert manifest["exclude"] == ["KAFKA-7"]
+
+    body = {"name": "none-left", "size": 1, "exclude": ["KAFKA-100"]}
+    response = client.post("/eval/datasets", json=body)
+    assert response.status_code == 400
+    assert "not excluded" in response.json()["detail"]
 
 
 def test_path_traversal_is_rejected(eval_client):
