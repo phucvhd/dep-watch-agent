@@ -86,6 +86,10 @@ class PhraseExtractor:
 SYSTEMS = {"phrases": PhraseExtractor, "phrases-2": PhraseExtractor}
 
 
+def no_langfuse():
+    raise AssertionError("this test must not reach Langfuse")
+
+
 @pytest.fixture
 def sessions(schema):
     migrate(schema.url, schema=schema.name)
@@ -102,9 +106,12 @@ def sessions(schema):
 def make_client(sessions, tmp_path):
     def make(datasets_dir=None, **deps) -> TestClient:
         deps.setdefault("systems", SYSTEMS)
+        # Never the real Langfuse: python-dotenv may find a .env with keys above the checkout.
+        deps.setdefault("langfuse_factory", no_langfuse)
         settings = Settings(
             datasets_dir=datasets_dir or tmp_path / "datasets",
             runs_dir=tmp_path / "runs",
+            baselines_dir=tmp_path / "baselines",
             cors_origins=["http://localhost:5173"],
             migrate_on_startup=False,
         )
@@ -814,3 +821,117 @@ def test_reading_time(make_client):
     assert stats["count"] == 1
     assert stats["bins"][0]["count"] == 1  # a fake reads in well under 15 s
     assert stats["bins"][-1]["to_s"] is None
+
+
+# --- eval: comparisons, gate, direct systems --------------------------------------------
+
+
+class DirectPhrases:
+    """A direct-verdict system: says affected, citing the description. The factory (the
+    class) is marked direct, as ``systems.llm_system`` marks its own."""
+
+    direct = True
+
+    def __init__(self, dependency=None):
+        pass
+
+    def answer(self, issue, version):
+        from dep_watch_agent.direct import DirectAnswer, check_answer
+
+        return check_answer(issue, version, DirectAnswer("affected", issue.description))
+
+
+def labeled_run(client, written, run_name, system="phrases"):
+    fill_labels(written, ALL_YES)
+    body = run_body(system=system, run_name=run_name, langfuse=False)
+    response = client.post("/eval/runs", json=body)
+    job = wait(client, response.json())
+    assert job["status"] == "succeeded", job["error"]
+    return client.get(f"/eval/runs/test-set/{run_name}").json()
+
+
+def test_run_has_intervals_and_compares(make_client, written):
+    client = make_client(datasets_dir=written.parent, systems={**SYSTEMS, "direct": DirectPhrases})
+    a = labeled_run(client, written, "a")
+    assert set(a["intervals"]) >= {"macro_f1", "silent_miss_rate"}
+    labeled_run(client, written, "b", system="direct")
+
+    body = client.get("/eval/compare", params={"dataset": "test-set", "a": "a", "b": "b"}).json()
+    assert body["cases"] == 4
+    assert set(body["mcnemar"]) == {"a_only", "b_only", "p_value"}
+    missing = client.get("/eval/compare", params={"dataset": "test-set", "a": "a", "b": "zz"})
+    assert missing.status_code == 404
+
+
+def test_direct_systems_are_eval_only(make_client, written):
+    client = make_client(datasets_dir=written.parent, systems={"direct": DirectPhrases, **SYSTEMS})
+    # The first extractor, not the first system, answers checks.
+    assert (
+        client.post("/check", json={"issue_key": "KAFKA-100", "version": "3.6.0"}).json()["system"]
+        == "phrases"
+    )
+    refused = client.post(
+        "/check", json={"issue_key": "KAFKA-100", "version": "3.6.0", "system": "direct"}
+    )
+    assert refused.status_code == 422
+    assert "eval only" in refused.json()["detail"]
+
+
+def test_accepted_baseline_gates_later_runs(make_client, written, tmp_path):
+    client = make_client(datasets_dir=written.parent)
+    labeled_run(client, written, "base")
+    accepted = client.post("/eval/runs/test-set/base/baseline", params={"tolerance": 0.05})
+    assert accepted.status_code == 200
+    assert accepted.json()["run_name"] == "base"
+
+    later = labeled_run(client, written, "later")
+    assert later["gate"]["passed"] is True
+    assert later["gate"]["baseline_run"] == "base"
+
+
+class FakeExperiments:
+    """A Langfuse client whose dataset runs experiments like tests.test_eval_runner's fake."""
+
+    def __init__(self, items):
+        from tests.test_eval_runner import FakeDataset
+
+        self.dataset = FakeDataset(items)
+
+    def get_dataset(self, name):
+        return self.dataset
+
+    def flush(self):
+        pass
+
+
+def test_runs_are_langfuse_experiments_and_saved_locally(make_client, written):
+    from types import SimpleNamespace
+
+    from dep_watch_agent.eval.dataset import langfuse_items, load_dataset
+
+    fill_labels(written, ALL_YES)
+    fake = FakeExperiments([SimpleNamespace(**i) for i in langfuse_items(load_dataset(written))])
+    client = make_client(datasets_dir=written.parent, langfuse_factory=lambda: fake)
+
+    job = wait(client, client.post("/eval/runs", json=run_body(run_name="lf")).json())
+    assert job["status"] == "succeeded", job["error"]
+    scores = fake.dataset.runs[0]["run_scores"]
+    assert {"macro_f1", "silent_miss_rate", "latency_p50_s"} <= set(scores)
+    saved = client.get("/eval/runs/test-set/lf").json()
+    assert saved["langfuse"] is True and len(saved["results"]) == 4
+
+    # A local-only run can be recorded in Langfuse later without the system.
+    labeled_run(client, written, "local")
+    job = wait(client, client.post("/eval/runs/test-set/local/langfuse").json())
+    assert job["status"] == "succeeded", job["error"]
+    assert fake.dataset.runs[1]["metadata"]["replay"] is True
+    assert client.get("/eval/runs/test-set/local").json()["langfuse"] is True
+
+
+def test_provisional_runs_cannot_be_replayed(eval_client):
+    job = wait(
+        eval_client,
+        eval_client.post("/eval/runs", json=run_body(provisional=True, run_name="p")).json(),
+    )
+    assert job["status"] == "succeeded"
+    assert eval_client.post("/eval/runs/test-set/p/langfuse").status_code == 400

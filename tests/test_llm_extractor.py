@@ -219,6 +219,70 @@ def test_output_mode_is_checked():
         LLMConfig(base_url="u", model="m", output="xml")
 
 
+def test_provider_is_checked():
+    with pytest.raises(ValueError, match="DEP_WATCH_LLM_PROVIDER"):
+        LLMConfig(base_url="u", model="m", provider="azure")
+
+
+def test_bedrock_reads_text_only():
+    with pytest.raises(ValueError, match="bedrock supports DEP_WATCH_LLM_OUTPUT=text"):
+        LLMConfig(base_url="u", model="m", provider="bedrock", output="json_schema")
+
+
+def test_provider_comes_from_the_environment(monkeypatch):
+    monkeypatch.setenv("DEP_WATCH_LLM_MODEL", "qwen.qwen3-32b-v1:0")
+    monkeypatch.setenv("DEP_WATCH_LLM_PROVIDER", "bedrock")
+    assert LLMConfig.from_env().provider == "bedrock"
+    monkeypatch.delenv("DEP_WATCH_LLM_PROVIDER")
+    assert LLMConfig.from_env().provider == "openai"
+
+
+def test_bedrock_client_uses_the_aws_chain(monkeypatch):
+    # Building the client resolves no credentials and makes no request.
+    from langchain_aws import ChatBedrockConverse
+
+    monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
+    monkeypatch.setenv("AWS_REGION", "us-west-2")
+    config = LLMConfig(base_url="ignored", model="qwen.qwen3-32b-v1:0", provider="bedrock")
+    chat = ChatFactModel(config)._runnable.first
+
+    assert isinstance(chat, ChatBedrockConverse)
+    assert chat.model_id == "qwen.qwen3-32b-v1:0"
+    assert chat.temperature == 0.0
+    assert chat.max_tokens == 2048
+
+
+def test_reasoning_effort_is_sent_only_when_set(monkeypatch):
+    monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
+    monkeypatch.setenv("DEP_WATCH_LLM_MODEL", "qwen/qwen3.5-9b")
+    monkeypatch.delenv("DEP_WATCH_LLM_REASONING_EFFORT", raising=False)
+    default = ChatFactModel(LLMConfig.from_env())._runnable.first
+    assert "reasoning_effort" not in default._get_request_payload([("user", "hi")])
+
+    monkeypatch.setenv("DEP_WATCH_LLM_REASONING_EFFORT", "none")
+    config = LLMConfig.from_env()
+    assert config.reasoning_effort == "none"
+    off = ChatFactModel(config)._runnable.first
+    assert off._get_request_payload([("user", "hi")])["reasoning_effort"] == "none"
+
+
+def test_reasoning_effort_is_part_of_the_extractor_version(monkeypatch):
+    # Turning thinking off changes what the model returns, so stored extractions of the
+    # thinking model must not be reused for it.
+    monkeypatch.setenv("DEP_WATCH_LLM_MODEL", "qwen/qwen3.5-9b")
+    monkeypatch.setenv("DEP_WATCH_LLM_REASONING_EFFORT", "none")
+    monkeypatch.delenv("DEP_WATCH_LLM_SYSTEM", raising=False)
+    monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
+    extractor = configured_systems()["qwen3.5-9b"](DEPENDENCIES[0])
+    assert extractor.model_id == "qwen/qwen3.5-9b;output=text;reasoning=none"
+    assert "reasoning=none" in extractor.version
+
+
+def test_bedrock_takes_no_reasoning_effort():
+    with pytest.raises(ValueError, match="REASONING_EFFORT is for the openai provider"):
+        LLMConfig(base_url="u", model="m", provider="bedrock", reasoning_effort="none")
+
+
 @pytest.mark.parametrize(
     ("model", "name"),
     [("qwen/qwen3-4b-2507", "qwen3-4b-2507"), ("qwen2.5:7b", "qwen2.5-7b"), ("///", "llm")],

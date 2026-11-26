@@ -1,10 +1,18 @@
 """Run a system over the ground-truth dataset, locally or as a Langfuse experiment.
 
-A system is anything with ``extract(IssueText) -> Extraction``. The runner, not the system,
-turns extractions into answers with ``verdict.decide``, so every system is scored through the
-same decision code. Each issue is extracted once and shared by its configs.
+Two kinds of system:
+
+- an ``Extractor`` (``extract(IssueText) -> Extraction``): the runner, not the system, turns
+  extractions into answers with ``verdict.decide``, so every extractor is scored through the
+  same decision code. Each issue is extracted once and shared by its configs.
+- a ``DirectSystem`` (``answer(IssueText, version) -> Decision``): the direct-verdict control,
+  which answers each config itself and whose citation code only checks (``direct.py``).
+
+Every case records the seconds its system spent on it (``CaseResult.seconds``).
 """
 
+import time
+from collections.abc import Callable
 from dataclasses import asdict
 from typing import Any, Protocol
 
@@ -25,18 +33,54 @@ class Extractor(Protocol):
     def extract(self, issue: IssueText) -> Extraction: ...
 
 
-def decision_output(decision: Decision) -> dict[str, Any]:
-    return {
+class DirectSystem(Protocol):
+    """Answers one config of an issue itself, with its citation checked (``direct.py``)."""
+
+    def answer(self, issue: IssueText, version: str) -> Decision: ...
+
+
+def is_direct(system: Any) -> bool:
+    return callable(getattr(system, "answer", None))
+
+
+class CaseAnswerer:
+    """Answers the configs of a run for one system, reading each issue once if the system is an
+    extractor. Returns the decision, the seconds spent and the passages read (if selected)."""
+
+    def __init__(self, system: Extractor | DirectSystem):
+        self.system = system
+        self._extractions: dict[str, Extraction] = {}
+
+    def __call__(
+        self, key: str, issue: IssueText, version: str
+    ) -> tuple[Decision, float, list[str] | None]:
+        start = time.perf_counter()
+        if is_direct(self.system):
+            decision = self.system.answer(issue, version)  # type: ignore[union-attr]
+            return decision, time.perf_counter() - start, None
+        seconds = 0.0
+        if key not in self._extractions:
+            self._extractions[key] = self.system.extract(issue)  # type: ignore[union-attr]
+            seconds = time.perf_counter() - start
+        extraction = self._extractions[key]
+        return decide(issue, version, extraction, KAFKA), seconds, extraction.context
+
+
+def decision_output(decision: Decision, context: list[str] | None = None) -> dict[str, Any]:
+    output = {
         "answer": decision.answer,
         "evidence": [asdict(e) for e in decision.used],
         "dropped": [{**asdict(d.evidence), "reason": d.reason} for d in decision.dropped],
         "evidence_total": decision.evidence_total,
         "citations_valid": decision.citations_valid,
     }
+    if context is not None:
+        output["context"] = context
+    return output
 
 
 def run_local(
-    dataset: Dataset, extractor: Extractor, *, provisional: bool = False
+    dataset: Dataset, system: Extractor | DirectSystem, *, provisional: bool = False
 ) -> list[CaseResult]:
     """Score ``extractor`` on the dataset files.
 
@@ -52,13 +96,11 @@ def run_local(
                 "Finish labeling or run as provisional."
             )
 
-    extractions: dict[str, Extraction] = {}
+    answer = CaseAnswerer(system)
     results = []
     for case in dataset.cases:
         issue = IssueText.from_dict(dataset.issues[case.issue_key])
-        if case.issue_key not in extractions:
-            extractions[case.issue_key] = extractor.extract(issue)
-        decision = decide(issue, case.version, extractions[case.issue_key], KAFKA)
+        decision, seconds, context = answer(case.issue_key, issue, case.version)
         expected = (
             case.metadata_answer
             if provisional
@@ -74,7 +116,8 @@ def run_local(
                 answer=decision.answer,
                 evidence_total=decision.evidence_total,
                 citations_valid=decision.citations_valid,
-                output=decision_output(decision),
+                output=decision_output(decision, context),
+                seconds=seconds,
             )
         )
     return results
@@ -89,28 +132,42 @@ def item_version(item: Any) -> str:
 def run_langfuse(
     client: Any,
     dataset_name: str,
-    extractor: Extractor,
+    system_impl: Extractor | DirectSystem | None,
     *,
     system: str,
     run_name: str,
     metadata: dict[str, Any] | None = None,
-) -> tuple[Any, dict[str, Any]]:
-    """Run as a Langfuse experiment on the uploaded dataset. Returns (experiment, metrics).
+    summarize: Callable[[list[CaseResult]], dict[str, Any]] | None = None,
+    saved: dict[str, CaseResult] | None = None,
+) -> tuple[Any, list[CaseResult], dict[str, Any]]:
+    """Run as a Langfuse experiment on the uploaded dataset. Returns (experiment, case results,
+    summary).
 
-    Per-case scores: ``correct`` and ``citation_validity``. Run-level scores: every metric in
-    ``RATE_METRICS``.
+    Per-case scores: ``correct`` and ``citation_validity``. Run-level scores: everything
+    ``summary_scores`` makes of the summary, which is ``summarize(results)`` (by default just
+    ``{"metrics": compute_metrics(results)}``).
+
+    With ``saved`` (case id -> result of a saved local run), nothing is asked of a system: each
+    item's task returns the saved output, so a run already made locally becomes an experiment
+    without calling the model again (a replay). Every item must be in ``saved``.
     """
     from langfuse import Evaluation
 
-    extractions: dict[str, Extraction] = {}
+    if system_impl is None and saved is None:
+        raise ValueError("give a system to run, or the saved results to replay")
+    answer = CaseAnswerer(system_impl) if saved is None else None
     results: list[CaseResult] = []
+    summary: dict[str, Any] = {}
 
     def task(*, item: Any, **_: Any) -> dict[str, Any]:
+        if saved is not None:
+            if item.id not in saved:
+                raise DatasetError(f"{item.id} is in the Langfuse dataset but not the saved run")
+            r = saved[item.id]
+            return {**r.output, "seconds": r.seconds}
         issue = IssueText.from_dict(item.input)
-        key = item.metadata["issue_key"]
-        if key not in extractions:
-            extractions[key] = extractor.extract(issue)
-        return decision_output(decide(issue, item_version(item), extractions[key], KAFKA))
+        decision, seconds, context = answer(item.metadata["issue_key"], issue, item_version(item))
+        return {**decision_output(decision, context), "seconds": seconds}
 
     def per_case(*, output: Any, expected_output: Any, **_: Any) -> list[Any]:
         scores = [
@@ -137,25 +194,119 @@ def run_langfuse(
                     answer=r.output["answer"],
                     evidence_total=r.output["evidence_total"],
                     citations_valid=r.output["citations_valid"],
-                    output=r.output,
+                    output={k: v for k, v in r.output.items() if k != "seconds"},
+                    seconds=r.output.get("seconds", 0.0),
                 )
             )
-        metrics = compute_metrics(results)
-        return [
-            Evaluation(name=name, value=metrics[name])
-            for name in RATE_METRICS
-            if metrics[name] is not None
-        ]
+        summary.update(summarize(results) if summarize else {"metrics": compute_metrics(results)})
+        return [Evaluation(**score) for score in summary_scores(summary)]
 
     dataset = client.get_dataset(dataset_name)
     experiment = dataset.run_experiment(
         name=system,
         run_name=run_name,
-        description=f"{system} on {dataset_name}",
+        description=f"{system} on {dataset_name}" + (" (replay of a local run)" if saved else ""),
         task=task,
         evaluators=[per_case],
         run_evaluators=[per_run],
         max_concurrency=1,
-        metadata={"system": system, **(metadata or {})},
+        metadata={"system": system, **({"replay": True} if saved else {}), **(metadata or {})},
     )
-    return experiment, compute_metrics(results)
+    return experiment, results, summary
+
+
+def summary_scores(summary: dict[str, Any]) -> list[dict[str, Any]]:
+    """The run-level Langfuse scores of a run summary (``metrics`` and, when present,
+    ``intervals``, ``contamination`` and ``gate``), as ``Evaluation`` keyword arguments.
+
+    - every rate metric with a value, its 95% bootstrap interval in the comment and metadata;
+      ``macro_f1`` also carries the confusion matrix;
+    - ``latency_p50_s``, ``latency_p95_s``;
+    - ``macro_f1_before_release``, ``macro_f1_after_release`` (and accuracy), the release and
+      issue counts in the comment;
+    - ``gate_passed`` (boolean), the failing metrics in the comment;
+    - ``faithfulness`` and ``context_recall``, once the run has been judged;
+    - ``faithfulness_ragas``, once the RAGAS library has scored it.
+    """
+    metrics = summary["metrics"]
+    intervals = summary.get("intervals") or {}
+    scores = []
+    for name in RATE_METRICS:
+        if metrics.get(name) is None:
+            continue
+        score: dict[str, Any] = {"name": name, "value": metrics[name]}
+        ci = intervals.get(name)
+        if ci:
+            score["comment"] = f"95% CI [{ci[0]:.3f}, {ci[1]:.3f}] (bootstrap over issues)"
+            score["metadata"] = {"ci95": ci}
+        if name == "macro_f1":
+            score["metadata"] = {**score.get("metadata", {}), "confusion": metrics["confusion"]}
+        scores.append(score)
+    latency = metrics.get("latency")
+    if latency:
+        scores += [
+            {"name": "latency_p50_s", "value": latency["p50_s"]},
+            {"name": "latency_p95_s", "value": latency["p95_s"]},
+        ]
+    split = summary.get("contamination")
+    if split:
+        for side, label in (("before", "before_release"), ("after", "after_release")):
+            part = split[side]
+            comment = f"{part['issues']} issues created {side} {split['release']}"
+            for name in ("macro_f1", "accuracy"):
+                if part.get(name) is not None:
+                    scores.append(
+                        {"name": f"{name}_{label}", "value": part[name], "comment": comment}
+                    )
+    gate = summary.get("gate")
+    if gate:
+        failed = ", ".join(
+            f"{f['metric']} {f['baseline']} -> {f['current']}" for f in gate["failures"]
+        )
+        scores.append(
+            {
+                "name": "gate_passed",
+                "value": float(gate["passed"]),  # Langfuse booleans are 1 or 0
+                "data_type": "BOOLEAN",
+                "comment": f"against {gate['baseline_run']}, tolerance {gate['tolerance']}"
+                + (f"; failed: {failed}" if failed else ""),
+            }
+        )
+    judged = summary.get("faithfulness")
+    if judged:
+        if judged.get("faithfulness") is not None:
+            scores.append(
+                {
+                    "name": "faithfulness",
+                    "value": judged["faithfulness"],
+                    "comment": f"judge {judged['judge']}, {judged['judged']} facts",
+                    "metadata": {"by_kind": judged.get("by_kind", {})},
+                }
+            )
+        recall = judged.get("context_recall")
+        if recall:
+            scores.append(
+                {
+                    "name": "context_recall",
+                    "value": recall["recall"],
+                    "comment": f"{recall['quotes']} labeled quotes in {recall['cases']} cases",
+                }
+            )
+    ragas = summary.get("faithfulness_ragas")
+    if ragas and ragas.get("faithfulness") is not None:
+        agreed = ragas.get("agreement_with_inhouse")
+        scores.append(
+            {
+                "name": "faithfulness_ragas",
+                "value": ragas["faithfulness"],
+                "comment": f"{ragas['library']}, judge {ragas['judge']}, mean over "
+                f"{ragas['scored']} of {ragas['samples']} issues"
+                + (
+                    f"; differs from the in-house judge by {agreed['mean_abs_diff']:.2f}"
+                    if agreed
+                    else ""
+                ),
+                "metadata": {"agreement_with_inhouse": agreed},
+            }
+        )
+    return scores

@@ -457,7 +457,11 @@ class EvalRunRequest(BaseModel):
     provisional: bool = Field(
         False, description="Score against JIRA metadata answers; allowed before labeling is done"
     )
-    langfuse: bool = Field(False, description="Run as a Langfuse experiment on the dataset")
+    langfuse: bool | None = Field(
+        None,
+        description="Record as a Langfuse experiment on the dataset (default: yes, unless "
+        "provisional). The run is saved locally either way.",
+    )
 
 
 class EvalRunSummary(BaseModel):
@@ -466,6 +470,42 @@ class EvalRunSummary(BaseModel):
     dataset: str
     provisional: bool
     metrics: dict[str, Any]
+    model: str | None = None
+    intervals: dict[str, list[float] | None] | None = Field(
+        None, description="95% bootstrap interval of each rate metric, resampling issues"
+    )
+    contamination: dict[str, Any] | None = Field(
+        None, description="Metrics on issues created before / after the model's release"
+    )
+    gate: dict[str, Any] | None = Field(None, description="Regression gate against the baseline")
+    faithfulness: dict[str, Any] | None = Field(None, description="Judge-scored faithfulness")
+    faithfulness_ragas: dict[str, Any] | None = Field(
+        None, description="Faithfulness scored by the RAGAS library"
+    )
+    langfuse: bool = Field(False, description="Recorded as a Langfuse experiment")
+
+
+class EvalComparison(BaseModel):
+    a: str
+    b: str
+    cases: int
+    issues: int
+    mcnemar: dict[str, Any]
+    difference: dict[str, Any]
+
+
+class BaselineOut(BaseModel):
+    system: str
+    dataset: str
+    run_name: str
+    accepted_at: str
+    tolerance: float
+    metrics: dict[str, Any]
+
+
+class IssueDatesOut(BaseModel):
+    name: str
+    issues: int
 
 
 class EvalRun(EvalRunSummary):

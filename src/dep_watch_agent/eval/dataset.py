@@ -326,10 +326,15 @@ class LangfuseDatasets(Protocol):
 
 def langfuse_items(dataset: Dataset) -> list[dict[str, Any]]:
     """Dataset items. ``input`` is all the model may see; answers stay in ``expected_output``
-    and ``metadata``."""
+    and ``metadata``. ``metadata.created`` is the issue's creation date when the dataset has
+    ``issue_dates.json``, for filtering by the contamination split in Langfuse."""
+    from dep_watch_agent.eval.contamination import ISSUE_DATES_FILE
+
     problems = label_problems(dataset)
     if problems:
         raise DatasetError(f"{len(problems)} labeling problem(s), first: {problems[0]}")
+    dates_path = dataset.directory / ISSUE_DATES_FILE
+    dates = json.loads(dates_path.read_text()) if dates_path.is_file() else {}
 
     items = []
     for case in dataset.cases:
@@ -355,6 +360,7 @@ def langfuse_items(dataset: Dataset) -> list[dict[str, Any]]:
                     "fix_versions": case.fix_versions,
                     "answerable_from_text": label["answerable_from_text"].strip().lower(),
                     "notes": label.get("notes", ""),
+                    **({"created": dates[case.issue_key]} if case.issue_key in dates else {}),
                 },
             }
         )

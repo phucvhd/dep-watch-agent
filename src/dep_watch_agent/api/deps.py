@@ -19,6 +19,7 @@ DEFAULT_CORS_ORIGINS = "http://localhost:5173,http://localhost:3000"
 class Settings:
     datasets_dir: Path = Path("eval/datasets")
     runs_dir: Path = Path("eval/runs")
+    baselines_dir: Path = Path("eval/baselines")
     cors_origins: list[str] = field(default_factory=list)
     migrate_on_startup: bool = True
 
@@ -28,6 +29,7 @@ class Settings:
         return cls(
             datasets_dir=Path(os.environ.get("DEP_WATCH_DATASETS_DIR", "eval/datasets")),
             runs_dir=Path(os.environ.get("DEP_WATCH_RUNS_DIR", "eval/runs")),
+            baselines_dir=Path(os.environ.get("DEP_WATCH_BASELINES_DIR", "eval/baselines")),
             cors_origins=[o.strip() for o in origins.split(",") if o.strip()],
             migrate_on_startup=os.environ.get("DEP_WATCH_MIGRATE_ON_STARTUP", "1") != "0",
         )
@@ -62,14 +64,20 @@ def get_systems(request: Request) -> SystemRegistry:
     return request.app.state.systems
 
 
-def pick_system(systems: SystemRegistry, name: str | None) -> str:
-    """The requested system's name, or the first registered one. 503 if none is registered,
-    422 if the name is unknown."""
-    if not systems:
+def pick_system(systems: SystemRegistry, name: str | None, *, direct_ok: bool = False) -> str:
+    """The requested system's name, or the first registered extractor. 503 if none is
+    registered, 422 if the name is unknown, or names a direct-verdict system where only
+    extractors can answer (everything but the eval)."""
+    from dep_watch_agent.systems import is_direct
+
+    extractors = [n for n, f in systems.items() if not is_direct(f)]
+    if not extractors and not (direct_ok and systems):
         raise HTTPException(503, "no system registered; set DEP_WATCH_LLM_MODEL (see .env.example)")
-    name = name or next(iter(systems))
+    name = name or (extractors[0] if extractors else next(iter(systems)))
     if name not in systems:
         raise HTTPException(422, f"unknown system {name!r}; registered: {sorted(systems)}")
+    if is_direct(systems[name]) and not direct_ok:
+        raise HTTPException(422, f"{name} is a direct-verdict system, for the eval only")
     return name
 
 

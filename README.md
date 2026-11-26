@@ -31,8 +31,8 @@ chunks the issue text; if the fix versions already settle the answer, code decid
 model call. Otherwise the LLM extractor (`qwen/qwen3-4b-2507` by default) returns cited version
 facts, and the decision code checks each quote and applies the version rules. The verdict goes
 back through FastAPI to the web UI. The eval runs the same extractor and decision code over the
-ground-truth set and records metrics in Langfuse. Retrieval and the direct-verdict control are
-in development.
+ground-truth set and records metrics in Langfuse, alongside the few-shot, chain-of-thought,
+hybrid-retrieval and direct-verdict variants.
 
 ## Data
 
@@ -134,7 +134,7 @@ Pages follow the flow:
   dependency an issue also shows whether it affects your version, from fix versions or stored
   facts, or read on request.
 - **Sources** (`#/sources`): pick an issue tracker, sync it, see what is new in it.
-- **Models** (`#/operations`): models, reading time, eval runs, jobs.
+- **Models** (`#/operations`): models, reading time, jobs. Eval results are in Langfuse.
 
 Old links (`#/alerts`, `#/setup`, `#/issues/KEY`, `#/check/KEY`) are rewritten to the new pages.
 
@@ -200,6 +200,11 @@ output is retried, then counts as no facts.
 Issues longer than one chunk (30k characters) are read in chunks, up to six. Calls are traced to
 Langfuse when its keys are set.
 
+On AWS the same system runs on Amazon Bedrock: set `DEP_WATCH_LLM_PROVIDER=bedrock`, `AWS_REGION`
+and a Bedrock model id in `DEP_WATCH_LLM_MODEL`. Credentials come from the AWS chain (an SSO
+profile locally, the instance role on EC2), so no API key is stored. Bedrock reads in `text` mode
+only.
+
 ### Checking an issue
 
 ```bash
@@ -261,9 +266,10 @@ release in only ~4% of not-affected cases, so it couldn't tell systems apart.
 | `POST /eval/datasets` `{"name": ...}` | sample 100 issues -> 200 cases (`design` v2 default) |
 | `GET /eval/datasets/{name}/status` | labeling progress and problems |
 | `POST /eval/datasets/{name}/upload` | push to the Langfuse dataset (needs `.env` keys) |
-| `POST /eval/runs` `{"system": ...}` | score a system locally (needs labels); a job |
-| `POST /eval/runs` `{"system": ..., "langfuse": true}` | record a Langfuse experiment |
-| `POST /eval/runs` `{"system": ..., "provisional": true}` | before labeling; not a result |
+| `POST /eval/runs` `{"system": ...}` | score a system (needs labels) as a Langfuse experiment, saved locally too; a job |
+| `POST /eval/runs` `{"system": ..., "langfuse": false}` | score locally only |
+| `POST /eval/runs` `{"system": ..., "provisional": true}` | before labeling; local, not a result |
+| `POST /eval/runs/{dataset}/{run}/langfuse` | record a saved local run as a Langfuse experiment, without calling the model |
 | `GET /eval/runs`, `GET /eval/runs/{dataset}/{run}` | saved local runs and their results |
 
 Every system extracts cited version facts from the issue text; `verdict.decide` drops facts
@@ -271,6 +277,86 @@ whose quote isn't in the text, then decides with the version module and the give
 versions. Systems (models) are registered by name in `systems.SYSTEMS` and compared with each
 other on the same metrics; there is no fixed baseline. Metric definitions are in
 `eval/metrics.py`.
+
+#### Variants
+
+`DEP_WATCH_LLM_VARIANTS` (comma-separated, default `zeroshot`) registers one system per variant
+of the configured model, named `<model>` for zero-shot and `<model>-<variant>` otherwise:
+
+| Variant | System |
+|---|---|
+| `zeroshot` | `prompts/extract_facts.md` |
+| `fewshot` | plus made-up worked examples (`extract_facts.fewshot.md`; never from the eval set) |
+| `cot` | step-by-step reasoning in `<reasoning>` tags before the JSON (`extract_facts.cot.md`) |
+| `hybrid` | zero-shot over hybrid retrieval on issues longer than `DEP_WATCH_RETRIEVAL_BUDGET` (6,000 characters): passages embedded with `DEP_WATCH_EMBED_MODEL` into pgvector, ranked by cosine distance and `ts_rank`, fused by reciprocal rank |
+| `direct` | the direct-verdict control (RQ1): the model answers each version with one citation, code only checks the citation. Eval only; `/check` and `/scan` use the first other system |
+
+#### What a run reports
+
+Results are read in Langfuse, not in the web UI: each run is an experiment on the uploaded
+dataset, with per-case `correct` and `citation_validity` scores, traces of every model call, and
+the run-level scores below. Upload the dataset again after labels or `issue_dates.json` change
+(`POST /eval/datasets/{name}/upload`; items are updated in place). The saved local file is what
+the gate and the comparison report read.
+
+Each run has the metrics (macro-F1, silent-miss and false-alarm rates, abstention recall,
+citation validity, latency p50/p95 per issue), a 95% bootstrap interval for each rate metric
+resampling issues (`eval/stats.py`; in the Langfuse score's comment), the gate result
+(`gate_passed`) when its system has a baseline, and, when the dataset has `issue_dates.json` and
+the model's release date is known (`eval/contamination.py`, or `DEP_WATCH_LLM_RELEASE_DATE`),
+macro-F1 and accuracy on issues created before and after the release. Dataset items carry the
+issue's `created` date in their metadata.
+
+| Endpoint | Does |
+|---|---|
+| `GET /eval/compare?dataset=&a=&b=` | McNemar's exact test and paired bootstrap differences |
+| `POST /eval/runs/{dataset}/{run}/baseline` | accept a run as its system's gate baseline |
+| `POST /eval/runs/{dataset}/{run}/faithfulness` | judge-scored faithfulness (`DEP_WATCH_JUDGE_MODEL`, never the model under test) and context recall; a job |
+| `POST /eval/datasets/{name}/dates` | write `issue_dates.json` from the synced issues |
+
+The regression gate compares every run with its system's baseline in
+`eval/baselines/<dataset>/<system>.json` (committed). There is no CI, so check a saved run from
+the command line before merging a prompt or model change:
+
+```bash
+uv run python -m dep_watch_agent.eval.gate eval/runs/kafka-ground-truth-v2/<run>.json
+```
+
+It exits 1 when a gated metric is worse than the baseline by more than its tolerance. A side
+by side report of several runs (intervals, McNemar against a reference, error kinds, the long
+issues, the contamination split):
+
+```bash
+uv run python -m dep_watch_agent.eval.analysis eval/datasets/kafka-ground-truth-v2 eval/runs/kafka-ground-truth-v2/{a,b,c}.json
+```
+
+The full experiment matrix for the report runs from the command line on LM Studio, one model
+loaded at a time, and takes several hours: a preflight (models downloaded, database migrated),
+four models and their variants, judged faithfulness for the Qwen3-4B runs, every new run
+recorded in Langfuse (the dataset is uploaded first), and the report above over every run, in
+`eval/runs/<dataset>/report.md`:
+
+```bash
+scripts/eval/run_matrix.sh --check          # preflight only; prints how to get a missing model
+scripts/eval/run_matrix.sh                  # every model; or name some: qwen/qwen3.5-9b
+VARIANTS=hybrid scripts/eval/run_matrix.sh qwen/qwen3-4b-2507   # one variant again
+scripts/eval/run_matrix.sh --report         # the report only, from the saved runs
+```
+
+Its steps also run alone: `scripts/eval/run_variants.py <model> <variants>` scores and saves
+runs locally (`--limit N` for a smoke test), `scripts/eval/judge.py <run.json>...` adds judged
+faithfulness, and `scripts/eval/replay.py [--upload] <run.json>...` records saved runs in
+Langfuse.
+
+Faithfulness is also scored by the RAGAS library itself, so the in-house judge can be checked
+against it. RAGAS runs in an overlay environment rather than as a project dependency (its
+`instructor` would hold `openai` back); the judge is any OpenAI-compatible API, set with the
+`DEP_WATCH_RAGAS_*` variables in `.env.example`. `--limit 3` scores three issues without saving,
+to check the judge answers in RAGAS's format first:
+
+```bash
+uv run --with ragas==0.4.4 python scripts/eval/ragas_judge.py eval/runs/kafka-ground-truth-v2/qwen3-4b-2507.json --limit 3
+```
 
 - `POST /eval/datasets` refuses (409) to overwrite an existing dataset, so labels aren't lost. To change the
   sample, create a new dataset name (e.g. `-v3`).

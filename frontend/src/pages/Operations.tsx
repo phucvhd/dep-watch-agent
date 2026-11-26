@@ -1,18 +1,8 @@
-import { useState } from 'react'
-import { api, type Dependency, type EvalRunSummary, type Job } from '../api/client'
+import { api, type Dependency, type Job } from '../api/client'
 import { ColumnChart } from '../components/charts'
-import { ErrorNote, Fields, JobLine, PageIntro } from '../components/common'
+import { ErrorNote, Fields, PageIntro } from '../components/common'
 import { formatDate } from '../format'
-import { message, useJob, useLoad } from '../hooks'
-
-const METRICS: [string, string][] = [
-  ['macro_f1', 'Macro F1'],
-  ['accuracy', 'Accuracy'],
-  ['precision', 'Precision'],
-  ['recall', 'Recall'],
-  ['abstention_rate', 'Abstention rate'],
-  ['citation_validity', 'Citation validity'],
-]
+import { useLoad } from '../hooks'
 
 const JOB_TEXT: Record<string, string> = {
   'sync-jira': 'JIRA sync',
@@ -32,8 +22,8 @@ interface Props {
   systems: string[]
 }
 
-/** The models that read issues: how many issues they have read, how long it takes, and how
- * they score on the ground truth. */
+/** The models that read issues: how many issues they have read and how long it takes. How they
+ * score on the ground truth is in Langfuse, where every eval run is an experiment. */
 export function Operations({ dependency, systems }: Props) {
   return (
     <div className="dash">
@@ -41,7 +31,6 @@ export function Operations({ dependency, systems }: Props) {
       <Models systems={systems} />
       <Facts dependency={dependency} />
       <ReadingTimeChart dependency={dependency} />
-      <Evaluation systems={systems} />
       <Jobs />
     </div>
   )
@@ -114,122 +103,6 @@ function Models({ systems }: { systems: string[] }) {
         </>
       )}
     </section>
-  )
-}
-
-function Evaluation({ systems }: { systems: string[] }) {
-  const runs = useLoad(() => api.runs(), [])
-  const datasets = useLoad(() => api.datasets(), [])
-  const [chosenDataset, setDataset] = useState<string>()
-  // Datasets are versioned by name (-v1, -v2); the newest supersedes the others.
-  const dataset = chosenDataset ?? datasets.data?.map((d) => d.name).sort().at(-1) ?? ''
-  const [system, setSystem] = useState(systems[0] ?? '')
-  const [jobId, setJobId] = useState<string>()
-  const [error, setError] = useState<string>()
-  const { job } = useJob(jobId, () => runs.reload())
-
-  async function start() {
-    setError(undefined)
-    try {
-      setJobId((await api.startRun({ dataset, system: system || systems[0] })).id)
-    } catch (e) {
-      setError(message(e))
-    }
-  }
-
-  return (
-    <section className="widget w-12" aria-labelledby="eval-title">
-      <div className="pane-head">
-        <div>
-          <h2 id="eval-title" className="widget-title">
-            Evaluation
-          </h2>
-        </div>
-        <div className="toolbar">
-          <label>
-            <span>Dataset</span>
-            <select value={dataset} onChange={(e) => setDataset(e.target.value)}>
-              {datasets.data?.map((d) => (
-                <option key={d.name} value={d.name}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span>Model</span>
-            <select value={system} onChange={(e) => setSystem(e.target.value)}>
-              {systems.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
-          </label>
-          <button
-            className="primary"
-            onClick={start}
-            disabled={systems.length === 0 || job?.status === 'running'}
-          >
-            Run
-          </button>
-        </div>
-      </div>
-      <ErrorNote>{error ?? runs.error ?? datasets.error}</ErrorNote>
-      {job && (
-        <JobLine
-          job={job}
-          describe={(j: Job) =>
-            j.status === 'succeeded'
-              ? 'Evaluation completed'
-              : 'Evaluation running (over 1 hour with a local model)'
-          }
-        />
-      )}
-      {runs.data && runs.data.length > 0 ? (
-        <RunsTable runs={runs.data} />
-      ) : (
-        <p className="list-empty">No evaluation runs</p>
-      )}
-    </section>
-  )
-}
-
-function RunsTable({ runs }: { runs: EvalRunSummary[] }) {
-  const value = (run: EvalRunSummary, key: string) => {
-    const v = run.metrics[key]
-    return typeof v === 'number' ? v.toFixed(3) : 'N/A'
-  }
-  return (
-    <div className="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Run</th>
-            <th scope="col">Model</th>
-            {METRICS.map(([key, label]) => (
-              <th key={key} scope="col" className="num">
-                {label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {runs.map((run) => (
-            <tr key={`${run.dataset}/${run.run_name}`}>
-              <td>
-                {run.run_name}
-                {run.provisional && <span className="tag">Provisional</span>}
-              </td>
-              <td>{run.system}</td>
-              {METRICS.map(([key]) => (
-                <td key={key} className="num">
-                  {value(run, key)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
   )
 }
 
