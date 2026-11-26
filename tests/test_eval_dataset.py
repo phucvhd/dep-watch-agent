@@ -203,6 +203,22 @@ def test_sample_dataset_end_to_end(db, tmp_path):
     assert {c.issue_key for c in ds.cases} == {c.key for c in sample}
 
 
+def test_sample_dataset_excludes_issues_and_records_them(db):
+    seed_db(db)
+    manifest, sample, _ = sample_dataset(
+        db, "held-out", size=4, seed=5, exclude=["KAFKA-6", "KAFKA-2"]
+    )
+    assert {c.key for c in sample} == {"KAFKA-1", "KAFKA-3", "KAFKA-4", "KAFKA-5"}
+    assert manifest["exclude"] == ["KAFKA-2", "KAFKA-6"]
+    assert manifest["excluded_viable_candidates"] == 2
+
+
+def test_sample_dataset_refuses_when_exclusions_leave_too_few(db):
+    seed_db(db)
+    with pytest.raises(DatasetError, match="only 4 viable candidates are not excluded"):
+        sample_dataset(db, "x", size=5, seed=1, exclude=["KAFKA-1", "KAFKA-2"])
+
+
 def test_sample_dataset_needs_versions(db):
     with pytest.raises(DatasetError, match="no released KAFKA versions"):
         sample_dataset(db, "x", size=1, seed=1)

@@ -30,6 +30,7 @@ from dep_watch_agent.eval.sampling import (
     STRATA_V1,
     STRATA_V2,
     IssueCandidate,
+    issue_key_sort,
     load_candidates,
     released_versions,
     strata_counts,
@@ -96,11 +97,13 @@ def sample_dataset(
     project: str = "KAFKA",
     max_text_chars: int = DEFAULT_MAX_TEXT_CHARS,
     design: str = "v2",
+    exclude: Iterable[str] = (),
     now: datetime | None = None,
 ) -> tuple[dict[str, Any], list[IssueCandidate], list[Case]]:
     """Sample issues and build their cases. Returns (manifest, sample, cases).
 
     ``design`` is ``v2`` (fix versions given to the system, see DESIGNS) or ``v1`` (text only).
+    Issue keys in ``exclude`` are never sampled (for a held-out set); the manifest lists them.
     """
     if design not in DESIGNS:
         raise DatasetError(f"unknown design {design!r}; expected one of {sorted(DESIGNS)}")
@@ -113,7 +116,13 @@ def sample_dataset(
     built = {c.key: make_cases(c, releases, seed=seed, design=design) for c in candidates}
     viable = [c for c in candidates if built[c.key] is not None]
 
-    sample = stratified_sample(viable, size, seed=seed, strata=strata)
+    excluded = set(exclude)
+    available = len([c for c in viable if c.key not in excluded])
+    if size > available:
+        raise DatasetError(
+            f"asked for {size} issues but only {available} viable candidates are not excluded"
+        )
+    sample = stratified_sample(viable, size, seed=seed, strata=strata, exclude=excluded)
     cases = [case for c in sample for case in built[c.key]]
     manifest = {
         "name": name,
@@ -126,6 +135,8 @@ def sample_dataset(
         "excluded_comment_authors": sorted(EXCLUDED_COMMENT_AUTHORS),
         "candidates": len(candidates),
         "viable_candidates": len(viable),
+        "exclude": sorted(excluded, key=issue_key_sort),
+        "excluded_viable_candidates": len(viable) - available,
         "strata_targets": {
             dim: {str(k): v for k, v in fractions.items()} for dim, fractions in strata.items()
         },

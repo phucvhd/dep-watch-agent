@@ -1405,6 +1405,11 @@ export interface components {
              */
             design?: "v1" | "v2";
             /**
+             * Exclude
+             * @description Issue keys never to sample, e.g. every issue in earlier datasets
+             */
+            exclude?: string[];
+            /**
              * Force
              * @description Overwrite an existing dataset (loses its labels)
              * @default false

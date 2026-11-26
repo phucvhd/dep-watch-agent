@@ -14,7 +14,7 @@ so later changes to the database don't change an existing dataset.
 import random
 import re
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -192,7 +192,7 @@ def load_candidates(
         )
         if candidate.text_chars <= max_text_chars:
             candidates.append(candidate)
-    return sorted(candidates, key=lambda c: _key_sort(c.key))
+    return sorted(candidates, key=lambda c: issue_key_sort(c.key))
 
 
 def stratified_sample(
@@ -201,35 +201,67 @@ def stratified_sample(
     *,
     seed: int,
     strata: dict[str, dict[object, float]] = DEFAULT_STRATA,
+    exclude: Collection[str] = frozenset(),
 ) -> list[IssueCandidate]:
     """Pick ``size`` candidates, filling each stratum's quota before relaxing.
 
+    Issue keys in ``exclude`` are never picked, so a held-out set can share no issue with
+    earlier ones.
+
     Candidates are shuffled with ``seed`` and taken greedily while every dimension's bucket is
-    under quota. If some buckets can't be filled, the remainder is topped up in shuffled order.
+    under quota. A single pass can fill a common bucket before enough candidates from a scarce
+    one turn up (most issues lack start language, and most that have it mention a version), so
+    if it misses a quota a second pass takes candidates in the scarcest buckets first, still in
+    shuffled order within equal scarcity. If some buckets still can't be filled, the remainder
+    is topped up in shuffled order.
     """
-    if size > len(candidates):
-        raise ValueError(f"asked for {size} issues but only {len(candidates)} candidates exist")
+    excluded = set(exclude)
+    pool = [c for c in candidates if c.key not in excluded]
+    if size > len(pool):
+        raise ValueError(f"asked for {size} issues but only {len(pool)} candidates exist")
 
     quotas = {dim: _quota_counts(fractions, size) for dim, fractions in strata.items()}
-    pool = list(candidates)
     random.Random(seed).shuffle(pool)
 
-    chosen: list[IssueCandidate] = []
-    filled: dict[str, Counter] = {dim: Counter() for dim in strata}
-    for candidate in pool:
-        if len(chosen) == size:
-            break
-        props = candidate.strata
-        if all(filled[dim][props[dim]] < quotas[dim].get(props[dim], 0) for dim in strata):
-            chosen.append(candidate)
-            for dim in strata:
-                filled[dim][props[dim]] += 1
+    chosen = _fill_quotas(pool, size, quotas)
+    if len(chosen) < size:
+        available = {dim: Counter(c.strata[dim] for c in pool) for dim in strata}
+
+        def scarcity(candidate: IssueCandidate) -> float:
+            """Candidates per quota slot in the candidate's tightest bucket."""
+            ratios = (
+                available[dim][bucket] / quotas[dim][bucket]
+                for dim, bucket in candidate.strata.items()
+                if quotas.get(dim, {}).get(bucket)
+            )
+            return min(ratios, default=float("inf"))
+
+        scarce_first = _fill_quotas(sorted(pool, key=scarcity), size, quotas)
+        if len(scarce_first) > len(chosen):
+            chosen = scarce_first
 
     if len(chosen) < size:
         picked = {c.key for c in chosen}
         chosen.extend([c for c in pool if c.key not in picked][: size - len(chosen)])
 
-    return sorted(chosen, key=lambda c: _key_sort(c.key))
+    return sorted(chosen, key=lambda c: issue_key_sort(c.key))
+
+
+def _fill_quotas(
+    pool: list[IssueCandidate], size: int, quotas: dict[str, dict[object, int]]
+) -> list[IssueCandidate]:
+    """Take candidates in order while every dimension's bucket is under quota."""
+    chosen: list[IssueCandidate] = []
+    filled: dict[str, Counter] = {dim: Counter() for dim in quotas}
+    for candidate in pool:
+        if len(chosen) == size:
+            break
+        props = candidate.strata
+        if all(filled[dim][props[dim]] < quotas[dim].get(props[dim], 0) for dim in quotas):
+            chosen.append(candidate)
+            for dim in quotas:
+                filled[dim][props[dim]] += 1
+    return chosen
 
 
 def strata_counts(
@@ -263,6 +295,6 @@ def _all_parse(names: list[str]) -> bool:
     return True
 
 
-def _key_sort(key: str) -> tuple[str, int]:
+def issue_key_sort(key: str) -> tuple[str, int]:
     project, _, number = key.partition("-")
     return project, int(number) if number.isdigit() else 0
