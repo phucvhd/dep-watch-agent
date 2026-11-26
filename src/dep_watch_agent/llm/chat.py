@@ -34,12 +34,16 @@ class LLMConfig:
     timeout: float = 600.0
     temperature: float = 0.0
     output: str = "text"  # one of OUTPUT_MODES
+    # Cap on generated tokens: without it a model that falls into a repetition loop
+    # generates until the context is full and the call times out. A truncated reply
+    # fails to parse and counts as invalid output (retried, then no facts).
+    max_tokens: int | None = 2048
 
     @classmethod
     def from_env(cls) -> "LLMConfig | None":
         """``DEP_WATCH_LLM_MODEL`` (required), ``DEP_WATCH_LLM_BASE_URL``,
-        ``DEP_WATCH_LLM_API_KEY``, ``DEP_WATCH_LLM_TIMEOUT``, ``DEP_WATCH_LLM_OUTPUT``. None if
-        no model is set."""
+        ``DEP_WATCH_LLM_API_KEY``, ``DEP_WATCH_LLM_TIMEOUT``, ``DEP_WATCH_LLM_OUTPUT``,
+        ``DEP_WATCH_LLM_MAX_TOKENS`` (0 for no cap). None if no model is set."""
         model = os.environ.get("DEP_WATCH_LLM_MODEL", "").strip()
         if not model:
             return None
@@ -49,6 +53,7 @@ class LLMConfig:
             api_key=os.environ.get("DEP_WATCH_LLM_API_KEY", "not-needed"),
             timeout=float(os.environ.get("DEP_WATCH_LLM_TIMEOUT", "600")),
             output=os.environ.get("DEP_WATCH_LLM_OUTPUT", "text"),
+            max_tokens=int(os.environ.get("DEP_WATCH_LLM_MAX_TOKENS", "2048")) or None,
         )
 
     def __post_init__(self) -> None:
@@ -73,6 +78,7 @@ class ChatFactModel:
             api_key=config.api_key,
             temperature=config.temperature,
             timeout=config.timeout,
+            max_tokens=config.max_tokens,
             max_retries=1,
         )
         self.config = config
