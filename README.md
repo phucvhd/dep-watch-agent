@@ -284,7 +284,7 @@ other on the same metrics; there is no fixed baseline. Metric definitions are in
 
 #### Variants
 
-`DEP_WATCH_LLM_VARIANTS` (comma-separated, default `zeroshot`) registers one system per variant
+`DEP_WATCH_LLM_VARIANTS` (comma-separated, default `fewshot`) registers one system per variant
 of the configured model, named `<model>` for zero-shot and `<model>-<variant>` otherwise:
 
 | Variant | System |
@@ -294,6 +294,12 @@ of the configured model, named `<model>` for zero-shot and `<model>-<variant>` o
 | `cot` | step-by-step reasoning in `<reasoning>` tags before the JSON (`extract_facts.cot.md`) |
 | `hybrid` | zero-shot over hybrid retrieval on issues longer than `DEP_WATCH_RETRIEVAL_BUDGET` (6,000 characters): passages embedded with `DEP_WATCH_EMBED_MODEL` into pgvector, ranked by cosine distance and `ts_rank`, fused by reciprocal rank |
 | `direct` | the direct-verdict control (RQ1): the model answers each version with one citation, code only checks the citation. Eval only; `/check` and `/scan` use the first other system |
+
+The default, `fewshot`, is what the final evaluation recommends for interactive checks: on the
+test set it was the fastest Qwen3-4B variant with the fewest silent misses. `cot` scored the
+highest macro-F1 but takes about four times as long per issue, so it suits batch scans. Only Kafka
+has worked examples; a dependency without them (Spark) reads with its zero-shot prompt under
+`fewshot`, and its extractions carry the zero-shot prompt's name.
 
 #### What a run reports
 

@@ -283,6 +283,7 @@ def test_reasoning_effort_is_part_of_the_extractor_version(monkeypatch):
     # thinking model must not be reused for it.
     monkeypatch.setenv("DEP_WATCH_LLM_MODEL", "qwen/qwen3.5-9b")
     monkeypatch.setenv("DEP_WATCH_LLM_REASONING_EFFORT", "none")
+    monkeypatch.setenv("DEP_WATCH_LLM_VARIANTS", "zeroshot")
     monkeypatch.delenv("DEP_WATCH_LLM_SYSTEM", raising=False)
     monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
     extractor = configured_systems()["qwen3.5-9b"](DEPENDENCIES[0])
@@ -310,6 +311,7 @@ def test_no_model_configured_means_no_system(monkeypatch):
 
 def test_configured_system_is_named_after_the_model(monkeypatch):
     monkeypatch.setenv("DEP_WATCH_LLM_MODEL", "qwen/qwen3-4b-2507")
+    monkeypatch.setenv("DEP_WATCH_LLM_VARIANTS", "zeroshot")
     monkeypatch.delenv("DEP_WATCH_LLM_SYSTEM", raising=False)
     monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
     systems = configured_systems()
