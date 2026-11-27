@@ -63,15 +63,19 @@ def test_variants_are_registered_by_name(monkeypatch):
     assert cot.prompt.name == "extract_facts+cot"
     assert cot.model.config.max_tokens == 4096
     assert systems["qwen3-4b-2507-direct"](KAFKA).prompt.name == "direct_verdict"
-    with pytest.raises(PromptNotFound):
-        systems["qwen3-4b-2507-fewshot"](SPARK)
+    # Spark has no worked examples yet: its few-shot system reads with Spark's zero-shot prompt,
+    # and the prompt name says so, so its extractions are never filed as few-shot ones.
+    assert systems["qwen3-4b-2507-fewshot"](SPARK).prompt.name == "extract_facts_spark"
 
 
-def test_default_is_zero_shot_only(monkeypatch):
+def test_default_is_few_shot_only(monkeypatch):
+    # few-shot is the recommended interactive configuration from the final evaluation
     monkeypatch.setenv("DEP_WATCH_LLM_MODEL", "qwen/qwen3-4b-2507")
     monkeypatch.delenv("DEP_WATCH_LLM_VARIANTS", raising=False)
     monkeypatch.delenv("DEP_WATCH_LLM_SYSTEM", raising=False)
-    assert list(configured_systems()) == ["qwen3-4b-2507"]
+    systems = configured_systems()
+    assert list(systems) == ["qwen3-4b-2507-fewshot"]
+    assert systems["qwen3-4b-2507-fewshot"](KAFKA).prompt.name == "extract_facts+fewshot"
     monkeypatch.setenv("DEP_WATCH_LLM_VARIANTS", "zeroshot,beam")
     with pytest.raises(ValueError, match="beam"):
         configured_systems()

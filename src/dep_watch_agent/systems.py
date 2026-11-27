@@ -32,7 +32,8 @@ def configured_systems() -> SystemRegistry:
     """The LLM systems configured in the environment (see ``llm.chat.LLMConfig``), or none.
 
     One model, one system per variant in ``DEP_WATCH_LLM_VARIANTS`` (comma-separated, default
-    ``zeroshot``), in that order:
+    ``fewshot``, the configuration the final evaluation recommends where latency matters: fastest
+    and fewest silent misses on the test set), in that order:
 
     - ``zeroshot``: the dependency's extraction prompt. Named ``DEP_WATCH_LLM_SYSTEM``, by
       default the model id without its publisher, e.g. ``qwen3-4b-2507`` for
@@ -53,7 +54,7 @@ def configured_systems() -> SystemRegistry:
     if not SYSTEM_NAME_PATTERN.match(name):
         raise ValueError(f"DEP_WATCH_LLM_SYSTEM {name!r} must match {SYSTEM_NAME_PATTERN.pattern}")
     variants = [
-        v.strip() for v in os.environ.get("DEP_WATCH_LLM_VARIANTS", "zeroshot").split(",") if v
+        v.strip() for v in os.environ.get("DEP_WATCH_LLM_VARIANTS", "fewshot").split(",") if v
     ]
     unknown = sorted(set(variants) - set(VARIANTS))
     if unknown or not variants:
@@ -76,7 +77,12 @@ def llm_system(config, variant: str) -> SystemFactory:
     @cache  # one client per dependency and process; the system is stateless between issues
     def factory(dependency: Dependency):
         from dep_watch_agent.llm.chat import ChatFactModel
-        from dep_watch_agent.llm.extractor import REASONING_TAG, LLMExtractor, load_prompt
+        from dep_watch_agent.llm.extractor import (
+            REASONING_TAG,
+            LLMExtractor,
+            PromptNotFound,
+            load_prompt,
+        )
 
         if dependency.adapter is None:
             raise ValueError(f"{dependency.name} is synced but not supported for checks")
@@ -96,7 +102,15 @@ def llm_system(config, variant: str) -> SystemFactory:
             return LLMDirect(model, prompt=prompt, model_id=model_id)
 
         prompt_variant = variant if variant in ("fewshot", "cot") else "zeroshot"
-        prompt = load_prompt(dependency.adapter.prompt, prompt_variant)
+        try:
+            prompt = load_prompt(dependency.adapter.prompt, prompt_variant)
+        except PromptNotFound:
+            if prompt_variant != "fewshot":
+                raise
+            # fewshot is the default, so a dependency without worked examples (Spark) reads with
+            # its zero-shot prompt instead of failing every check. The prompt's name records which
+            # one ran, so these extractions are stored and compared as zero-shot.
+            prompt = load_prompt(dependency.adapter.prompt)
         model_config = config
         if variant == "cot" and config.max_tokens is not None:
             # Room for the reasoning before the JSON.
